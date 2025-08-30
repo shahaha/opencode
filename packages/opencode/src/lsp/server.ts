@@ -21,8 +21,8 @@ export namespace LSPServer {
 
   const NearestRoot = (patterns: string[]): RootFunction => {
     return async (file, app) => {
-      const files = Filesystem.up({
-        targets: patterns,
+      const files = Filesystem.globsUp({
+        patterns,
         start: path.dirname(file),
         stop: app.path.root,
       })
@@ -475,7 +475,7 @@ export namespace LSPServer {
 
   export const CSharp: Info = {
     id: "csharp",
-    root: NearestRoot([".sln", ".csproj", "global.json"]),
+    root: NearestRoot(["*.sln", "*.csproj", "global.json"]),
     extensions: [".cs"],
     async spawn(_, root) {
       let bin = Bun.which("csharp-ls", {
