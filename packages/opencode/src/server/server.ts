@@ -93,6 +93,7 @@ export namespace Server {
         status: 400,
       })
     })
+    .use("*", cors())
     .use(async (c, next) => {
       const skipLogging = c.req.path === "/log"
       if (!skipLogging) {
