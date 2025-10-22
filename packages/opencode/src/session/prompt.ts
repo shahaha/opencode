@@ -50,6 +50,7 @@ import { spawn } from "child_process"
 import { Command } from "../command"
 import { $, fileURLToPath } from "bun"
 import { ConfigMarkdown } from "../config/markdown"
+import { Template } from "../util/template"
 
 export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
@@ -418,11 +419,14 @@ export namespace SessionPrompt {
   }) {
     let system = SystemPrompt.header(input.providerID)
     system.push(
-      ...(() => {
+      ...(await (async () => {
         if (input.system) return [input.system]
-        if (input.agent.prompt) return [input.agent.prompt]
+        if (input.agent.prompt) {
+          // Process templates (bash commands and file references)
+          return [await Template.process(input.agent.prompt)]
+        }
         return SystemPrompt.provider(input.modelID)
-      })(),
+      })()),
     )
     system.push(...(await SystemPrompt.environment()))
     system.push(...(await SystemPrompt.custom()))
