@@ -2437,10 +2437,25 @@ export namespace Server {
             ...errors(400),
           },
         }),
-        validator("json", TuiEvent.PromptAppend.properties),
+        validator("json", z.object({ text: z.string() })),
         async (c) => {
-          await Bus.publish(TuiEvent.PromptAppend, c.req.valid("json"))
-          return c.json(true)
+          const { text } = c.req.valid("json")
+
+          try {
+            await Bus.publish(TuiEvent.PromptAppend, {
+              text,
+              parts: (await SessionPrompt.resolvePromptParts(text)).filter(
+                (part) => part.type === "agent" || part.type === "file",
+              ),
+            })
+            return c.json(true)
+          } catch (error) {
+            log.error("Failed to process prompt append", {
+              text,
+              error: error instanceof Error ? error.message : String(error),
+            })
+            return c.json(false)
+          }
         },
       )
       .post(
