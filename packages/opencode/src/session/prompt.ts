@@ -184,6 +184,7 @@ export namespace SessionPrompt {
         text: template,
       },
     ]
+
     const files = ConfigMarkdown.files(template)
     const seen = new Set<string>()
     await Promise.all(
@@ -200,28 +201,32 @@ export namespace SessionPrompt {
           const agent = await Agent.get(name)
           if (agent) {
             parts.push({
-              type: "agent",
+              type: "agent" as const,
               name: agent.name,
+              source: {
+                start: match.index!,
+                end: match.index! + match[0].length,
+                value: match[0],
+              },
             })
           }
           return
         }
 
-        if (stats.isDirectory()) {
-          parts.push({
-            type: "file",
-            url: `file://${filepath}`,
-            filename: name,
-            mime: "application/x-directory",
-          })
-          return
-        }
-
         parts.push({
-          type: "file",
-          url: `file://${filepath}`,
+          type: "file" as const,
+          mime: stats.isDirectory() ? "application/x-directory" : "text/plain",
           filename: name,
-          mime: "text/plain",
+          url: `file://${filepath}`,
+          source: {
+            type: "file" as const,
+            path: name,
+            text: {
+              start: match.index!,
+              end: match.index! + match[0].length,
+              value: match[0],
+            },
+          },
         })
       }),
     )
