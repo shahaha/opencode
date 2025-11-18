@@ -5,6 +5,8 @@ import { type rpc } from "./worker"
 import path from "path"
 import { UI } from "@/cli/ui"
 import { iife } from "@/util/iife"
+import fs from "fs/promises"
+import tty from "tty"
 
 declare global {
   const OPENCODE_WORKER_PATH: string
@@ -94,8 +96,19 @@ export const TuiThreadCommand = cmd({
     const prompt = await iife(async () => {
       const piped = !process.stdin.isTTY ? await Bun.stdin.text() : undefined
       if (!args.prompt) return piped
-      return piped ? piped + "\n" + args.prompt : args.prompt
+      return piped ? args.prompt + "\n" + piped : args.prompt
     })
+
+    let stdin: NodeJS.ReadStream
+    try {
+      stdin = process.stdin.isTTY ? process.stdin : new tty.ReadStream((await fs.open("/dev/tty", "r")).fd)
+    } catch (err) {
+      console.error(
+        "Failed to open /dev/tty for input. Prompt piping from stdin might not be supported on your platform.",
+      )
+      process.exit(1)
+    }
+
     await tui({
       url: server.url,
       args: {
@@ -105,6 +118,7 @@ export const TuiThreadCommand = cmd({
         model: args.model,
         prompt,
       },
+      stdin,
       onExit: async () => {
         await client.call("shutdown", undefined)
       },
