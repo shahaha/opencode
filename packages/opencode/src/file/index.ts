@@ -263,6 +263,14 @@ export namespace File {
       "file.edited",
       z.object({
         file: z.string(),
+        changedLines: z
+          .array(
+            z.object({
+              start: z.number(),
+              end: z.number(),
+            }),
+          )
+          .optional(),
       }),
     ),
   }

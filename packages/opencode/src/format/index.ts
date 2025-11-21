@@ -104,14 +104,30 @@ export namespace Format {
     log.info("init")
     Bus.subscribe(File.Event.Edited, async (payload) => {
       const file = payload.properties.file
-      log.info("formatting", { file })
+      const changedLines = payload.properties.changedLines
+      log.info("formatting", { file, changedLines })
       const ext = path.extname(file)
 
       for (const item of await getFormatter(ext)) {
         log.info("running", { command: item.command })
         try {
+          let cmd: string[]
+
+          // Use line-range formatting if supported and ranges are provided
+          if (item.buildLineRangeCommand && changedLines) {
+            if (changedLines.length > 0) {
+              cmd = item.buildLineRangeCommand(file, changedLines)
+              log.info("using line-range formatting", { ranges: changedLines })
+            } else {
+              log.info("formatting skipped: no changed lines detected", { file })
+              continue
+            }
+          } else {
+            cmd = item.command.map((x) => x.replace("$FILE", file))
+          }
+
           const proc = Bun.spawn({
-            cmd: item.command.map((x) => x.replace("$FILE", file)),
+            cmd,
             cwd: Instance.directory,
             env: { ...process.env, ...item.environment },
             stdout: "ignore",
@@ -120,7 +136,7 @@ export namespace Format {
           const exit = await proc.exited
           if (exit !== 0)
             log.error("failed", {
-              command: item.command,
+              command: cmd,
               ...item.environment,
             })
         } catch (error) {

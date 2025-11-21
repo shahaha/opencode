@@ -3,6 +3,7 @@ import { BunProc } from "../bun"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
 import { Flag } from "@/flag/flag"
+import type { LineRange } from "./diff-range"
 
 export interface Info {
   name: string
@@ -10,6 +11,7 @@ export interface Info {
   environment?: Record<string, string>
   extensions: string[]
   enabled(): Promise<boolean>
+  buildLineRangeCommand?(file: string, ranges: LineRange[]): string[]
 }
 
 export const gofmt: Info = {
@@ -156,6 +158,14 @@ export const clang: Info = {
   async enabled() {
     const items = await Filesystem.findUp(".clang-format", Instance.directory, Instance.worktree)
     return items.length > 0
+  },
+  buildLineRangeCommand(file: string, ranges: LineRange[]) {
+    const cmd = ["clang-format", "-i"]
+    for (const range of ranges) {
+      cmd.push(`--lines=${range.start}:${range.end}`)
+    }
+    cmd.push(file)
+    return cmd
   },
 }
 
