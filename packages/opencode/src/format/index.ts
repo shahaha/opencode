@@ -8,6 +8,7 @@ import * as Formatter from "./formatter"
 import { Config } from "../config/config"
 import { mergeDeep } from "remeda"
 import { Instance } from "../project/instance"
+import { DiffRange } from "./diff-range"
 
 export namespace Format {
   const log = Log.create({ service: "format" })
@@ -104,8 +105,8 @@ export namespace Format {
     log.info("init")
     Bus.subscribe(File.Event.Edited, async (payload) => {
       const file = payload.properties.file
-      const changedLines = payload.properties.changedLines
-      log.info("formatting", { file, changedLines })
+      const changedRanges = payload.properties.changedRanges
+      log.info("formatting", { file, changedRanges })
       const ext = path.extname(file)
 
       for (const item of await getFormatter(ext)) {
@@ -113,13 +114,16 @@ export namespace Format {
         try {
           let cmd: string[]
 
-          // Use line-range formatting if supported and ranges are provided
-          if (item.buildLineRangeCommand && changedLines) {
-            if (changedLines.length > 0) {
-              cmd = item.buildLineRangeCommand(file, changedLines)
-              log.info("using line-range formatting", { ranges: changedLines })
+          // Use range formatting if supported and ranges are provided
+          if (item.buildRangeCommand && changedRanges) {
+            // Convert plain objects back to DiffRange instances
+            const rangeObjects = changedRanges.map((data) => DiffRange.fromJSON(data))
+
+            if (rangeObjects.length > 0) {
+              cmd = item.buildRangeCommand(file, rangeObjects)
+              log.info("using range formatting", { ranges: rangeObjects })
             } else {
-              log.info("formatting skipped: no changed lines detected", { file })
+              log.info("formatting skipped: no changed ranges detected", { file })
               continue
             }
           } else {

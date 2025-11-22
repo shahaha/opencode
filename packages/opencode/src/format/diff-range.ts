@@ -1,48 +1,159 @@
 import { diffLines } from "diff"
 
-export interface LineRange {
-  start: number
-  end: number
+// Configuration constants
+const MERGE_THRESHOLD = 6 // characters - about 1 line gap
+const EOF_CLAMP_OFFSET = 1 // Safety margin for EOF clamping
+
+/**
+ * Clamp offset to be within valid file bounds
+ */
+function clampOffset(offset: number, total: number): number {
+  return total > 0 ? Math.min(offset, total - EOF_CLAMP_OFFSET) : 0
 }
 
 /**
- * Calculate changed line ranges from old and new content
- * Returns 1-indexed line ranges suitable for formatters like clang-format
+ * Simplified range representation with conversion methods
  */
-export function calculateChangedLines(contentOld: string, contentNew: string): LineRange[] {
-  const changes = diffLines(contentOld.replace(/\r\n/g, "\n"), contentNew.replace(/\r\n/g, "\n"))
-  const ranges: LineRange[] = []
+export class DiffRange {
+  constructor(
+    public readonly start: number,
+    public readonly end: number,
+  ) {}
 
-  let oldLine = 1
-  let newLine = 1
+  /**
+   * Convert to plain object for serialization
+   */
+  toJSON(): { start: number; end: number; _byteOffset?: number; _byteLength?: number } {
+    const byteOffsets = this.getCachedByteOffsets()
+    return {
+      start: this.start,
+      end: this.end,
+      _byteOffset: byteOffsets?.start,
+      _byteLength: byteOffsets ? byteOffsets.end - byteOffsets.start : undefined,
+    }
+  }
 
-  // Calculate total new lines for clamping
-  const totalNewLines = changes.reduce(
-    (acc, change) => acc + (change.added || (!change.added && !change.removed) ? change.count || 0 : 0),
-    0,
+  /**
+   * Create from plain object (for deserialization)
+   */
+  static fromJSON(data: { start: number; end: number; _byteOffset?: number; _byteLength?: number }): DiffRange {
+    if (data.start < 0 || data.end < 0) {
+      throw new Error(`Invalid range: negative offsets (start=${data.start}, end=${data.end})`)
+    }
+    if (data.start > data.end) {
+      throw new Error(`Invalid range: start ${data.start} > end ${data.end}`)
+    }
+    const range = new DiffRange(data.start, data.end)
+    if (data._byteOffset !== undefined && data._byteLength !== undefined) {
+      range._byteOffset = data._byteOffset
+      range._byteLength = data._byteLength
+    }
+    return range
+  }
+
+  get length(): number {
+    return this.end - this.start
+  }
+
+  // Private storage for cached byte offsets (mutable for factory methods)
+  private _byteOffset?: number
+  private _byteLength?: number
+
+  /**
+   * Create DiffRange from character and byte offsets
+   */
+  static fromOffsets(charOffset: number, charLength: number, byteOffset: number, byteLength: number): DiffRange {
+    const range = new DiffRange(charOffset, charOffset + charLength)
+    range._byteOffset = byteOffset
+    range._byteLength = byteLength
+    return range
+  }
+
+  getCachedByteOffsets(): { start: number; end: number } | undefined {
+    if (this._byteOffset !== undefined && this._byteLength !== undefined) {
+      return { start: this._byteOffset, end: this._byteOffset + this._byteLength }
+    }
+    return undefined
+  }
+
+  /**
+   * Check if this range should be merged with another
+   */
+  shouldMerge(other: DiffRange): boolean {
+    return other.start - this.end <= MERGE_THRESHOLD
+  }
+
+  /**
+   * Merge this range with another
+   */
+  merge(other: DiffRange): DiffRange {
+    const newStart = Math.min(this.start, other.start)
+    const newEnd = Math.max(this.end, other.end)
+    const merged = new DiffRange(newStart, newEnd)
+
+    // Merge cached byte offsets if available
+    const thisBytes = this.getCachedByteOffsets()
+    const otherBytes = other.getCachedByteOffsets()
+    if (thisBytes && otherBytes) {
+      merged._byteOffset = Math.min(thisBytes.start, otherBytes.start)
+      merged._byteLength = Math.max(thisBytes.end, otherBytes.end) - merged._byteOffset
+    }
+
+    return merged
+  }
+}
+
+/**
+ * Calculate changed ranges from old and new content
+ * Returns ranges that can be converted to both character and byte offsets
+ */
+export function calculateChangedRanges(contentOld: string, contentNew: string): DiffRange[] {
+  const changes = diffLines(
+    contentOld.replace(/\r\n/g, "\n"),
+    contentNew.replace(/\r\n/g, "\n")
   )
+  const ranges: DiffRange[] = []
+
+  let newCharOffset = 0
+  let newByteOffset = 0
+
+  // Calculate total lengths for EOF clamping
+  const totalCharLength = contentNew.length
+  const totalByteLength = Buffer.byteLength(contentNew)
 
   for (const change of changes) {
-    const count = change.count || 0
-
     if (change.added) {
       // Lines were added in new content
-      if (count > 0) {
-        ranges.push({ start: newLine, end: newLine + count - 1 })
-      }
-      newLine += count
+      const text = change.value
+      const byteLength = Buffer.byteLength(text)
+
+      ranges.push(
+        DiffRange.fromOffsets(
+          newCharOffset,
+          text.length,
+          newByteOffset,
+          byteLength
+        )
+      )
+
+      newCharOffset += text.length
+      newByteOffset += byteLength
     } else if (change.removed) {
-      // Lines were removed from old content
-      // Format the surrounding context (current line in new content)
-      if (totalNewLines > 0) {
-        const target = Math.min(newLine, totalNewLines)
-        ranges.push({ start: target, end: target })
-      }
-      oldLine += count
+      // Lines were removed - add a zero-length range at the deletion point
+      ranges.push(
+        DiffRange.fromOffsets(
+          clampOffset(newCharOffset, totalCharLength),
+          0,
+          clampOffset(newByteOffset, totalByteLength),
+          0
+        )
+      )
     } else {
-      // Unchanged lines
-      oldLine += count
-      newLine += count
+      // Unchanged lines - advance offsets
+      const text = change.value
+      const byteLength = Buffer.byteLength(text)
+      newCharOffset += text.length
+      newByteOffset += byteLength
     }
   }
 
@@ -50,28 +161,23 @@ export function calculateChangedLines(contentOld: string, contentNew: string): L
 }
 
 /**
- * Merge ranges that are adjacent or overlapping
- * This reduces the number of --lines flags needed
+ * Merge adjacent ranges to reduce formatter invocations
  */
-function mergeAdjacentRanges(ranges: LineRange[]): LineRange[] {
+function mergeAdjacentRanges(ranges: DiffRange[]): DiffRange[] {
   if (ranges.length === 0) return ranges
 
-  // Sort by start line
-  const sorted = ranges.toSorted((a, b) => a.start - b.start)
-  const merged: LineRange[] = [sorted[0]]
+  // Sort by start position and reduce to merged ranges
+  return ranges
+    .toSorted((a, b) => a.start - b.start)
+    .reduce((merged, current) => {
+      if (merged.length === 0) return [current]
 
-  for (let i = 1; i < sorted.length; i++) {
-    const current = sorted[i]
-    const last = merged[merged.length - 1]
-
-    // If current range overlaps or is adjacent to last range (allowing 1 line gap), merge them
-    // This prevents fragmentation when small changes are close together
-    if (current.start <= last.end + 2) {
-      last.end = Math.max(last.end, current.end)
-    } else {
-      merged.push(current)
-    }
-  }
-
-  return merged
+      const last = merged[merged.length - 1]
+      if (last.shouldMerge(current)) {
+        merged[merged.length - 1] = last.merge(current)
+      } else {
+        merged.push(current)
+      }
+      return merged
+    }, [] as DiffRange[])
 }

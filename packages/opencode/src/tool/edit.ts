@@ -17,7 +17,7 @@ import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { Snapshot } from "@/snapshot"
 import { assertExternalDirectory } from "./external-directory"
-import { calculateChangedLines } from "../format/diff-range"
+import { calculateChangedRanges } from "../format/diff-range"
 
 const MAX_DIAGNOSTICS_PER_FILE = 20
 
@@ -99,12 +99,12 @@ export const EditTool = Tool.define("edit", {
 
       await file.write(contentNew)
 
-      // Calculate changed line ranges for targeted formatting
-      const changedLines = calculateChangedLines(contentOld, contentNew)
+      // Calculate changed ranges for targeted formatting
+      const changedRanges = calculateChangedRanges(contentOld, contentNew)
 
       await Bus.publish(File.Event.Edited, {
         file: filePath,
-        changedLines,
+        changedRanges: changedRanges.map((range) => range.toJSON()),
       })
       await Bus.publish(FileWatcher.Event.Updated, {
         file: filePath,
