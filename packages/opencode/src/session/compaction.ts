@@ -95,6 +95,7 @@ export namespace SessionCompaction {
     }
     agent: string
     abort: AbortSignal
+    context?: string
   }) {
     const model = await Provider.getModel(input.model.providerID, input.model.modelID)
     const system = [...SystemPrompt.compaction(model.providerID)]
@@ -177,7 +178,9 @@ export namespace SessionCompaction {
             content: [
               {
                 type: "text",
-                text: "Provide a detailed but concise summary of our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next.",
+                text:
+                  "Provide a detailed but concise summary of our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next." +
+                  (input.context ? `\n\nUser guidance: ${input.context}` : ""),
               },
             ],
           },
@@ -234,6 +237,7 @@ export namespace SessionCompaction {
         providerID: z.string(),
         modelID: z.string(),
       }),
+      context: z.string().optional(),
     }),
     async (input) => {
       const msg = await Session.updateMessage({
@@ -251,6 +255,7 @@ export namespace SessionCompaction {
         messageID: msg.id,
         sessionID: msg.sessionID,
         type: "compaction",
+        context: input.context,
       })
     },
   )

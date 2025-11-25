@@ -371,6 +371,7 @@ export type CompactionPart = {
   sessionID: string
   messageID: string
   type: "compaction"
+  context?: string
 }
 
 export type Part =
@@ -2131,6 +2132,7 @@ export type SessionSummarizeData = {
   body?: {
     providerID: string
     modelID: string
+    context?: string
   }
   path: {
     /**
