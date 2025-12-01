@@ -513,6 +513,22 @@ export namespace SessionPrompt {
         })
       }
 
+      const modelMessages = await MessageV2.toModelMessage(
+        msgs.filter((m) => {
+          if (m.info.role !== "assistant" || m.info.error === undefined) {
+            return true
+          }
+          if (
+            MessageV2.AbortedError.isInstance(m.info.error) &&
+            m.parts.some((part) => part.type !== "step-start" && part.type !== "reasoning")
+          ) {
+            return true
+          }
+
+          return false
+        }),
+      )
+
       const result = await processor.process(() =>
         streamText({
           onError(error) {
@@ -571,21 +587,7 @@ export namespace SessionPrompt {
                 content: x,
               }),
             ),
-            ...MessageV2.toModelMessage(
-              msgs.filter((m) => {
-                if (m.info.role !== "assistant" || m.info.error === undefined) {
-                  return true
-                }
-                if (
-                  MessageV2.AbortedError.isInstance(m.info.error) &&
-                  m.parts.some((part) => part.type !== "step-start" && part.type !== "reasoning")
-                ) {
-                  return true
-                }
-
-                return false
-              }),
-            ),
+            ...modelMessages,
           ],
           tools: model.info.tool_call === false ? undefined : tools,
           model: wrapLanguageModel({
@@ -1466,7 +1468,7 @@ export namespace SessionPrompt {
           role: "user",
           content: "Generate a title for this conversation:\n",
         },
-        ...MessageV2.toModelMessage([
+        ...(await MessageV2.toModelMessage([
           {
             info: {
               id: Identifier.ascending("message"),
@@ -1483,7 +1485,7 @@ export namespace SessionPrompt {
             },
             parts: input.message.parts,
           },
-        ]),
+        ])),
       ],
       headers: small.info.headers,
       model: small.language,
