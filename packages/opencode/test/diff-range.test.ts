@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test"
-import { calculateChangedRanges, DiffRange } from "../src/format/diff-range"
+import { calculateRanges, DiffRange } from "../src/format/diff-range"
 
-describe("calculateChangedRanges", () => {
+describe("calculateRanges", () => {
   test("calculates ranges for added lines", () => {
-    const contentOld = "line1\nline2\nline3"
-    const contentNew = "line1\nline2\nnewline\nline3"
+    const oldContent = "line1\nline2\nline3"
+    const newContent = "line1\nline2\nnewline\nline3"
 
-    const ranges = calculateChangedRanges(contentOld, contentNew)
+    const ranges = calculateRanges(oldContent, newContent)
 
     // "newline\n" starts at offset 12 (after "line1\nline2\n") and has length 8
     expect(ranges.length).toBe(1)
@@ -16,10 +16,10 @@ describe("calculateChangedRanges", () => {
   })
 
   test("calculates ranges for multiple added lines", () => {
-    const contentOld = "line1\nline2\nline3"
-    const contentNew = "line1\nline2\nnewline1\nnewline2\nnewline3\nline3"
+    const oldContent = "line1\nline2\nline3"
+    const newContent = "line1\nline2\nnewline1\nnewline2\nnewline3\nline3"
 
-    const ranges = calculateChangedRanges(contentOld, contentNew)
+    const ranges = calculateRanges(oldContent, newContent)
 
     // "newline1\nnewline2\nnewline3\n" starts at offset 12 and has length 27
     expect(ranges.length).toBe(1)
@@ -29,10 +29,10 @@ describe("calculateChangedRanges", () => {
   })
 
   test("calculates ranges for removed lines", () => {
-    const contentOld = "line1\nline2\nline3\nline4"
-    const contentNew = "line1\nline2\nline4"
+    const oldContent = "line1\nline2\nline3\nline4"
+    const newContent = "line1\nline2\nline4"
 
-    const ranges = calculateChangedRanges(contentOld, contentNew)
+    const ranges = calculateRanges(oldContent, newContent)
 
     // "line3\n" was removed at offset 12 (after "line1\nline2\n")
     // Should report a zero-length range to trigger formatting at the join point
@@ -43,10 +43,10 @@ describe("calculateChangedRanges", () => {
   })
 
   test("calculates ranges for removed lines at end", () => {
-    const contentOld = "line1\nline2\nline3"
-    const contentNew = "line1\nline2"
+    const oldContent = "line1\nline2\nline3"
+    const newContent = "line1\nline2"
 
-    const ranges = calculateChangedRanges(contentOld, contentNew)
+    const ranges = calculateRanges(oldContent, newContent)
 
     // diffLines may report line2 as changed when line3 is removed (missing newline)
     // In this case "line2" changed from "line2\n" to "line2", so offset 6, length 5
@@ -57,10 +57,10 @@ describe("calculateChangedRanges", () => {
   })
 
   test("merges adjacent ranges", () => {
-    const contentOld = "line1\nline2\nline3\nline4\nline5"
-    const contentNew = "line1\nnew2\nline3\nnew4\nline5"
+    const oldContent = "line1\nline2\nline3\nline4\nline5"
+    const newContent = "line1\nnew2\nline3\nnew4\nline5"
 
-    const ranges = calculateChangedRanges(contentOld, contentNew)
+    const ranges = calculateRanges(oldContent, newContent)
 
     // "new2\n" at offset 6, length 5, and "new4\n" at offset 17, length 5
     // These should be merged since they're close
@@ -71,10 +71,10 @@ describe("calculateChangedRanges", () => {
   })
 
   test("keeps separate ranges when not adjacent", () => {
-    const contentOld = "line1\nline2\nline3\nline4\nline5\nline6"
-    const contentNew = "line1\nnew2\nline3\nline4\nline5\nnew6"
+    const oldContent = "line1\nline2\nline3\nline4\nline5\nline6"
+    const newContent = "line1\nnew2\nline3\nline4\nline5\nnew6"
 
-    const ranges = calculateChangedRanges(contentOld, contentNew)
+    const ranges = calculateRanges(oldContent, newContent)
 
     // "new2\n" at offset 6 and "new6" at offset 29 (counted properly)
     expect(ranges.length).toBe(2)
@@ -85,10 +85,10 @@ describe("calculateChangedRanges", () => {
   })
 
   test("handles empty old content", () => {
-    const contentOld = ""
-    const contentNew = "line1\nline2\nline3"
+    const oldContent = ""
+    const newContent = "line1\nline2\nline3"
 
-    const ranges = calculateChangedRanges(contentOld, contentNew)
+    const ranges = calculateRanges(oldContent, newContent)
 
     expect(ranges.length).toBe(1)
     expect(ranges[0]!.start).toBe(0)
@@ -97,10 +97,10 @@ describe("calculateChangedRanges", () => {
   })
 
   test("handles complex edit with insertions and deletions", () => {
-    const contentOld = "line1\nline2\nline3\nline4\nline5"
-    const contentNew = "line1\nnewA\nnewB\nline4\nline5"
+    const oldContent = "line1\nline2\nline3\nline4\nline5"
+    const newContent = "line1\nnewA\nnewB\nline4\nline5"
 
-    const ranges = calculateChangedRanges(contentOld, contentNew)
+    const ranges = calculateRanges(oldContent, newContent)
 
     // "newA\nnewB\n" starts at offset 6, length 10
     expect(ranges.length).toBe(1)
@@ -110,10 +110,10 @@ describe("calculateChangedRanges", () => {
   })
 
   test("handles adding lines at the beginning", () => {
-    const contentOld = "line2\nline3"
-    const contentNew = "line1\nline2\nline3"
+    const oldContent = "line2\nline3"
+    const newContent = "line1\nline2\nline3"
 
-    const ranges = calculateChangedRanges(contentOld, contentNew)
+    const ranges = calculateRanges(oldContent, newContent)
 
     // "line1\n" at offset 0, length 6
     expect(ranges.length).toBe(1)
@@ -123,10 +123,10 @@ describe("calculateChangedRanges", () => {
   })
 
   test("handles adding lines at the end", () => {
-    const contentOld = "line1\nline2\n"
-    const contentNew = "line1\nline2\nline3\n"
+    const oldContent = "line1\nline2\n"
+    const newContent = "line1\nline2\nline3\n"
 
-    const ranges = calculateChangedRanges(contentOld, contentNew)
+    const ranges = calculateRanges(oldContent, newContent)
 
     // "line3\n" starts at offset 12, length 6
     expect(ranges.length).toBe(1)
@@ -138,25 +138,25 @@ describe("calculateChangedRanges", () => {
   test("returns empty array for identical content", () => {
     const content = "line1\nline2\nline3"
 
-    const ranges = calculateChangedRanges(content, content)
+    const ranges = calculateRanges(content, content)
 
     expect(ranges).toEqual([])
   })
 
   test("ignores line ending differences", () => {
-    const contentOld = "line1\r\nline2\r\nline3"
-    const contentNew = "line1\nline2\nline3"
+    const oldContent = "line1\r\nline2\r\nline3"
+    const newContent = "line1\nline2\nline3"
 
-    const ranges = calculateChangedRanges(contentOld, contentNew)
+    const ranges = calculateRanges(oldContent, newContent)
 
     expect(ranges).toEqual([])
   })
 
   test("handles byte-level accuracy for unicode", () => {
-    const contentOld = "hello\nworld"
-    const contentNew = "hello\n世界" // "世界" is "world" in Chinese
+    const oldContent = "hello\nworld"
+    const newContent = "hello\n世界" // "世界" is "world" in Chinese
 
-    const ranges = calculateChangedRanges(contentOld, contentNew)
+    const ranges = calculateRanges(oldContent, newContent)
 
     // "世界" starts at offset 6 (after "hello\n")
     // char length is 2 (2 JS chars)
@@ -168,10 +168,10 @@ describe("calculateChangedRanges", () => {
   })
 
   test("handles unicode characters correctly in offsets", () => {
-    const contentOld = "a"
-    const contentNew = "a\n💩"
+    const oldContent = "a"
+    const newContent = "a\n💩"
 
-    const ranges = calculateChangedRanges(contentOld, contentNew)
+    const ranges = calculateRanges(oldContent, newContent)
 
     // "a" (no newline) changed to "a\n..." is treated as a change of the first line
     // So the range covers the entire new content
@@ -182,10 +182,10 @@ describe("calculateChangedRanges", () => {
   })
 
   test("handles unicode with previous content containing unicode", () => {
-    const contentOld = "💩"
-    const contentNew = "💩\nbar"
+    const oldContent = "💩"
+    const newContent = "💩\nbar"
 
-    const ranges = calculateChangedRanges(contentOld, contentNew)
+    const ranges = calculateRanges(oldContent, newContent)
 
     // Same here, "💩" changed to "💩\n..."
     expect(ranges.length).toBe(1)
@@ -195,10 +195,10 @@ describe("calculateChangedRanges", () => {
   })
 
   test("clamps offset to EOF when deleting last line", () => {
-    const contentOld = "line1\nline2"
-    const contentNew = "line1\n"
+    const oldContent = "line1\nline2"
+    const newContent = "line1\n"
 
-    const ranges = calculateChangedRanges(contentOld, contentNew)
+    const ranges = calculateRanges(oldContent, newContent)
 
     // "line2" removed. newOffset would be 6 (length of "line1\n").
     // "line1\n" is 6 chars. valid offsets 0..5.

@@ -107,77 +107,55 @@ export class DiffRange {
  * Calculate changed ranges from old and new content
  * Returns ranges that can be converted to both character and byte offsets
  */
-export function calculateChangedRanges(contentOld: string, contentNew: string): DiffRange[] {
-  const changes = diffLines(
-    contentOld.replace(/\r\n/g, "\n"),
-    contentNew.replace(/\r\n/g, "\n")
-  )
-  const ranges: DiffRange[] = []
+export function calculateRanges(oldContent: string, newContent: string): DiffRange[] {
+  const changes = diffLines(oldContent.replace(/\r\n/g, "\n"), newContent.replace(/\r\n/g, "\n"))
+  const result: DiffRange[] = []
 
-  let newCharOffset = 0
-  let newByteOffset = 0
+  let charOffset = 0
+  let byteOffset = 0
 
-  // Calculate total lengths for EOF clamping
-  const totalCharLength = contentNew.length
-  const totalByteLength = Buffer.byteLength(contentNew)
+  const totalChars = newContent.length
+  const totalBytes = Buffer.byteLength(newContent)
 
   for (const change of changes) {
     if (change.added) {
-      // Lines were added in new content
       const text = change.value
-      const byteLength = Buffer.byteLength(text)
-
-      ranges.push(
-        DiffRange.fromOffsets(
-          newCharOffset,
-          text.length,
-          newByteOffset,
-          byteLength
-        )
-      )
-
-      newCharOffset += text.length
-      newByteOffset += byteLength
-    } else if (change.removed) {
-      // Lines were removed - add a zero-length range at the deletion point
-      ranges.push(
-        DiffRange.fromOffsets(
-          clampOffset(newCharOffset, totalCharLength),
-          0,
-          clampOffset(newByteOffset, totalByteLength),
-          0
-        )
-      )
-    } else {
-      // Unchanged lines - advance offsets
-      const text = change.value
-      const byteLength = Buffer.byteLength(text)
-      newCharOffset += text.length
-      newByteOffset += byteLength
+      const bytes = Buffer.byteLength(text)
+      result.push(DiffRange.fromOffsets(charOffset, text.length, byteOffset, bytes))
+      charOffset += text.length
+      byteOffset += bytes
+      continue
     }
+    if (change.removed) {
+      result.push(DiffRange.fromOffsets(clampOffset(charOffset, totalChars), 0, clampOffset(byteOffset, totalBytes), 0))
+      continue
+    }
+    const text = change.value
+    const bytes = Buffer.byteLength(text)
+    charOffset += text.length
+    byteOffset += bytes
   }
 
-  return mergeAdjacentRanges(ranges)
+  return mergeRanges(result)
 }
 
 /**
  * Merge adjacent ranges to reduce formatter invocations
  */
-function mergeAdjacentRanges(ranges: DiffRange[]): DiffRange[] {
+function mergeRanges(ranges: DiffRange[]): DiffRange[] {
   if (ranges.length === 0) return ranges
 
-  // Sort by start position and reduce to merged ranges
   return ranges
     .toSorted((a, b) => a.start - b.start)
-    .reduce((merged, current) => {
-      if (merged.length === 0) return [current]
+    .reduce((acc, cur) => {
+      if (acc.length === 0) return [cur]
 
-      const last = merged[merged.length - 1]
-      if (last.shouldMerge(current)) {
-        merged[merged.length - 1] = last.merge(current)
-      } else {
-        merged.push(current)
+      const last = acc[acc.length - 1]
+      if (last.shouldMerge(cur)) {
+        acc[acc.length - 1] = last.merge(cur)
+        return acc
       }
-      return merged
+      acc.push(cur)
+      return acc
     }, [] as DiffRange[])
 }
