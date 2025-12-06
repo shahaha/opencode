@@ -19,7 +19,7 @@ export namespace Agent {
       color: z.string().optional(),
       permission: z.object({
         edit: Config.Permission,
-        bash: z.record(z.string(), Config.Permission),
+        shell: z.record(z.string(), Config.Permission),
         webfetch: Config.Permission.optional(),
         doom_loop: Config.Permission.optional(),
         external_directory: Config.Permission.optional(),
@@ -45,7 +45,7 @@ export namespace Agent {
     const defaultTools = cfg.tools ?? {}
     const defaultPermission: Info["permission"] = {
       edit: "allow",
-      bash: {
+      shell: {
         "*": "allow",
       },
       webfetch: "allow",
@@ -57,7 +57,7 @@ export namespace Agent {
     const planPermission = mergeAgentPermissions(
       {
         edit: "deny",
-        bash: {
+        shell: {
           "cut*": "allow",
           "diff*": "allow",
           "du*": "allow",
@@ -271,29 +271,29 @@ export namespace Agent {
 }
 
 function mergeAgentPermissions(basePermission: any, overridePermission: any): Agent.Info["permission"] {
-  if (typeof basePermission.bash === "string") {
-    basePermission.bash = {
-      "*": basePermission.bash,
+  if (typeof basePermission.shell === "string") {
+    basePermission.shell = {
+      "*": basePermission.shell,
     }
   }
-  if (typeof overridePermission.bash === "string") {
-    overridePermission.bash = {
-      "*": overridePermission.bash,
+  if (typeof overridePermission.shell === "string") {
+    overridePermission.shell = {
+      "*": overridePermission.shell,
     }
   }
   const merged = mergeDeep(basePermission ?? {}, overridePermission ?? {}) as any
-  let mergedBash
-  if (merged.bash) {
-    if (typeof merged.bash === "string") {
+  let mergedShell
+  if (merged.shell) {
+    if (typeof merged.shell === "string") {
       mergedBash = {
-        "*": merged.bash,
+        "*": merged.shell,
       }
-    } else if (typeof merged.bash === "object") {
+    } else if (typeof merged.shell === "object") {
       mergedBash = mergeDeep(
         {
           "*": "allow",
         },
-        merged.bash,
+        merged.shell,
       )
     }
   }
@@ -301,7 +301,7 @@ function mergeAgentPermissions(basePermission: any, overridePermission: any): Ag
   const result: Agent.Info["permission"] = {
     edit: merged.edit ?? "allow",
     webfetch: merged.webfetch ?? "allow",
-    bash: mergedBash ?? { "*": "allow" },
+    bash: mergedShell ?? { "*": "allow" },
     doom_loop: merged.doom_loop,
     external_directory: merged.external_directory,
   }
