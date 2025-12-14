@@ -17,6 +17,7 @@ import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { Agent } from "../agent/agent"
 import { Snapshot } from "@/snapshot"
+import { Ide } from "../ide"
 
 const MAX_DIAGNOSTICS_PER_FILE = 20
 
@@ -87,9 +88,22 @@ export const EditTool = Tool.define("edit", {
             messageID: ctx.messageID,
             callID: ctx.callID,
             title: "Edit this file: " + filePath,
-            metadata: {
-              filePath,
-              diff,
+            metadata: { filePath, diff },
+            onSetup: (info) => {
+              if (Ide.active()) {
+                Ide.openDiff(filePath, contentNew).then((response) => {
+                  Permission.respond({
+                    sessionID: info.sessionID,
+                    permissionID: info.id,
+                    response,
+                  })
+                })
+              }
+            },
+            onRespond: () => {
+              if (Ide.active()) {
+                Ide.closeDiff(filePath).catch(() => {})
+              }
             },
           })
         }
@@ -118,9 +132,22 @@ export const EditTool = Tool.define("edit", {
           messageID: ctx.messageID,
           callID: ctx.callID,
           title: "Edit this file: " + filePath,
-          metadata: {
-            filePath,
-            diff,
+          metadata: { filePath, diff },
+          onSetup: (info) => {
+            if (Ide.active()) {
+              Ide.openDiff(filePath, contentNew).then((response) => {
+                Permission.respond({
+                  sessionID: info.sessionID,
+                  permissionID: info.id,
+                  response,
+                })
+              })
+            }
+          },
+          onRespond: () => {
+            if (Ide.active()) {
+              Ide.closeDiff(filePath).catch(() => {})
+            }
           },
         })
       }

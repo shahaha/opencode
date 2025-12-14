@@ -518,6 +518,37 @@ export type EventFileEdited = {
   }
 }
 
+export type EventIdeInstalled = {
+  type: "ide.installed"
+  properties: {
+    ide: string
+  }
+}
+
+export type IdeSelection = {
+  text: string
+  filePath: string
+  fileUrl: string
+  selection: {
+    start: {
+      line: number
+      character: number
+    }
+    end: {
+      line: number
+      character: number
+    }
+    isEmpty: boolean
+  }
+}
+
+export type EventIdeSelectionUpdated = {
+  type: "ide.selection.updated"
+  properties: {
+    selection: IdeSelection
+  }
+}
+
 export type Todo = {
   /**
    * Brief description of the task
@@ -749,6 +780,8 @@ export type Event =
   | EventSessionIdle
   | EventSessionCompacted
   | EventFileEdited
+  | EventIdeInstalled
+  | EventIdeSelectionUpdated
   | EventTodoUpdated
   | EventCommandExecuted
   | EventSessionCreated
@@ -1484,6 +1517,19 @@ export type Config = {
      */
     url?: string
   }
+  /**
+   * IDE integration settings
+   */
+  ide?: {
+    /**
+     * Directory containing IDE lock files for WebSocket connections
+     */
+    lockfile_dir?: string
+    /**
+     * HTTP header name for IDE WebSocket authentication
+     */
+    auth_header_name?: string
+  }
   experimental?: {
     hook?: {
       file_edited?: {
@@ -1789,6 +1835,13 @@ export type McpStatus =
   | McpStatusFailed
   | McpStatusNeedsAuth
   | McpStatusNeedsClientRegistration
+
+export type IdeStatus = {
+  status: "connected" | "disconnected" | "failed"
+  name: string
+  workspaceFolders?: Array<string>
+  error?: string
+}
 
 export type LspStatus = {
   id: string
@@ -3767,6 +3820,66 @@ export type McpDisconnectResponses = {
 }
 
 export type McpDisconnectResponse = McpDisconnectResponses[keyof McpDisconnectResponses]
+
+export type IdeStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/ide"
+}
+
+export type IdeStatusResponses = {
+  /**
+   * IDE instance status
+   */
+  200: {
+    [key: string]: IdeStatus
+  }
+}
+
+export type IdeStatusResponse = IdeStatusResponses[keyof IdeStatusResponses]
+
+export type IdeConnectData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/ide/{name}/connect"
+}
+
+export type IdeConnectResponses = {
+  /**
+   * IDE connected successfully
+   */
+  200: boolean
+}
+
+export type IdeConnectResponse = IdeConnectResponses[keyof IdeConnectResponses]
+
+export type IdeDisconnectData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/ide/{name}/disconnect"
+}
+
+export type IdeDisconnectResponses = {
+  /**
+   * IDE disconnected successfully
+   */
+  200: boolean
+}
+
+export type IdeDisconnectResponse = IdeDisconnectResponses[keyof IdeDisconnectResponses]
 
 export type LspStatusData = {
   body?: never
