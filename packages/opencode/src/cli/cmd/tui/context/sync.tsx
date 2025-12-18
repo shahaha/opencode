@@ -250,6 +250,22 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           setStore("vcs", { branch: event.properties.branch })
           break
         }
+
+        case "session.compacted": {
+          // Refresh messages after compaction to update sidebar context
+          sdk.client.session.messages({ sessionID: event.properties.sessionID, limit: 100 }).then((res) => {
+            if (!res.data) return
+            setStore(
+              produce((draft) => {
+                draft.message[event.properties.sessionID] = res.data!.map((x) => x.info)
+                for (const message of res.data!) {
+                  draft.part[message.info.id] = message.parts
+                }
+              }),
+            )
+          })
+          break
+        }
       }
     })
 

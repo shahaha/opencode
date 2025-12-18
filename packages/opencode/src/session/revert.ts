@@ -57,9 +57,15 @@ export namespace SessionRevert {
       revert.snapshot = session.revert?.snapshot ?? (await Snapshot.track())
       await Snapshot.revert(patches)
       if (revert.snapshot) revert.diff = await Snapshot.diff(revert.snapshot)
-      return Session.update(input.sessionID, (draft) => {
+      const result = await Session.update(input.sessionID, (draft) => {
         draft.revert = revert
       })
+      // Emit session.diff event to update sidebar's Modified Files list
+      Bus.publish(Session.Event.Diff, {
+        sessionID: input.sessionID,
+        diff: [],
+      })
+      return result
     }
     return session
   }
@@ -72,6 +78,12 @@ export namespace SessionRevert {
     if (session.revert.snapshot) await Snapshot.restore(session.revert.snapshot)
     const next = await Session.update(input.sessionID, (draft) => {
       draft.revert = undefined
+    })
+    // Emit session.diff event to refresh sidebar's Modified Files list
+    const diff = await Session.diff(input.sessionID)
+    Bus.publish(Session.Event.Diff, {
+      sessionID: input.sessionID,
+      diff,
     })
     return next
   }
