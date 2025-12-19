@@ -102,6 +102,7 @@ export function Session() {
   const route = useRouteData("session")
   const { navigate } = useRoute()
   const sync = useSync()
+  const local = useLocal()
   const kv = useKV()
   const { theme } = useTheme()
   const promptRef = usePromptRef()
@@ -168,6 +169,23 @@ export function Session() {
   const toast = useToast()
   const sdk = useSDK()
 
+  createEffect(() => {
+    if (!sync.data.provider.length) return
+    if (!sync.data.agent.length) return
+    if (!local.model.ready) return
+    const last = messages().at(-1)
+    if (!last) return
+    const pref = last as { agent?: string; model?: { providerID: string; modelID: string } }
+    const agent = pref.agent
+    if (agent && agent !== local.agent.current().name) local.agent.set(agent)
+    const model = pref.model
+    if (model) {
+      const current = local.model.current()
+      const same = current && current.providerID === model.providerID && current.modelID === model.modelID
+      if (!same) local.model.set(model)
+    }
+  })
+
   // Auto-navigate to whichever session currently needs permission input
   createEffect(() => {
     const currentSession = session()
@@ -222,8 +240,6 @@ export function Session() {
       if (scroll) scroll.scrollTo(scroll.scrollHeight)
     }, 50)
   }
-
-  const local = useLocal()
 
   function moveChild(direction: number) {
     const parentID = session()?.parentID ?? session()?.id

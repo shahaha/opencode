@@ -1,5 +1,5 @@
-import { createStore } from "solid-js/store"
 import { batch, createEffect, createMemo } from "solid-js"
+import { createStore } from "solid-js/store"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
 import { uniqueBy } from "remeda"
@@ -12,6 +12,13 @@ import { Provider } from "@/provider/provider"
 import { useArgs } from "./args"
 import { useSDK } from "./sdk"
 import { RGBA } from "@opentui/core"
+import type { SessionPref } from "./session-pref"
+
+type SessionPrefStore = {
+  get(sessionID: string): SessionPref | undefined
+  setAgent(sessionID: string, agent: string): void
+  setModel(sessionID: string, model: { providerID: string; modelID: string }): void
+}
 
 export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
   name: "Local",
@@ -19,6 +26,14 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     const sync = useSync()
     const sdk = useSDK()
     const toast = useToast()
+
+    const pref: SessionPrefStore = {
+      get() {
+        return undefined
+      },
+      setAgent() {},
+      setModel() {},
+    }
 
     function isModelValid(model: { providerID: string; modelID: string }) {
       const provider = sync.data.provider.find((x) => x.id === model.providerID)
@@ -333,6 +348,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       model,
       agent,
       mcp,
+      pref,
     }
     return result
   },
