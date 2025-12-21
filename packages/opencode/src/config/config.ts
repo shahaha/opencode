@@ -380,6 +380,113 @@ export namespace Config {
   export const Permission = z.enum(["ask", "allow", "deny"])
   export type Permission = z.infer<typeof Permission>
 
+  export const PermissionPatternMap = z.record(z.string(), Permission).describe(
+    "Map of glob patterns to permissions. Patterns are evaluated in insertion order; first match wins. Use '*' as a catch-all default.",
+  )
+  export type PermissionPatternMap = z.infer<typeof PermissionPatternMap>
+
+  export const ExternalDirectoryPermission = z
+    .union([
+      Permission,
+      z
+        .object({
+          read: z
+            .union([Permission, PermissionPatternMap])
+            .optional()
+            .describe("Permission for reading files outside working directory"),
+          write: z
+            .union([Permission, PermissionPatternMap])
+            .optional()
+            .describe("Permission for writing files outside working directory"),
+        })
+        .strict(),
+    ])
+    .meta({
+      ref: "ExternalDirectoryPermission",
+    })
+  export type ExternalDirectoryPermission = z.infer<typeof ExternalDirectoryPermission>
+
+  export function getExternalDirectoryRead(
+    permission: ExternalDirectoryPermission | undefined,
+  ): Permission | undefined {
+    if (permission === undefined) return undefined
+    if (typeof permission === "string") return permission
+    if (typeof permission.read === "object") return undefined // Pattern map requires filepath
+    return permission.read
+  }
+
+  export function getExternalDirectoryWrite(
+    permission: ExternalDirectoryPermission | undefined,
+  ): Permission | undefined {
+    if (permission === undefined) return undefined
+    if (typeof permission === "string") return permission
+    if (typeof permission.write === "object") return undefined // Pattern map requires filepath
+    return permission.write
+  }
+
+  /**
+   * Resolves the read permission for a specific file path.
+   * When permission is a pattern map, patterns are evaluated in insertion order (first match wins).
+   * The "*" pattern is treated as a catch-all default and only evaluated if no other pattern matches.
+   */
+  export function getExternalDirectoryReadForPath(
+    permission: ExternalDirectoryPermission | undefined,
+    filepath: string,
+  ): Permission | undefined {
+    if (permission === undefined) return undefined
+    if (typeof permission === "string") return permission
+
+    const readPerm = permission.read
+    if (readPerm === undefined) return undefined
+    if (typeof readPerm === "string") return readPerm
+
+    return resolvePermissionFromPatternMap(readPerm, filepath)
+  }
+
+  /**
+   * Resolves the write permission for a specific file path.
+   * When permission is a pattern map, patterns are evaluated in insertion order (first match wins).
+   * The "*" pattern is treated as a catch-all default and only evaluated if no other pattern matches.
+   */
+  export function getExternalDirectoryWriteForPath(
+    permission: ExternalDirectoryPermission | undefined,
+    filepath: string,
+  ): Permission | undefined {
+    if (permission === undefined) return undefined
+    if (typeof permission === "string") return permission
+
+    const writePerm = permission.write
+    if (writePerm === undefined) return undefined
+    if (typeof writePerm === "string") return writePerm
+
+    return resolvePermissionFromPatternMap(writePerm, filepath)
+  }
+
+  /**
+   * Resolves permission from a pattern map for a given filepath.
+   * Patterns are evaluated in insertion order; "*" is skipped and used as fallback.
+   */
+  function resolvePermissionFromPatternMap(
+    patternMap: PermissionPatternMap,
+    filepath: string,
+  ): Permission | undefined {
+    for (const [pattern, perm] of Object.entries(patternMap)) {
+      // Skip "*" (catch-all default) - evaluate it last
+      if (pattern === "*") continue
+
+      // Expand ~ to home directory
+      const normalizedPattern = pattern.startsWith("~/") ? pattern.replace("~", os.homedir()) : pattern
+
+      const glob = new Bun.Glob(normalizedPattern)
+      if (glob.match(filepath)) {
+        return perm
+      }
+    }
+
+    // Return catch-all default if present
+    return patternMap["*"]
+  }
+
   export const Command = z.object({
     template: z.string(),
     description: z.string().optional(),
@@ -416,7 +523,7 @@ export namespace Config {
           bash: z.union([Permission, z.record(z.string(), Permission)]).optional(),
           webfetch: Permission.optional(),
           doom_loop: Permission.optional(),
-          external_directory: Permission.optional(),
+          external_directory: ExternalDirectoryPermission.optional(),
         })
         .optional(),
     })
@@ -763,7 +870,7 @@ export namespace Config {
           bash: z.union([Permission, z.record(z.string(), Permission)]).optional(),
           webfetch: Permission.optional(),
           doom_loop: Permission.optional(),
-          external_directory: Permission.optional(),
+          external_directory: ExternalDirectoryPermission.optional(),
         })
         .optional(),
       tools: z.record(z.string(), z.boolean()).optional(),
