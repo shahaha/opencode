@@ -590,6 +590,12 @@ export namespace SessionPrompt {
     for (const item of await ToolRegistry.tools(input.model.providerID)) {
       if (Wildcard.all(item.id, enabledTools) === false) continue
       const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
+      if (schema.type === "object" && schema.properties) {
+        schema.properties.displayInput = {
+          type: "object",
+          description: "the inputs to display in the TUI",
+        }
+      }
       tools[item.id] = tool({
         id: item.id as any,
         description: item.description,
@@ -606,7 +612,9 @@ export namespace SessionPrompt {
               args,
             },
           )
-          const result = await item.execute(args, {
+          const { displayInput, ...execArgs } = args
+          const displayArgs = displayInput ?? args
+          const result = await item.execute(execArgs, {
             sessionID: input.sessionID,
             abort: options.abortSignal!,
             messageID: input.processor.message.id,
@@ -616,18 +624,21 @@ export namespace SessionPrompt {
             metadata: async (val) => {
               const match = input.processor.partFromToolCall(options.toolCallId)
               if (match && match.state.status === "running") {
-                await Session.updatePart({
-                  ...match,
-                  state: {
-                    title: val.title,
-                    metadata: val.metadata,
-                    status: "running",
-                    input: args,
-                    time: {
-                      start: Date.now(),
-                    },
+                // Keep in-memory toolcall state in sync so processor can preserve display input
+                // This is so plugins can transform how bash is displayed. See #5321
+                match.state = {
+                  ...match.state,
+                  title: val.title,
+                  metadata: val.metadata,
+                  status: "running",
+                  input: execArgs,
+                  displayInput: displayArgs,
+                  time: match.state.time ?? {
+                    start: Date.now(),
                   },
-                })
+                }
+
+                await Session.updatePart(match)
               }
             },
           })
@@ -656,6 +667,20 @@ export namespace SessionPrompt {
       if (!execute) continue
 
       // Wrap execute to add plugin hooks and format output
+      const schema = (
+        item.inputSchema as {
+          jsonSchema?: {
+            type?: string
+            properties?: Record<string, unknown>
+          }
+        }
+      ).jsonSchema
+      if (schema && schema.type === "object" && schema.properties) {
+        schema.properties.displayInput = {
+          type: "object",
+          description: "the inputs to display in the TUI",
+        }
+      }
       item.execute = async (args, opts) => {
         await Plugin.trigger(
           "tool.execute.before",
@@ -668,7 +693,8 @@ export namespace SessionPrompt {
             args,
           },
         )
-        const result = await execute(args, opts)
+        const { displayInput: _, ...execArgs } = args
+        const result = await execute(execArgs, opts)
 
         await Plugin.trigger(
           "tool.execute.after",

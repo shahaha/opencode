@@ -122,12 +122,17 @@ export namespace SessionProcessor {
                 case "tool-call": {
                   const match = toolcalls[value.toolCallId]
                   if (match) {
+                  const { displayInput, ...execArgs } = value.input as Record<string, unknown> & {
+                    displayInput?: unknown
+                  }
+                  const displayArgs = displayInput ?? value.input
                     const part = await Session.updatePart({
                       ...match,
                       tool: value.toolName,
                       state: {
                         status: "running",
-                        input: value.input,
+                        input: execArgs,
+                        displayInput: displayArgs,
                         time: {
                           start: Date.now(),
                         },
@@ -186,7 +191,8 @@ export namespace SessionProcessor {
                       ...match,
                       state: {
                         status: "completed",
-                        input: value.input,
+                        input: match.state.input !== undefined ? match.state.input : value.input,
+                        displayInput: match.state.displayInput,
                         output: value.output.output,
                         metadata: value.output.metadata,
                         title: value.output.title,
@@ -210,7 +216,8 @@ export namespace SessionProcessor {
                       ...match,
                       state: {
                         status: "error",
-                        input: value.input,
+                        input: match.state.input !== undefined ? match.state.input : value.input,
+                        displayInput: match.state.displayInput,
                         error: (value.error as any).toString(),
                         metadata: value.error instanceof Permission.RejectedError ? value.error.metadata : undefined,
                         time: {
