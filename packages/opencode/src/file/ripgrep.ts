@@ -205,12 +205,32 @@ export namespace Ripgrep {
     return filepath
   }
 
-  export async function* files(input: { cwd: string; glob?: string[] }) {
-    const args = [await filepath(), "--files", "--follow", "--hidden", "--glob=!.git/*"]
+  export async function* files(input: {
+    cwd: string
+    glob?: string[]
+    ignore?: string[]
+    maxDepth?: number
+    maxFileSize?: string
+    timeoutMs?: number
+    follow?: boolean
+  }) {
+    const args = [await filepath(), "--files", "--hidden", "--glob=!.git/*"]
+    if (input.follow) args.push("--follow")
     if (input.glob) {
       for (const g of input.glob) {
         args.push(`--glob=${g}`)
       }
+    }
+    if (input.ignore) {
+      for (const g of input.ignore) {
+        args.push(`--glob=!${g}`)
+      }
+    }
+    if (input.maxDepth !== undefined) {
+      args.push(`--max-depth=${input.maxDepth}`)
+    }
+    if (input.maxFileSize) {
+      args.push(`--max-filesize=${input.maxFileSize}`)
     }
 
     // Bun.spawn should throw this, but it incorrectly reports that the executable does not exist.
@@ -234,10 +254,21 @@ export namespace Ripgrep {
     const decoder = new TextDecoder()
     let buffer = ""
 
+    let interrupted = true
+    let timedOut = false
+    const timeout = input.timeoutMs
+      ? setTimeout(() => {
+          timedOut = true
+          proc.kill()
+        }, input.timeoutMs)
+      : undefined
     try {
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {
+          interrupted = false
+          break
+        }
 
         buffer += decoder.decode(value, { stream: true })
         // Handle both Unix (\n) and Windows (\r\n) line endings
@@ -252,7 +283,10 @@ export namespace Ripgrep {
       if (buffer) yield buffer
     } finally {
       reader.releaseLock()
+      if (timeout) clearTimeout(timeout)
+      if ((interrupted || timedOut) && proc.exitCode === null) proc.kill()
       await proc.exited
+      if (timedOut) throw new Error("ripgrep timed out")
     }
   }
 
