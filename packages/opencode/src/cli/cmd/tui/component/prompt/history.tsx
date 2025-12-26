@@ -25,7 +25,7 @@ export type PromptInfo = {
   )[]
 }
 
-const MAX_HISTORY_ENTRIES = 50
+const MAX_HISTORY_ENTRIES = 100
 
 export const { use: usePromptHistory, provider: PromptHistoryProvider } = createSimpleContext({
   name: "PromptHistory",
@@ -61,6 +61,9 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
     })
 
     return {
+      get items() {
+        return store.history
+      },
       move(direction: 1 | -1, input: string) {
         if (!store.history.length) return undefined
         const current = store.history.at(store.index)
@@ -102,6 +105,9 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
         }
 
         appendFile(historyFile.name!, JSON.stringify(entry) + "\n").catch(() => {})
+      },
+      reset() {
+        setStore("index", 0)
       },
     }
   },

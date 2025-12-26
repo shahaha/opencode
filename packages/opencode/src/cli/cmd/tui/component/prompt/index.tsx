@@ -29,6 +29,7 @@ import { useDialog } from "@tui/ui/dialog"
 import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
 import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
+import { DialogHistorySearch } from "../dialog-history-search"
 
 export type PromptProps = {
   sessionID?: string
@@ -843,6 +844,25 @@ export function Prompt(props: PromptProps) {
                 }
                 if (store.mode === "normal") autocomplete.onKeyDown(e)
                 if (!autocomplete.visible) {
+                  if (keybind.match("history_search", e)) {
+                    e.preventDefault()
+                    const historyItems = history.items
+                    dialog.replace(() => (
+                      <DialogHistorySearch
+                        items={historyItems}
+                        onSelect={(item) => {
+                          input.setText(item.input)
+                          setStore("prompt", item)
+                          setStore("mode", item.mode ?? "normal")
+                          restoreExtmarksFromParts(item.parts)
+                          input.cursorOffset = input.plainText.length
+                          history.reset()
+                        }}
+                      />
+                    ))
+                    return
+                  }
+
                   if (
                     (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
                     (keybind.match("history_next", e) && input.cursorOffset === input.plainText.length)
