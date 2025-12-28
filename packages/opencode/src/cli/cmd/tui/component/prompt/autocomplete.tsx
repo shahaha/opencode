@@ -441,7 +441,9 @@ export function Autocomplete(props: {
       },
     })
 
-    return result.map((arr) => arr.obj)
+    return result
+      .map((arr) => arr.obj)
+      .sort((a, b) => a.display.localeCompare(b.display))
   })
 
   createEffect(() => {
