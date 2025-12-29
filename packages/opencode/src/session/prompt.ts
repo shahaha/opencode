@@ -1369,6 +1369,7 @@ export namespace SessionPrompt {
       model,
       agent: agentName,
       parts,
+      tools: command.tools,
     })) as MessageV2.WithParts
 
     Bus.publish(Command.Event.Executed, {
