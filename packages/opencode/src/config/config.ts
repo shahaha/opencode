@@ -929,6 +929,20 @@ export namespace Config {
     .object({
       $schema: z.string().optional().describe("JSON schema reference for configuration validation"),
       theme: z.string().optional().describe("Theme name to use for the interface"),
+      clipboard: z
+        .object({
+          linux: z
+            .object({
+              enablePrimaryCopy: z
+                .boolean()
+                .optional()
+                .default(false)
+                .describe("Copy to primary clipboard in addition to regular clipboard on Linux (Wayland/X11)"),
+            })
+            .optional(),
+        })
+        .optional()
+        .describe("Clipboard configuration"),
       keybinds: Keybinds.optional().describe("Custom keybind configurations"),
       logLevel: Log.Level.optional().describe("Log level"),
       tui: TUI.optional().describe("TUI specific settings"),
