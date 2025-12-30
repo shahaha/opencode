@@ -2,6 +2,7 @@
 mode: primary
 hidden: true
 model: opencode/claude-haiku-4-5
+color: "#44BA81"
 tools:
   "*": false
   "github-triage": true
@@ -62,8 +63,6 @@ TUI issues potentially caused by our underlying TUI library:
 - Crashes with opentui in the log
 
 **Do not** add for general TUI bugs.
-
----
 
 When assigning to people here are the following rules:
 
