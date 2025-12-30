@@ -61,9 +61,10 @@ export namespace SessionRevert {
         draft.revert = revert
       })
       // Emit session.diff event to update sidebar's Modified Files list
+      const diff = await Session.diff(input.sessionID)
       Bus.publish(Session.Event.Diff, {
         sessionID: input.sessionID,
-        diff: [],
+        diff,
       })
       return result
     }
