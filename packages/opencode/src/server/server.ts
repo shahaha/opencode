@@ -29,6 +29,8 @@ import { Command } from "../command"
 import { ProviderAuth } from "../provider/auth"
 import { Global } from "../global"
 import { ProjectRoute } from "./project"
+import { DiscoveryRoute } from "./discovery"
+import { StreamRoute } from "./stream"
 import { ToolRegistry } from "../tool/registry"
 import { zodToJsonSchema } from "zod-to-json-schema"
 import { SessionPrompt } from "../session/prompt"
@@ -264,6 +266,8 @@ export namespace Server {
       .use(validator("query", z.object({ directory: z.string().optional() })))
 
       .route("/project", ProjectRoute)
+      .route("/", StreamRoute)
+      .route("/", DiscoveryRoute)
 
       .get(
         "/pty",
