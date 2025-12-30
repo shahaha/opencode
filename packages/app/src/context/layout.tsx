@@ -30,6 +30,8 @@ type SessionTabs = {
 
 export type LocalProject = Partial<Project> & { worktree: string; expanded: boolean }
 
+export type ExpandedSessions = Record<string, boolean>
+
 export const { use: useLayout, provider: LayoutProvider } = createSimpleContext({
   name: "Layout",
   init: () => {
@@ -54,6 +56,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           width: 600,
         },
         sessionTabs: {} as Record<string, SessionTabs>,
+        expandedSessions: {} as ExpandedSessions,
       }),
     )
 
@@ -173,6 +176,33 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
             setStore("session", { width })
           } else {
             setStore("session", "width", width)
+          }
+        },
+      },
+      sessions: {
+        expanded: createMemo(() => store.expandedSessions ?? {}),
+        isExpanded(sessionID: string) {
+          return store.expandedSessions?.[sessionID] ?? false
+        },
+        expand(sessionID: string) {
+          if (!store.expandedSessions) {
+            setStore("expandedSessions", { [sessionID]: true })
+          } else {
+            setStore("expandedSessions", sessionID, true)
+          }
+        },
+        collapse(sessionID: string) {
+          if (!store.expandedSessions) {
+            setStore("expandedSessions", { [sessionID]: false })
+          } else {
+            setStore("expandedSessions", sessionID, false)
+          }
+        },
+        toggle(sessionID: string) {
+          if (!store.expandedSessions) {
+            setStore("expandedSessions", { [sessionID]: true })
+          } else {
+            setStore("expandedSessions", sessionID, !store.expandedSessions[sessionID])
           }
         },
       },
