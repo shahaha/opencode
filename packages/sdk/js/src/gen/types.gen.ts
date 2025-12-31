@@ -955,6 +955,10 @@ export type KeybindsConfig = {
    */
   session_child_cycle_reverse?: string
   /**
+   * List subagent sessions
+   */
+  session_child_list?: string
+  /**
    * Suspend terminal
    */
   terminal_suspend?: string

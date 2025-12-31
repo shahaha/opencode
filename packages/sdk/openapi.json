@@ -7748,6 +7748,11 @@
             "default": "<leader>left",
             "type": "string"
           },
+          "session_child_list": {
+            "description": "List subagent sessions",
+            "default": "none",
+            "type": "string"
+          },
           "session_parent": {
             "description": "Go to parent session",
             "default": "<leader>up",
