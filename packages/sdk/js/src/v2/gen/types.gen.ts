@@ -1196,7 +1196,7 @@ export type AgentConfig = {
    * Description of when to use the agent
    */
   description?: string
-  mode?: "subagent" | "primary" | "all"
+  mode?: "subagent" | "primary" | "all" | "fork"
   /**
    * Hex color code for the agent (e.g., #FF5733)
    */
@@ -1236,6 +1236,7 @@ export type AgentConfig = {
     | "subagent"
     | "primary"
     | "all"
+    | "fork"
     | string
     | number
     | {
@@ -1883,7 +1884,7 @@ export type File = {
 export type Agent = {
   name: string
   description?: string
-  mode: "subagent" | "primary" | "all"
+  mode: "subagent" | "primary" | "all" | "fork"
   native?: boolean
   hidden?: boolean
   default?: boolean

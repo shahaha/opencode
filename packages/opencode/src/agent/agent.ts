@@ -20,7 +20,7 @@ export namespace Agent {
     .object({
       name: z.string(),
       description: z.string().optional(),
-      mode: z.enum(["subagent", "primary", "all"]),
+      mode: z.enum(["subagent", "primary", "all", "fork"]),
       native: z.boolean().optional(),
       hidden: z.boolean().optional(),
       default: z.boolean().optional(),
@@ -266,7 +266,8 @@ export namespace Agent {
       }
     }
 
-    const hasPrimaryAgents = Object.values(result).filter((a) => a.mode !== "subagent" && !a.hidden).length > 0
+    const hasPrimaryAgents =
+      Object.values(result).filter((a) => a.mode !== "subagent" && a.mode !== "fork" && !a.hidden).length > 0
     if (!hasPrimaryAgents) {
       throw new Config.InvalidError({
         path: "config",

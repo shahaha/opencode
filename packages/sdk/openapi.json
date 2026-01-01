@@ -7837,7 +7837,7 @@
           },
           "mode": {
             "type": "string",
-            "enum": ["subagent", "primary", "all"]
+            "enum": ["subagent", "primary", "all", "fork"]
           },
           "color": {
             "description": "Hex color code for the agent (e.g., #FF5733)",
@@ -9462,7 +9462,7 @@
           },
           "mode": {
             "type": "string",
-            "enum": ["subagent", "primary", "all"]
+            "enum": ["subagent", "primary", "all", "fork"]
           },
           "native": {
             "type": "boolean"
