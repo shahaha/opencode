@@ -528,6 +528,7 @@ export namespace SessionPrompt {
 
       await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: sessionMessages })
 
+      const drop = model.api.id.startsWith("gpt-5.2")
       const result = await processor.process({
         user: lastUser,
         agent,
@@ -535,7 +536,9 @@ export namespace SessionPrompt {
         sessionID,
         system: [...(await SystemPrompt.environment()), ...(await SystemPrompt.custom())],
         messages: [
-          ...MessageV2.toModelMessage(sessionMessages),
+          ...MessageV2.toModelMessage(sessionMessages, {
+            dropReasoningOnlyAssistantMessages: drop,
+          }),
           ...(isLastStep
             ? [
                 {

@@ -418,7 +418,13 @@ export namespace MessageV2 {
   })
   export type WithParts = z.infer<typeof WithParts>
 
-  export function toModelMessage(input: WithParts[]): ModelMessage[] {
+  export function toModelMessage(
+    input: WithParts[],
+    options?: {
+      dropReasoningOnlyAssistantMessages?: boolean
+    },
+  ): ModelMessage[] {
+    const drop = options?.dropReasoningOnlyAssistantMessages === true
     const result: UIMessage[] = []
 
     for (const msg of input) {
@@ -534,6 +540,10 @@ export namespace MessageV2 {
               providerMetadata: part.metadata,
             })
           }
+        }
+
+        if (drop && assistantMessage.parts.every((part) => part.type === "step-start" || part.type === "reasoning")) {
+          if (result[result.length - 1] === assistantMessage) result.pop()
         }
       }
     }
