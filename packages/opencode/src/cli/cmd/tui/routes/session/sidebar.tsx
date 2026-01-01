@@ -1,5 +1,5 @@
 import { useSync } from "@tui/context/sync"
-import { createMemo, For, Show, Switch, Match } from "solid-js"
+import { createMemo, createResource, For, Show, Switch, Match, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
 import { Locale } from "@/util/locale"
@@ -11,6 +11,7 @@ import { useKeybind } from "../../context/keybind"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { TodoItem } from "../../component/todo-item"
+import { useSDK } from "../../context/sdk"
 
 export function Sidebar(props: { sessionID: string }) {
   const sync = useSync()
@@ -20,7 +21,7 @@ export function Sidebar(props: { sessionID: string }) {
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
 
-  const [expanded, setExpanded] = createStore({
+  const [expanded, setExpanded] = createStore<Record<string, boolean>>({
     mcp: true,
     diff: true,
     todo: true,
@@ -62,6 +63,26 @@ export function Sidebar(props: { sessionID: string }) {
 
   const directory = useDirectory()
   const kv = useKV()
+  const sdk = useSDK()
+
+  const [pluginPanels, { refetch: refetchPluginPanels }] = createResource(
+    () => props.sessionID,
+    async () => {
+      try {
+        const result = await sdk.client.plugin.sidebar()
+        return result.data ?? []
+      } catch (e) {
+        console.warn("Failed to fetch plugin sidebar panels:", e)
+        return []
+      }
+    },
+  )
+
+  // Poll plugin panels every 5 seconds for dynamic updates
+  const pluginPollInterval = setInterval(() => {
+    refetchPluginPanels()
+  }, 5000)
+  onCleanup(() => clearInterval(pluginPollInterval))
 
   const hasProviders = createMemo(() =>
     sync.data.provider.some((x) => x.id !== "opencode" || Object.values(x.models).some((y) => y.cost?.input !== 0)),
@@ -263,6 +284,59 @@ export function Sidebar(props: { sessionID: string }) {
                 </Show>
               </box>
             </Show>
+            <For each={pluginPanels() ?? []}>
+              {(panel) => {
+                const panelKey = `plugin_${panel.id}`
+                const isExpanded = () => expanded[panelKey] ?? true
+                return (
+                  <Show when={panel.items.length > 0}>
+                    <box>
+                      <box
+                        flexDirection="row"
+                        gap={1}
+                        onMouseDown={() => panel.items.length > 2 && setExpanded(panelKey, !isExpanded())}
+                      >
+                        <Show when={panel.items.length > 2}>
+                          <text fg={theme.text}>{isExpanded() ? "▼" : "▶"}</text>
+                        </Show>
+                        <text fg={theme.text}>
+                          <b>{panel.title}</b>
+                          <Show when={!isExpanded()}>
+                            <span style={{ fg: theme.textMuted }}> ({panel.items.length} items)</span>
+                          </Show>
+                        </text>
+                      </box>
+                      <Show when={panel.items.length <= 2 || isExpanded()}>
+                        <For each={panel.items}>
+                          {(item) => (
+                            <box flexDirection="row" gap={1} justifyContent="space-between">
+                              <text fg={theme.textMuted}>{item.label}</text>
+                              <Show when={item.value}>
+                                <text
+                                  fg={
+                                    item.status === "success"
+                                      ? theme.success
+                                      : item.status === "warning"
+                                        ? theme.warning
+                                        : item.status === "error"
+                                          ? theme.error
+                                          : item.status === "info"
+                                            ? theme.info
+                                            : theme.textMuted
+                                  }
+                                >
+                                  {item.value}
+                                </text>
+                              </Show>
+                            </box>
+                          )}
+                        </For>
+                      </Show>
+                    </box>
+                  </Show>
+                )
+              }}
+            </For>
           </box>
         </scrollbox>
 

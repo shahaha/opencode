@@ -4382,6 +4382,32 @@ export type AuthSetResponses = {
 
 export type AuthSetResponse = AuthSetResponses[keyof AuthSetResponses]
 
+export type PluginSidebarData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/plugin/sidebar"
+}
+
+export type PluginSidebarResponses = {
+  /**
+   * Plugin sidebar panels
+   */
+  200: Array<{
+    id: string
+    title: string
+    items: Array<{
+      label: string
+      value?: string
+      status?: "success" | "warning" | "error" | "info"
+    }>
+  }>
+}
+
+export type PluginSidebarResponse = PluginSidebarResponses[keyof PluginSidebarResponses]
+
 export type EventSubscribeData = {
   body?: never
   path?: never

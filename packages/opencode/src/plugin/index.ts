@@ -18,7 +18,7 @@ export namespace Plugin {
       fetch: async (...args) => Server.App().fetch(...args),
     })
     const config = await Config.get()
-    const hooks = []
+    const hooks: Hooks[] = []
     const input: PluginInput = {
       client,
       project: Instance.project,
@@ -34,16 +34,20 @@ export namespace Plugin {
     }
     for (let plugin of plugins) {
       log.info("loading plugin", { path: plugin })
-      if (!plugin.startsWith("file://")) {
-        const lastAtIndex = plugin.lastIndexOf("@")
-        const pkg = lastAtIndex > 0 ? plugin.substring(0, lastAtIndex) : plugin
-        const version = lastAtIndex > 0 ? plugin.substring(lastAtIndex + 1) : "latest"
-        plugin = await BunProc.install(pkg, version)
-      }
-      const mod = await import(plugin)
-      for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
-        const init = await fn(input)
-        hooks.push(init)
+      try {
+        if (!plugin.startsWith("file://")) {
+          const lastAtIndex = plugin.lastIndexOf("@")
+          const pkg = lastAtIndex > 0 ? plugin.substring(0, lastAtIndex) : plugin
+          const version = lastAtIndex > 0 ? plugin.substring(lastAtIndex + 1) : "latest"
+          plugin = await BunProc.install(pkg, version)
+        }
+        const mod = await import(plugin)
+        for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
+          const init = await fn(input)
+          hooks.push(init)
+        }
+      } catch (e) {
+        log.error("failed to load plugin", { path: plugin, error: e })
       }
     }
 
@@ -54,7 +58,7 @@ export namespace Plugin {
   })
 
   export async function trigger<
-    Name extends Exclude<keyof Required<Hooks>, "auth" | "event" | "tool">,
+    Name extends Exclude<keyof Required<Hooks>, "auth" | "event" | "tool" | "sidebar">,
     Input = Parameters<Required<Hooks>[Name]>[0],
     Output = Parameters<Required<Hooks>[Name]>[1],
   >(name: Name, input: Input, output: Output): Promise<Output> {
@@ -72,6 +76,29 @@ export namespace Plugin {
 
   export async function list() {
     return state().then((x) => x.hooks)
+  }
+
+  export async function getSidebarPanels() {
+    const { hooks } = await state()
+    const panels: Array<{
+      id: string
+      title: string
+      items: Array<{ label: string; value?: string; status?: "success" | "warning" | "error" | "info" }>
+    }> = []
+    for (const hook of hooks) {
+      const sidebar = hook.sidebar
+      if (!sidebar) continue
+      try {
+        const resolved = typeof sidebar === "function" ? sidebar() : sidebar
+        for (const panel of resolved) {
+          const items = typeof panel.items === "function" ? panel.items() : panel.items
+          panels.push({ id: panel.id, title: panel.title, items })
+        }
+      } catch (e) {
+        log.warn("sidebar panel failed", { error: e })
+      }
+    }
+    return panels
   }
 
   export async function init() {
