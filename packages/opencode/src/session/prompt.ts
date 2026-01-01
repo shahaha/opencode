@@ -11,6 +11,7 @@ import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
 import { type Tool as AITool, tool, jsonSchema } from "ai"
 import { SessionCompaction } from "./compaction"
+import { SessionLock } from "./lock"
 import { Instance } from "../project/instance"
 import { Bus } from "../bus"
 import { ProviderTransform } from "../provider/transform"
@@ -90,7 +91,6 @@ export namespace SessionPrompt {
     noReply: z.boolean().optional(),
     tools: z.record(z.string(), z.boolean()).optional(),
     system: z.string().optional(),
-    variant: z.string().optional(),
     parts: z.array(
       z.discriminatedUnion("type", [
         MessageV2.TextPart.omit({
@@ -228,6 +228,22 @@ export namespace SessionPrompt {
     return
   }
 
+  function lock(sessionID: string) {
+    const handle = SessionLock.acquire({ sessionID })
+    log.info("locking", { sessionID })
+    return {
+      signal: handle.signal,
+      abort: handle.abort,
+      async [Symbol.dispose]() {
+        handle[Symbol.dispose]()
+        log.info("unlocking", { sessionID })
+        const session = await Session.get(sessionID)
+        if (session.parentID) return
+        cancel(sessionID)
+      },
+    }
+  }
+
   export const loop = fn(Identifier.schema("session"), async (sessionID) => {
     const abort = start(sessionID)
     if (!abort) {
@@ -237,7 +253,14 @@ export namespace SessionPrompt {
       })
     }
 
-    using _ = defer(() => cancel(sessionID))
+    using _lock = lock(sessionID)
+    using _ = defer(() => {
+      cancel(sessionID)
+      // Clear currentAgent when loop completes
+      Session.update(sessionID, (draft) => {
+        draft.currentAgent = undefined
+      }).catch(() => {})
+    })
 
     let step = 0
     while (true) {
@@ -473,6 +496,13 @@ export namespace SessionPrompt {
 
       // normal processing
       const agent = await Agent.get(lastUser.agent)
+      // Track current agent in session state (only if changed)
+      const session = await Session.get(sessionID)
+      if (session.currentAgent !== agent.name) {
+        await Session.update(sessionID, (draft) => {
+          draft.currentAgent = agent.name
+        })
+      }
       const maxSteps = agent.maxSteps ?? Infinity
       const isLastStep = step >= maxSteps
       msgs = insertReminders({
@@ -584,7 +614,7 @@ export namespace SessionPrompt {
       mergeDeep(await ToolRegistry.enabled(input.agent)),
       mergeDeep(input.tools ?? {}),
     )
-    for (const item of await ToolRegistry.tools(input.model.providerID, input.agent)) {
+    for (const item of await ToolRegistry.tools(input.model.providerID)) {
       if (Wildcard.all(item.id, enabledTools) === false) continue
       const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
       tools[item.id] = tool({
@@ -716,7 +746,19 @@ export namespace SessionPrompt {
   }
 
   async function createUserMessage(input: PromptInput) {
-    const agent = await Agent.get(input.agent ?? (await Agent.defaultAgent()))
+    const session = await Session.get(input.sessionID)
+
+    // If no agent specified, infer from last assistant message's mode
+    let agentName = input.agent
+    if (!agentName) {
+      const msgs = await MessageV2.filterCompacted(MessageV2.stream(input.sessionID))
+      const lastAssistant = msgs.findLast((m) => m.info.role === "assistant") as MessageV2.Assistant | undefined
+      // Updated fallback chain - add session.currentAgent before session.agent
+      agentName = lastAssistant?.mode ?? session.currentAgent ?? session.agent ?? "general"
+    }
+
+    const agent = (await Agent.get(agentName)) || (await Agent.get("general"))
+    if (!agent) throw new Error(`Agent not found: ${agentName}`)
     const info: MessageV2.Info = {
       id: input.messageID ?? Identifier.ascending("message"),
       role: "user",
@@ -728,7 +770,6 @@ export namespace SessionPrompt {
       agent: agent.name,
       model: input.model ?? agent.model ?? (await lastModel(input.sessionID)),
       system: input.system,
-      variant: input.variant,
     }
 
     const parts = await Promise.all(
@@ -829,7 +870,7 @@ export namespace SessionPrompt {
                     const result = await t.execute(args, {
                       sessionID: input.sessionID,
                       abort: new AbortController().signal,
-                      agent: input.agent!,
+                      agent: agent.name,
                       messageID: info.id,
                       extra: { bypassCwdCheck: true, model },
                       metadata: async () => {},
@@ -889,7 +930,7 @@ export namespace SessionPrompt {
                   t.execute(args, {
                     sessionID: input.sessionID,
                     abort: new AbortController().signal,
-                    agent: input.agent!,
+                    agent: agent.name,
                     messageID: info.id,
                     extra: { bypassCwdCheck: true },
                     metadata: async () => {},
@@ -1269,7 +1310,6 @@ export namespace SessionPrompt {
     model: z.string().optional(),
     arguments: z.string(),
     command: z.string(),
-    variant: z.string().optional(),
   })
   export type CommandInput = z.infer<typeof CommandInput>
   const bashRegex = /!`([^`]+)`/g
@@ -1285,14 +1325,13 @@ export namespace SessionPrompt {
   export async function command(input: CommandInput) {
     log.info("command", input)
     const command = await Command.get(input.command)
-    const agentName = command.agent ?? input.agent ?? (await Agent.defaultAgent())
+    const agentName = command.agent ?? input.agent ?? "build"
 
     const raw = input.arguments.match(argsRegex) ?? []
     const args = raw.map((arg) => arg.replace(quoteTrimRegex, ""))
 
-    const templateCommand = await command.template
-
-    const placeholders = templateCommand.match(placeholderRegex) ?? []
+    const templateStr = await command.template
+    const placeholders = templateStr.match(placeholderRegex) ?? []
     let last = 0
     for (const item of placeholders) {
       const value = Number(item.slice(1))
@@ -1300,7 +1339,7 @@ export namespace SessionPrompt {
     }
 
     // Let the final placeholder swallow any extra arguments so prompts read naturally
-    const withArgs = templateCommand.replaceAll(placeholderRegex, (_, index) => {
+    const withArgs = templateStr.replaceAll(placeholderRegex, (_: string, index: string) => {
       const position = Number(index)
       const argIndex = position - 1
       if (argIndex >= args.length) return ""
@@ -1314,7 +1353,7 @@ export namespace SessionPrompt {
       const results = await Promise.all(
         shell.map(async ([, cmd]) => {
           try {
-            return await $`${{ raw: cmd }}`.quiet().nothrow().text()
+            return await $`${{ raw: cmd }}`.nothrow().text()
           } catch (error) {
             return `Error executing command: ${error instanceof Error ? error.message : String(error)}`
           }
@@ -1374,7 +1413,6 @@ export namespace SessionPrompt {
       model,
       agent: agentName,
       parts,
-      variant: input.variant,
     })) as MessageV2.WithParts
 
     Bus.publish(Command.Event.Executed, {
@@ -1431,7 +1469,7 @@ export namespace SessionPrompt {
               time: {
                 created: Date.now(),
               },
-              agent: input.message.info.role === "user" ? input.message.info.agent : await Agent.defaultAgent(),
+              agent: input.message.info.role === "user" ? input.message.info.agent : "build",
               model: {
                 providerID: input.providerID,
                 modelID: input.modelID,
