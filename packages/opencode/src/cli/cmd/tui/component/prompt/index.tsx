@@ -30,6 +30,9 @@ import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
 import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
+import { useWindowID } from "../../context/window-id"
+import { WindowFocusRegistry } from "../../window-focus-registry"
+import { useLayout } from "../../context/layout"
 
 export type PromptProps = {
   sessionID?: string
@@ -126,6 +129,8 @@ export function Prompt(props: PromptProps) {
   const renderer = useRenderer()
   const { theme, syntax } = useTheme()
   const kv = useKV()
+  const windowID = useWindowID()
+  const layout = useLayout()
 
   function promptModelWarning() {
     toast.show({
@@ -378,6 +383,11 @@ export function Prompt(props: PromptProps) {
 
   onMount(() => {
     promptPartTypeId = input.extmarks.registerType("prompt-part")
+    // Register with window focus system if in a window context
+    if (windowID) {
+      const unregister = WindowFocusRegistry.register(windowID, { focus: () => input.focus() })
+      onCleanup(unregister)
+    }
   })
 
   function restoreExtmarksFromParts(parts: PromptInfo["parts"]) {
@@ -550,6 +560,14 @@ export function Prompt(props: PromptProps) {
     if (props.disabled) return
     if (autocomplete?.visible) return
     if (!store.prompt.input) return
+    if (autocomplete?.visible) {
+      toast.show({ message: "DEBUG: blocked by autocomplete", variant: "error", duration: 3000 })
+      return
+    }
+    if (!store.prompt.input) {
+      toast.show({ message: "DEBUG: blocked by empty input", variant: "error", duration: 3000 })
+      return
+    }
     const trimmed = store.prompt.input.trim()
     if (trimmed === "exit" || trimmed === "quit" || trimmed === ":q") {
       exit()
@@ -654,14 +672,21 @@ export function Prompt(props: PromptProps) {
     setStore("extmarkToPartIndex", new Map())
     props.onSubmit?.()
 
-    // temporary hack to make sure the message is sent
-    if (!props.sessionID)
+    // Navigate to the new session after submission
+    if (!props.sessionID) {
       setTimeout(() => {
-        route.navigate({
-          type: "session",
-          sessionID,
-        })
+        if (windowID) {
+          // Multi-window mode: update this window's view
+          layout.navigateFocusedWindow(`session:${sessionID}`)
+        } else {
+          // Single-window mode: use route navigation
+          route.navigate({
+            type: "session",
+            sessionID,
+          })
+        }
       }, 50)
+    }
     input.clear()
   }
   const exit = useExit()

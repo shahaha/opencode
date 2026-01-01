@@ -430,7 +430,7 @@ export namespace Config {
       status_view: z.string().optional().default("<leader>s").describe("View status"),
       session_export: z.string().optional().default("<leader>x").describe("Export session to editor"),
       session_new: z.string().optional().default("<leader>n").describe("Create a new session"),
-      session_list: z.string().optional().default("<leader>l").describe("List all sessions"),
+      session_list: z.string().optional().default("<leader>;").describe("List all sessions"),
       session_timeline: z.string().optional().default("<leader>g").describe("Show session timeline"),
       session_fork: z.string().optional().default("none").describe("Fork session from message"),
       session_rename: z.string().optional().default("none").describe("Rename session"),
@@ -457,7 +457,7 @@ export namespace Config {
       messages_toggle_conceal: z
         .string()
         .optional()
-        .default("<leader>h")
+        .default("<leader>.")
         .describe("Toggle code block concealment in messages"),
       tool_details: z.string().optional().default("none").describe("Toggle tool details visibility"),
       model_list: z.string().optional().default("<leader>m").describe("List available models"),
@@ -558,7 +558,21 @@ export namespace Config {
       session_parent: z.string().optional().default("<leader>up").describe("Go to parent session"),
       terminal_suspend: z.string().optional().default("ctrl+z").describe("Suspend terminal"),
       terminal_title_toggle: z.string().optional().default("none").describe("Toggle terminal title"),
-      tips_toggle: z.string().optional().default("<leader>h").describe("Toggle tips on home screen"),
+      tips_toggle: z.string().optional().default("<leader>?").describe("Toggle tips on home screen"),
+      // Window commands (leader + key, default leader is ctrl+x)
+      window_focus_left: z.string().optional().default("<leader>h").describe("Focus window to the left"),
+      window_focus_down: z.string().optional().default("<leader>j").describe("Focus window below"),
+      window_focus_up: z.string().optional().default("<leader>k").describe("Focus window above"),
+      window_focus_right: z.string().optional().default("<leader>l").describe("Focus window to the right"),
+      window_split_horizontal: z.string().optional().default("<leader>-").describe("Split window horizontally"),
+      window_split_vertical: z.string().optional().default("<leader>|").describe("Split window vertically"),
+      window_close: z.string().optional().default("<leader>w").describe("Close current window"),
+      window_close_others: z.string().optional().default("<leader>shift+w").describe("Close all other windows"),
+      window_equalize: z.string().optional().default("<leader>=").describe("Equalize window sizes"),
+      window_increase_height: z.string().optional().default("<leader>+").describe("Increase window height"),
+      window_decrease_height: z.string().optional().default("<leader>_").describe("Decrease window height"),
+      window_increase_width: z.string().optional().default("<leader>>").describe("Increase window width"),
+      window_decrease_width: z.string().optional().default("<leader><").describe("Decrease window width"),
     })
     .strict()
     .meta({
@@ -577,6 +591,64 @@ export namespace Config {
       .enum(["auto", "stacked"])
       .optional()
       .describe("Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column"),
+
+    // Component-specific settings
+    messages: z
+      .object({
+        padding: z.number().int().min(0).optional().describe("Padding around messages"),
+        gap: z.number().int().min(0).optional().describe("Gap between messages"),
+      })
+      .optional()
+      .describe("Message display settings"),
+
+    sidebar: z
+      .object({
+        padding: z.number().int().min(0).optional().describe("Padding inside sidebar"),
+        width: z.number().int().min(10).optional().describe("Sidebar width in characters"),
+        visible: z.boolean().optional().describe("Show sidebar by default"),
+      })
+      .optional()
+      .describe("Sidebar settings"),
+
+    header: z
+      .object({
+        padding: z.number().int().min(0).optional().describe("Padding inside header"),
+        visible: z.boolean().optional().describe("Show header"),
+        show_title: z.boolean().optional().describe("Show session title"),
+        show_context: z.boolean().optional().describe("Show context info"),
+        show_cost: z.boolean().optional().describe("Show cost information"),
+        show_tokens: z.boolean().optional().describe("Show token count"),
+      })
+      .optional()
+      .describe("Header settings"),
+
+    footer: z
+      .object({
+        padding: z.number().int().min(0).optional().describe("Padding inside footer"),
+        visible: z.boolean().optional().describe("Show footer"),
+        show_directory: z.boolean().optional().describe("Show current directory"),
+        show_lsp_status: z.boolean().optional().describe("Show LSP status"),
+        show_mcp_status: z.boolean().optional().describe("Show MCP status"),
+        show_version: z.boolean().optional().describe("Show version"),
+        show_keybind_hints: z.boolean().optional().describe("Show keybind hints"),
+      })
+      .optional()
+      .describe("Footer settings"),
+
+    prompt: z
+      .object({
+        padding: z.number().int().min(0).optional().describe("Padding around prompt"),
+      })
+      .optional()
+      .describe("Prompt settings"),
+
+    window: z
+      .object({
+        padding: z.number().int().min(0).optional().describe("Padding inside windows"),
+        border: z.boolean().optional().describe("Show window borders"),
+      })
+      .optional()
+      .describe("Window settings"),
   })
 
   export const Server = z
