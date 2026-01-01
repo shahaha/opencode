@@ -665,6 +665,18 @@ export function Prompt(props: PromptProps) {
     input.clear()
   }
   const exit = useExit()
+  const [ctrlCPressedOnce, setCtrlCPressedOnce] = createSignal(false)
+  let ctrlCResetTimeout: ReturnType<typeof setTimeout> | undefined
+
+  const [ctrlCClearedState, setCtrlCClearedState] = createSignal<{
+    input: string
+    parts: PromptInfo["parts"]
+    mode: "normal" | "shell"
+  } | null>(null)
+
+  onCleanup(() => {
+    if (ctrlCResetTimeout) clearTimeout(ctrlCResetTimeout)
+  })
 
   function pasteText(text: string, virtualText: string) {
     const currentOffset = input.visualCursor.offset
@@ -851,7 +863,25 @@ export function Prompt(props: PromptProps) {
                   }
                   // If no image, let the default paste behavior continue
                 }
+                if (keybind.match("input_undo", e) && ctrlCClearedState()) {
+                  const saved = ctrlCClearedState()!
+                  input.setText(saved.input)
+                  restoreExtmarksFromParts(saved.parts)
+                  setStore("prompt", {
+                    input: saved.input,
+                    parts: saved.parts,
+                  })
+                  setStore("mode", saved.mode)
+                  setCtrlCClearedState(null)
+                  e.preventDefault()
+                  return
+                }
                 if (keybind.match("input_clear", e) && store.prompt.input !== "") {
+                  setCtrlCClearedState({
+                    input: store.prompt.input,
+                    parts: [...store.prompt.parts],
+                    mode: store.mode,
+                  })
                   input.clear()
                   input.extmarks.clear()
                   setStore("prompt", {
@@ -859,12 +889,27 @@ export function Prompt(props: PromptProps) {
                     parts: [],
                   })
                   setStore("extmarkToPartIndex", new Map())
+                  e.preventDefault()
                   return
                 }
                 if (keybind.match("app_exit", e)) {
                   if (store.prompt.input === "") {
-                    await exit()
-                    // Don't preventDefault - let textarea potentially handle the event
+                    if (ctrlCPressedOnce()) {
+                      if (ctrlCResetTimeout) clearTimeout(ctrlCResetTimeout)
+                      await exit()
+                      e.preventDefault()
+                      return
+                    }
+                    setCtrlCPressedOnce(true)
+                    toast.show({
+                      variant: "warning",
+                      message: "Press Ctrl+C again to exit",
+                      duration: 3000,
+                    })
+                    if (ctrlCResetTimeout) clearTimeout(ctrlCResetTimeout)
+                    ctrlCResetTimeout = setTimeout(() => {
+                      setCtrlCPressedOnce(false)
+                    }, 3000)
                     e.preventDefault()
                     return
                   }
