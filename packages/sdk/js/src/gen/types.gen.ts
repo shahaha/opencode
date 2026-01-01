@@ -995,7 +995,32 @@ export type AgentConfig = {
         }
     webfetch?: "ask" | "allow" | "deny"
     doom_loop?: "ask" | "allow" | "deny"
-    external_directory?: "ask" | "allow" | "deny"
+    external_directory?:
+      | "ask"
+      | "allow"
+      | "deny"
+      | {
+          read?:
+            | "ask"
+            | "allow"
+            | "deny"
+            | {
+                directories?: {
+                  [key: string]: "ask" | "allow" | "deny"
+                }
+                default?: "ask" | "allow" | "deny"
+              }
+          write?:
+            | "ask"
+            | "allow"
+            | "deny"
+            | {
+                directories?: {
+                  [key: string]: "ask" | "allow" | "deny"
+                }
+                default?: "ask" | "allow" | "deny"
+              }
+        }
   }
   [key: string]:
     | unknown
@@ -1016,7 +1041,32 @@ export type AgentConfig = {
             }
         webfetch?: "ask" | "allow" | "deny"
         doom_loop?: "ask" | "allow" | "deny"
-        external_directory?: "ask" | "allow" | "deny"
+        external_directory?:
+          | "ask"
+          | "allow"
+          | "deny"
+          | {
+              read?:
+                | "ask"
+                | "allow"
+                | "deny"
+                | {
+                    directories?: {
+                      [key: string]: "ask" | "allow" | "deny"
+                    }
+                    default?: "ask" | "allow" | "deny"
+                  }
+              write?:
+                | "ask"
+                | "allow"
+                | "deny"
+                | {
+                    directories?: {
+                      [key: string]: "ask" | "allow" | "deny"
+                    }
+                    default?: "ask" | "allow" | "deny"
+                  }
+            }
       }
     | undefined
 }
@@ -1324,7 +1374,32 @@ export type Config = {
         }
     webfetch?: "ask" | "allow" | "deny"
     doom_loop?: "ask" | "allow" | "deny"
-    external_directory?: "ask" | "allow" | "deny"
+    external_directory?:
+      | "ask"
+      | "allow"
+      | "deny"
+      | {
+          read?:
+            | "ask"
+            | "allow"
+            | "deny"
+            | {
+                directories?: {
+                  [key: string]: "ask" | "allow" | "deny"
+                }
+                default?: "ask" | "allow" | "deny"
+              }
+          write?:
+            | "ask"
+            | "allow"
+            | "deny"
+            | {
+                directories?: {
+                  [key: string]: "ask" | "allow" | "deny"
+                }
+                default?: "ask" | "allow" | "deny"
+              }
+        }
   }
   tools?: {
     [key: string]: boolean
@@ -1589,7 +1664,32 @@ export type Agent = {
     }
     webfetch?: "ask" | "allow" | "deny"
     doom_loop?: "ask" | "allow" | "deny"
-    external_directory?: "ask" | "allow" | "deny"
+    external_directory?:
+      | "ask"
+      | "allow"
+      | "deny"
+      | {
+          read?:
+            | "ask"
+            | "allow"
+            | "deny"
+            | {
+                directories?: {
+                  [key: string]: "ask" | "allow" | "deny"
+                }
+                default?: "ask" | "allow" | "deny"
+              }
+          write?:
+            | "ask"
+            | "allow"
+            | "deny"
+            | {
+                directories?: {
+                  [key: string]: "ask" | "allow" | "deny"
+                }
+                default?: "ask" | "allow" | "deny"
+              }
+        }
   }
   model?: {
     modelID: string

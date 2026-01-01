@@ -1,9 +1,14 @@
 import z from "zod"
+import path from "path"
 import { Tool } from "./tool"
 import { Ripgrep } from "../file/ripgrep"
 
 import DESCRIPTION from "./grep.txt"
 import { Instance } from "../project/instance"
+import { Filesystem } from "../util/filesystem"
+import { Permission } from "../permission"
+import { Agent } from "../agent/agent"
+import { ExternalPermission } from "../util/external-permission"
 
 const MAX_LINE_LENGTH = 2000
 
@@ -14,12 +19,40 @@ export const GrepTool = Tool.define("grep", {
     path: z.string().optional().describe("The directory to search in. Defaults to the current working directory."),
     include: z.string().optional().describe('File pattern to include in the search (e.g. "*.js", "*.{ts,tsx}")'),
   }),
-  async execute(params) {
+  async execute(params, ctx) {
     if (!params.pattern) {
       throw new Error("pattern is required")
     }
 
-    const searchPath = params.path || Instance.directory
+    const searchPath = params.path
+      ? path.isAbsolute(params.path)
+        ? params.path
+        : path.resolve(Instance.directory, params.path)
+      : Instance.directory
+    const agent = await Agent.get(ctx.agent)
+
+    if (!Filesystem.contains(Instance.directory, searchPath)) {
+      const externalPerm = ExternalPermission.resolve(agent.permission.external_directory, searchPath, "read")
+      if (externalPerm === "ask") {
+        await Permission.ask({
+          type: "external_directory",
+          pattern: [searchPath, path.join(searchPath, "*")],
+          sessionID: ctx.sessionID,
+          messageID: ctx.messageID,
+          callID: ctx.callID,
+          title: `Search directory outside working directory: ${searchPath}`,
+          metadata: { searchPath },
+        })
+      } else if (externalPerm === "deny") {
+        throw new Permission.RejectedError(
+          ctx.sessionID,
+          "external_directory",
+          ctx.callID,
+          { searchPath },
+          `Access to ${searchPath} is denied by external_directory permission`,
+        )
+      }
+    }
 
     const rgPath = await Ripgrep.filepath()
     const args = ["-nH", "--field-match-separator=|", "--regexp", params.pattern]
