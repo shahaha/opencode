@@ -167,7 +167,6 @@ function App() {
   const route = useRoute()
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
-  renderer.disableStdoutInterception()
   const dialog = useDialog()
   const local = useLocal()
   const kv = useKV()
@@ -194,10 +193,6 @@ function App() {
     renderer.clearSelection()
   }
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
-
-  createEffect(() => {
-    console.log(JSON.stringify(route.data))
-  })
 
   // Update terminal window title based on current route and session
   createEffect(() => {

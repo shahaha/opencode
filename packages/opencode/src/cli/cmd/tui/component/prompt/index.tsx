@@ -609,7 +609,6 @@ export function Prompt(props: PromptProps) {
       inputText.startsWith("/") &&
       iife(() => {
         const command = inputText.split(" ")[0].slice(1)
-        console.log(command)
         return sync.data.command.some((x) => x.name === command)
       })
     ) {
