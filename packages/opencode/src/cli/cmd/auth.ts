@@ -276,6 +276,7 @@ export const AuthLoginCommand = cmd({
           google: 4,
           openrouter: 5,
           vercel: 6,
+          "ollama-cloud": 7,
         }
         let provider = await prompts.autocomplete({
           message: "Select provider",
@@ -297,6 +298,10 @@ export const AuthLoginCommand = cmd({
                 }[x.id],
               })),
             ),
+            {
+              value: "ollama-cloud",
+              label: "Ollama Cloud",
+            },
             {
               value: "other",
               label: "Other",
@@ -339,6 +344,12 @@ export const AuthLoginCommand = cmd({
           )
           prompts.outro("Done")
           return
+        }
+
+        if (provider === "ollama-cloud") {
+          prompts.log.info("1. Go to https://ollama.com/ and sign in")
+          prompts.log.info("2. Navigate to Settings > Keys and generate a new API key")
+          prompts.log.info("3. Copy the API key and paste it below")
         }
 
         if (provider === "opencode") {

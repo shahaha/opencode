@@ -289,6 +289,13 @@ export namespace Provider {
         },
       }
     },
+    "ollama-cloud": async () => {
+      const hasKey = await Auth.get("ollama-cloud")
+      return {
+        autoload: Boolean(hasKey),
+        options: {},
+      }
+    },
     "google-vertex": async () => {
       const project = Env.get("GOOGLE_CLOUD_PROJECT") ?? Env.get("GCP_PROJECT") ?? Env.get("GCLOUD_PROJECT")
       const location = Env.get("GOOGLE_CLOUD_LOCATION") ?? Env.get("VERTEX_LOCATION") ?? "us-east5"
@@ -594,6 +601,18 @@ export namespace Provider {
     log.info("init")
 
     const configProviders = Object.entries(config.provider ?? {})
+
+    // Add Ollama Cloud provider
+    if (!database["ollama-cloud"]) {
+      database["ollama-cloud"] = {
+        id: "ollama-cloud",
+        name: "Ollama Cloud",
+        env: [],
+        npm: "@ai-sdk/openai-compatible",
+        api: "https://api.ollama.com/v1",
+        models: {},
+      }
+    }
 
     // Add GitHub Copilot Enterprise provider that inherits from GitHub Copilot
     if (database["github-copilot"]) {
