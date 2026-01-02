@@ -1141,6 +1141,10 @@ export type KeybindsConfig = {
    */
   history_next?: string
   /**
+   * Reverse search history
+   */
+  history_search?: string
+  /**
    * Next child session
    */
   session_child_cycle?: string
