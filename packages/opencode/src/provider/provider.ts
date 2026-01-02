@@ -356,49 +356,14 @@ export namespace Provider {
         },
       }
     },
-    "cloudflare-ai-gateway": async (input) => {
-      const accountId = Env.get("CLOUDFLARE_ACCOUNT_ID")
-      const gateway = Env.get("CLOUDFLARE_GATEWAY_ID")
-
-      if (!accountId || !gateway) return { autoload: false }
-
-      // Get API token from env or auth prompt
-      const apiToken = await (async () => {
-        const envToken = Env.get("CLOUDFLARE_API_TOKEN")
-        if (envToken) return envToken
-        const auth = await Auth.get(input.id)
-        if (auth?.type === "api") return auth.key
-        return undefined
-      })()
-
-      return {
-        autoload: true,
-        async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
-          return sdk.chat(modelID)
-        },
-        options: {
-          baseURL: `https://gateway.ai.cloudflare.com/v1/${accountId}/${gateway}/compat`,
-          headers: {
-            // Cloudflare AI Gateway uses cf-aig-authorization for authenticated gateways
-            // This enables Unified Billing where Cloudflare handles upstream provider auth
-            ...(apiToken ? { "cf-aig-authorization": `Bearer ${apiToken}` } : {}),
-            "HTTP-Referer": "https://opencode.ai/",
-            "X-Title": "opencode",
-          },
-          // Custom fetch to strip Authorization header - AI Gateway uses cf-aig-authorization instead
-          // Sending Authorization header with invalid value causes auth errors
-          fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-            const headers = new Headers(init?.headers)
-            headers.delete("Authorization")
-            return fetch(input, { ...init, headers })
-          },
-        },
-      }
-    },
     cerebras: async () => {
       return {
         autoload: false,
         options: {
+          // Conservative max_tokens to avoid premature rate limiting.
+          // Cerebras rate limiter estimates token consumption using max_completion_tokens upfront,
+          // so requesting the model maximum reserves that quota even if actual usage is low.
+          maxCompletionTokens: 16384,
           headers: {
             "X-Cerebras-3rd-Party-Integration": "opencode",
           },
