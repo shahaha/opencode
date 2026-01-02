@@ -3,14 +3,22 @@ import { createSimpleContext } from "./helper"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { batch, onCleanup, onMount } from "solid-js"
 
+function parseRemoteHost(url: string): string {
+  const parsed = new URL(url)
+  const host = parsed.hostname
+  const port = parsed.port
+  return port ? `${host}:${port}` : host
+}
+
 export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
   name: "SDK",
-  init: (props: { url: string }) => {
+  init: (props: { url: string; attached?: boolean }) => {
     const abort = new AbortController()
     const sdk = createOpencodeClient({
       baseUrl: props.url,
       signal: abort.signal,
     })
+    const remoteHost = props.attached ? parseRemoteHost(props.url) : undefined
 
     const emitter = createGlobalEmitter<{
       [key in Event["type"]]: Extract<Event, { type: key }>
@@ -69,6 +77,6 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       abort.abort()
     })
 
-    return { client: sdk, event: emitter, url: props.url }
+    return { client: sdk, event: emitter, url: props.url, remoteHost }
   },
 })
