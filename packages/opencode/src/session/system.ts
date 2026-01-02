@@ -92,9 +92,10 @@ export namespace SystemPrompt {
         }
         let matches: string[] = []
         if (path.isAbsolute(instruction)) {
+          const { base, pattern } = Filesystem.splitGlob(instruction)
           matches = await Array.fromAsync(
-            new Bun.Glob(path.basename(instruction)).scan({
-              cwd: path.dirname(instruction),
+            new Bun.Glob(pattern).scan({
+              cwd: base,
               absolute: true,
               onlyFiles: true,
             }),

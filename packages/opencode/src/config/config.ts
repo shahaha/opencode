@@ -1053,6 +1053,13 @@ export namespace Config {
           } catch (err) {}
         }
       }
+      if (data.instructions) {
+        data.instructions = data.instructions.map((instruction) => {
+          if (instruction.startsWith("~/")) return instruction
+          if (path.isAbsolute(instruction)) return instruction
+          return path.resolve(path.dirname(configFilepath), instruction)
+        })
+      }
       return data
     }
 
