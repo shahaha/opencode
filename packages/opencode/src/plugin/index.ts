@@ -1,4 +1,4 @@
-import type { Hooks, PluginInput, Plugin as PluginInstance } from "@opencode-ai/plugin"
+import { type Hooks, type PluginInput, type Plugin as PluginFunction, type PluginDefinition, type PluginScope } from "@opencode-ai/plugin"
 import { Config } from "../config/config"
 import { Bus } from "../bus"
 import { Log } from "../util/log"
@@ -8,6 +8,17 @@ import { BunProc } from "../bun"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
 
+// Built-in auth plugins that should always load (global scope)
+// TODO: Remove once these plugins are updated to use definePlugin({ scope: "global" })
+const BUILTIN_GLOBAL_PLUGINS = ["opencode-copilot-auth", "opencode-anthropic-auth"]
+function isPluginDefinition(value: unknown): value is PluginDefinition {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "plugin" in value &&
+    typeof value.plugin === "function"
+  )
+}
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
 
@@ -33,6 +44,9 @@ export namespace Plugin {
     if (!Flag.OPENCODE_DISABLE_DEFAULT_PLUGINS) {
       plugins.push(...BUILTIN)
     }
+
+    const isNonProjectContext = Instance.worktree === "/"
+
     for (let plugin of plugins) {
       log.info("loading plugin", { path: plugin })
       if (!plugin.startsWith("file://")) {
@@ -46,13 +60,24 @@ export namespace Plugin {
         })
         if (!plugin) continue
       }
+
+      const isBuiltinGlobal = BUILTIN_GLOBAL_PLUGINS.some(name => plugin.includes(name))
       const mod = await import(plugin)
-      for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
-        const init = await fn(input)
-        hooks.push(init)
+
+      for (const [_name, exported] of Object.entries(mod)) {
+        if (isPluginDefinition(exported)) {
+          const scope = exported.scope ?? "project"
+          if (scope === "project" && isNonProjectContext) continue
+          hooks.push(await exported.plugin(input))
+          continue
+        }
+        if (typeof exported === "function") {
+          // Built-in auth plugins are global, others default to project
+          if (!isBuiltinGlobal && isNonProjectContext) continue
+          hooks.push(await (exported as PluginFunction)(input))
+        }
       }
     }
-
     return {
       hooks,
       input,
