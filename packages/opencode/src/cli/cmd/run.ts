@@ -11,6 +11,7 @@ import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/v2"
 import { Server } from "../../server/server"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
+import { isInteractive } from "../../util/interactive"
 
 const TOOL: Record<string, [string, string]> = {
   todowrite: ["Todo", UI.Style.TEXT_WARNING_BOLD],
@@ -209,6 +210,18 @@ export const RunCommand = cmd({
           if (event.type === "permission.asked") {
             const permission = event.properties
             if (permission.sessionID !== sessionID) continue
+
+            // In non-interactive mode, permission was already auto-denied by the server
+            // Just log what was denied so users can configure permissions
+            if (!isInteractive()) {
+              if (outputJsonEvent("permission_denied", { permission })) continue
+              UI.println()
+              UI.println(UI.Style.TEXT_WARNING_BOLD + "Permission denied:", permission.permission)
+              UI.println(`  Patterns: ${permission.patterns.join(", ")}`)
+              UI.println(`  To allow: add { "permission": { "${permission.permission}": "allow" } } to opencode.json`)
+              continue
+            }
+
             const result = await select({
               message: `Permission required: ${permission.permission} (${permission.patterns.join(", ")})`,
               options: [
