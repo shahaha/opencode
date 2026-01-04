@@ -1160,6 +1160,10 @@ export type KeybindsConfig = {
    */
   history_next?: string
   /**
+   * Show prompt history modal
+   */
+  prompt_history_list?: string
+  /**
    * Next child session
    */
   session_child_cycle?: string
