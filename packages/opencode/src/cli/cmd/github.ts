@@ -27,6 +27,9 @@ import { Bus } from "../../bus"
 import { MessageV2 } from "../../session/message-v2"
 import { SessionPrompt } from "@/session/prompt"
 import { $ } from "bun"
+import { Tool } from "../../tool/tool"
+import { ToolRegistry } from "../../tool/registry"
+import z from "zod"
 
 type GitHubAuthor = {
   login: string
@@ -515,6 +518,7 @@ export const GithubRunCommand = cmd({
 
         // Setup opencode session
         const repoData = await fetchRepo()
+        await registerGitHubTools()
         session = await Session.create({})
         subscribeSessionEvents()
         shareId = await (async () => {
@@ -1248,6 +1252,61 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
         return pr.data.number
       }
 
+      async function registerGitHubTools() {
+        await ToolRegistry.register(
+          Tool.define("github_pr_comment", {
+            description: "Create a review comment on a specific line or line range in a pull request",
+            parameters: z.object({
+              pull_number: z.number().describe("Pull request number"),
+              commit_id: z.string().describe("SHA of the commit to comment on"),
+              path: z.string().describe("File path relative to repository root"),
+              line: z
+                .number()
+                .describe("Line number in the new version of the file (end line for multi-line comments)"),
+              start_line: z
+                .number()
+                .optional()
+                .describe(
+                  "Starting line number for multi-line comments. If provided, comment spans from start_line to line",
+                ),
+              body: z.string().describe("Comment text. Use ```suggestion blocks for code fixes"),
+              side: z.enum(["LEFT", "RIGHT"]).optional().describe("LEFT for old version, RIGHT for new (default)"),
+              start_side: z
+                .enum(["LEFT", "RIGHT"])
+                .optional()
+                .describe("Side for start_line in multi-line comments. Defaults to RIGHT"),
+            }),
+            execute: async (args) => {
+              const lineRange = args.start_line ? `${args.start_line}-${args.line}` : `${args.line}`
+              console.log(`Creating PR comment on ${args.path}:${lineRange}...`)
+
+              await octoRest.rest.pulls.createReviewComment({
+                owner,
+                repo,
+                pull_number: args.pull_number,
+                commit_id: args.commit_id,
+                path: args.path,
+                line: args.line,
+                body: args.body,
+                side: args.side ?? "RIGHT",
+                ...(args.start_line
+                  ? {
+                      start_line: args.start_line,
+                      start_side: args.start_side ?? "RIGHT",
+                    }
+                  : {}),
+              })
+
+              return {
+                title: `Comment on ${args.path}:${lineRange}`,
+                output: `Successfully created review comment on ${args.path} at line${args.start_line ? "s" : ""} ${lineRange}`,
+                metadata: {},
+              }
+            },
+          }),
+        )
+      }
+
       function footer(opts?: { image?: boolean }) {
         const image = (() => {
           if (!shareId) return ""
@@ -1454,6 +1513,76 @@ query($owner: String!, $repo: String!, $number: Int!) {
           ]
         })
 
+        const instructions = [
+          "",
+          "<pr_review_instructions>",
+          "When reviewing code in this PR, you can create line-specific review comments on exact lines or line ranges that need attention.",
+          "",
+          "Use the github_pr_comment tool to post comments directly on specific lines:",
+          "",
+          "Single-line comment example:",
+          JSON.stringify(
+            {
+              pull_number: issueId,
+              commit_id: pr.headRefOid,
+              path: "src/file.ts",
+              line: 42,
+              body: "Consider refactoring this function",
+            },
+            null,
+            2,
+          ),
+          "",
+          "Multi-line comment example (comment spans lines 20-25):",
+          JSON.stringify(
+            {
+              pull_number: issueId,
+              commit_id: pr.headRefOid,
+              path: "src/file.ts",
+              start_line: 20,
+              line: 25,
+              body: "This entire block could be simplified",
+            },
+            null,
+            2,
+          ),
+          "",
+          "Parameters:",
+          `- pull_number: ${issueId} (required)`,
+          `- commit_id: ${pr.headRefOid} (required, use this exact SHA)`,
+          `- path: File path relative to repo root (required)`,
+          `- line: End line number (required)`,
+          `- start_line: Start line number for multi-line comments (optional)`,
+          `- body: Your review comment (required)`,
+          `- side: "RIGHT" for new version, "LEFT" for old version (optional, defaults to RIGHT)`,
+          `- start_side: Side for start_line in multi-line comments (optional, defaults to RIGHT)`,
+          "",
+          "IMPORTANT NOTES:",
+          "- Line comments only work on changed files. If the tool fails, include that feedback in your response text instead.",
+          "- When you post line comments, do NOT repeat the same feedback in your final response text. The line comments are already visible to the user.",
+          "- Preserve exact indentation when making code suggestions. Match the original code's spacing/tabs exactly.",
+          "",
+          "For code suggestions, use GitHub's suggestion syntax in the body:",
+          "```suggestion",
+          "your suggested code here (with proper indentation)",
+          "```",
+          "",
+          "Example with multi-line suggestion:",
+          JSON.stringify(
+            {
+              pull_number: issueId,
+              commit_id: pr.headRefOid,
+              path: "src/utils.ts",
+              start_line: 23,
+              line: 27,
+              body: "Consider simplifying this entire function:\n```suggestion\nconst result = data.map(x => x.value)\n```",
+            },
+            null,
+            2,
+          ),
+          "</pr_review_instructions>",
+        ]
+
         return [
           "<github_action_context>",
           "You are running as a GitHub Action. Important:",
@@ -1471,6 +1600,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
           `Created At: ${pr.createdAt}`,
           `Base Branch: ${pr.baseRefName}`,
           `Head Branch: ${pr.headRefName}`,
+          `Head Commit SHA: ${pr.headRefOid}`,
           `State: ${pr.state}`,
           `Additions: ${pr.additions}`,
           `Deletions: ${pr.deletions}`,
@@ -1480,6 +1610,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
           ...(files.length > 0 ? ["<pull_request_changed_files>", ...files, "</pull_request_changed_files>"] : []),
           ...(reviewData.length > 0 ? ["<pull_request_reviews>", ...reviewData, "</pull_request_reviews>"] : []),
           "</pull_request>",
+          ...instructions,
         ].join("\n")
       }
 
