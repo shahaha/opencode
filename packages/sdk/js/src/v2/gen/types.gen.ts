@@ -3015,6 +3015,7 @@ export type SessionMessagesData = {
   query?: {
     directory?: string
     limit?: number
+    before?: string
   }
   url: "/session/{sessionID}/message"
 }
