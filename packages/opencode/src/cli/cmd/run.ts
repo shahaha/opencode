@@ -11,6 +11,7 @@ import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/v2"
 import { Server } from "../../server/server"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
+import { t } from "../../i18n"
 
 const TOOL: Record<string, [string, string]> = {
   todowrite: ["Todo", UI.Style.TEXT_WARNING_BOLD],
@@ -106,11 +107,11 @@ export const RunCommand = cmd({
         const file = Bun.file(resolvedPath)
         const stats = await file.stat().catch(() => {})
         if (!stats) {
-          UI.error(`File not found: ${filePath}`)
+          UI.error(t("run.file_not_found", { path: filePath }))
           process.exit(1)
         }
         if (!(await file.exists())) {
-          UI.error(`File not found: ${filePath}`)
+          UI.error(t("run.file_not_found", { path: filePath }))
           process.exit(1)
         }
 
@@ -129,7 +130,7 @@ export const RunCommand = cmd({
     if (!process.stdin.isTTY) message += "\n" + (await Bun.stdin.text())
 
     if (message.trim().length === 0 && !args.command) {
-      UI.error("You must provide a message or a command")
+      UI.error(t("run.must_provide_message"))
       process.exit(1)
     }
 
@@ -210,11 +211,11 @@ export const RunCommand = cmd({
             const permission = event.properties
             if (permission.sessionID !== sessionID) continue
             const result = await select({
-              message: `Permission required: ${permission.permission} (${permission.patterns.join(", ")})`,
+              message: `${t("permission.title")}: ${permission.permission} (${permission.patterns.join(", ")})`,
               options: [
-                { value: "once", label: "Allow once" },
-                { value: "always", label: "Always allow: " + permission.always.join(", ") },
-                { value: "reject", label: "Reject" },
+                { value: "once", label: t("permission.allow_once") },
+                { value: "always", label: t("permission.allow_always") + ": " + permission.always.join(", ") },
+                { value: "reject", label: t("permission.reject") },
               ],
               initialValue: "once",
             }).catch(() => "reject")
@@ -236,7 +237,7 @@ export const RunCommand = cmd({
           UI.println(
             UI.Style.TEXT_WARNING_BOLD + "!",
             UI.Style.TEXT_NORMAL,
-            `agent "${args.agent}" not found. Falling back to default agent`,
+            t("run.agent_not_found", { name: args.agent }),
           )
           return undefined
         }
@@ -244,7 +245,7 @@ export const RunCommand = cmd({
           UI.println(
             UI.Style.TEXT_WARNING_BOLD + "!",
             UI.Style.TEXT_NORMAL,
-            `agent "${args.agent}" is a subagent, not a primary agent. Falling back to default agent`,
+            t("run.agent_is_subagent", { name: args.agent }),
           )
           return undefined
         }
@@ -297,7 +298,7 @@ export const RunCommand = cmd({
       })()
 
       if (!sessionID) {
-        UI.error("Session not found")
+        UI.error(t("run.session_not_found"))
         process.exit(1)
       }
 
@@ -325,7 +326,7 @@ export const RunCommand = cmd({
         const exists = await Command.get(args.command)
         if (!exists) {
           server.stop()
-          UI.error(`Command "${args.command}" not found`)
+          UI.error(t("run.command_not_found", { command: args.command }))
           process.exit(1)
         }
       }
@@ -350,7 +351,7 @@ export const RunCommand = cmd({
 
       if (!sessionID) {
         server.stop()
-        UI.error("Session not found")
+        UI.error(t("run.session_not_found"))
         process.exit(1)
       }
 

@@ -740,6 +740,10 @@ export namespace Config {
   export const Info = z
     .object({
       $schema: z.string().optional().describe("JSON schema reference for configuration validation"),
+      language: z
+        .enum(["en", "ko"])
+        .optional()
+        .describe("UI language for the interface. Supported: 'en' (English), 'ko' (Korean)"),
       theme: z.string().optional().describe("Theme name to use for the interface"),
       keybinds: Keybinds.optional().describe("Custom keybind configurations"),
       logLevel: Log.Level.optional().describe("Log level"),
@@ -1063,10 +1067,11 @@ export namespace Config {
       }
       const data = parsed.data
       if (data.plugin) {
+        const configDir = path.dirname(configFilepath)
         for (let i = 0; i < data.plugin.length; i++) {
           const plugin = data.plugin[i]
           try {
-            data.plugin[i] = import.meta.resolve!(plugin, configFilepath)
+            data.plugin[i] = Bun.resolveSync(plugin, configDir)
           } catch (err) {}
         }
       }
