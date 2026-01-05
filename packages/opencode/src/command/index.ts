@@ -53,6 +53,7 @@ export namespace Command {
   export const Default = {
     INIT: "init",
     REVIEW: "review",
+    UNQUEUE: "unqueue",
   } as const
 
   const state = Instance.state(async () => {
@@ -75,6 +76,11 @@ export namespace Command {
         },
         subtask: true,
         hints: hints(PROMPT_REVIEW),
+      },
+      [Default.UNQUEUE]: {
+        name: Default.UNQUEUE,
+        description: "remove all queued messages",
+        template: "",
       },
     }
 

@@ -254,6 +254,18 @@ export namespace SessionPrompt {
     return
   }
 
+  export function clearQueue(sessionID: string) {
+    log.info("clearQueue", { sessionID })
+    const s = state()
+    const match = s[sessionID]
+    if (!match) return
+
+    for (const callback of match.callbacks) {
+      callback.reject()
+    }
+    match.callbacks = []
+  }
+
   export const loop = fn(Identifier.schema("session"), async (sessionID) => {
     const abort = start(sessionID)
     if (!abort) {
@@ -1434,8 +1446,57 @@ export namespace SessionPrompt {
    * Does not match when preceded by word characters or backticks (to avoid email addresses and quoted references)
    */
 
+  export async function removeQueued(sessionID: string) {
+    const queued: string[] = []
+
+    // MessageV2.stream yields newest->oldest, so queued messages appear first
+    for await (const msg of MessageV2.stream(sessionID)) {
+      if (msg.info.role === "assistant") {
+        // Only delete if incomplete assistant found
+        if (!msg.info.time.completed && queued.length > 0) {
+          await Promise.all(queued.map((messageID) => Session.removeMessage({ sessionID, messageID })))
+        }
+        break
+      }
+
+      if (msg.info.role === "user") {
+        queued.push(msg.info.id)
+      }
+    }
+
+    clearQueue(sessionID)
+  }
+
+  async function handleUnqueue(sessionID: string) {
+    await removeQueued(sessionID)
+
+    return {
+      info: {
+        id: "",
+        sessionID,
+        role: "assistant" as const,
+        parentID: "",
+        mode: "",
+        time: { created: 0 },
+        agent: "",
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        path: { cwd: "", root: "" },
+        modelID: "",
+        providerID: "",
+      },
+      parts: [],
+    }
+  }
+
   export async function command(input: CommandInput) {
     log.info("command", input)
+
+    // Special handling for unqueue command
+    if (input.command === "unqueue") {
+      return await handleUnqueue(input.sessionID)
+    }
+
     const command = await Command.get(input.command)
     const agentName = command.agent ?? input.agent ?? (await Agent.defaultAgent())
 
