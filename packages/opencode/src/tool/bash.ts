@@ -161,26 +161,67 @@ export const BashTool = Tool.define("bash", async () => {
         detached: process.platform !== "win32",
       })
 
-      let output = ""
+      const state = {
+        output: "",
+        outputLimitReached: false,
+        outputBuffer: "",
+        lineBuffer: "",
+        overwritingLine: false,
+        lastSent: "",
+      }
 
       // Initialize metadata with empty output
       ctx.metadata({
         metadata: {
-          output: "",
+          output: state.output,
           description: params.description,
         },
       })
 
-      const append = (chunk: Buffer) => {
-        if (output.length <= MAX_OUTPUT_LENGTH) {
-          output += chunk.toString()
-          ctx.metadata({
-            metadata: {
-              output,
-              description: params.description,
-            },
-          })
+      const appendText = (text: string) => {
+        for (const char of text) {
+          if (char === "\r") {
+            state.overwritingLine = true
+            continue
+          }
+
+          if (char === "\n") {
+            state.outputBuffer += state.lineBuffer + "\n"
+            state.lineBuffer = ""
+            state.overwritingLine = false
+            continue
+          }
+
+          if (state.overwritingLine) {
+            state.lineBuffer = ""
+            state.overwritingLine = false
+          }
+
+          state.lineBuffer += char
         }
+
+        state.output = state.outputBuffer + state.lineBuffer
+      }
+
+      const append = (chunk: Buffer) => {
+        if (state.outputLimitReached) return
+
+        appendText(chunk.toString())
+
+        if (state.output.length > MAX_OUTPUT_LENGTH) {
+          state.output = state.output.slice(0, MAX_OUTPUT_LENGTH)
+          state.outputLimitReached = true
+        }
+
+        if (state.output === state.lastSent) return
+        state.lastSent = state.output
+
+        ctx.metadata({
+          metadata: {
+            output: state.output,
+            description: params.description,
+          },
+        })
       }
 
       proc.stdout?.on("data", append)
@@ -230,8 +271,7 @@ export const BashTool = Tool.define("bash", async () => {
 
       let resultMetadata: String[] = ["<bash_metadata>"]
 
-      if (output.length > MAX_OUTPUT_LENGTH) {
-        output = output.slice(0, MAX_OUTPUT_LENGTH)
+      if (state.outputLimitReached) {
         resultMetadata.push(`bash tool truncated output as it exceeded ${MAX_OUTPUT_LENGTH} char limit`)
       }
 
@@ -245,17 +285,17 @@ export const BashTool = Tool.define("bash", async () => {
 
       if (resultMetadata.length > 1) {
         resultMetadata.push("</bash_metadata>")
-        output += "\n\n" + resultMetadata.join("\n")
+        state.output += "\n\n" + resultMetadata.join("\n")
       }
 
       return {
         title: params.description,
         metadata: {
-          output,
+          output: state.output,
           exit: proc.exitCode,
           description: params.description,
         },
-        output,
+        output: state.output,
       }
     },
   }
