@@ -56,6 +56,7 @@ import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
 import { Sidebar } from "./sidebar"
+import { SessionsSidebar } from "./sessions-sidebar"
 import { LANGUAGE_EXTENSIONS } from "@/lsp/language"
 import parsers from "../../../../../../parsers-config.ts"
 import { Clipboard } from "../../util/clipboard"
@@ -130,6 +131,7 @@ export function Session() {
 
   const dimensions = useTerminalDimensions()
   const [sidebar, setSidebar] = createSignal<"show" | "hide" | "auto">(kv.get("sidebar", "auto"))
+  const [sidebarMode, setSidebarMode] = createSignal<"context" | "sessions">(kv.get("sidebar_mode", "context"))
   const [conceal, setConceal] = createSignal(true)
   const [showThinking, setShowThinking] = createSignal(kv.get("thinking_visibility", true))
   const [showTimestamps, setShowTimestamps] = createSignal(kv.get("timestamps", "hide") === "show")
@@ -445,6 +447,20 @@ export function Session() {
         })
         if (sidebar() === "show") kv.set("sidebar", "auto")
         if (sidebar() === "hide") kv.set("sidebar", "hide")
+        dialog.clear()
+      },
+    },
+    {
+      title: sidebarMode() === "context" ? "Switch to sessions sidebar" : "Switch to context sidebar",
+      value: "session.sidebar.mode",
+      keybind: "sidebar_mode_toggle",
+      category: "Session",
+      onSelect: (dialog) => {
+        setSidebarMode((prev) => {
+          const next = prev === "context" ? "sessions" : "context"
+          kv.set("sidebar_mode", next)
+          return next
+        })
         dialog.clear()
       },
     },
@@ -1046,7 +1062,12 @@ export function Session() {
           <Toast />
         </box>
         <Show when={sidebarVisible()}>
-          <Sidebar sessionID={route.sessionID} />
+          <Show
+            when={sidebarMode() === "sessions"}
+            fallback={<Sidebar sessionID={route.sessionID} />}
+          >
+            <SessionsSidebar sessionID={route.sessionID} />
+          </Show>
         </Show>
       </box>
     </context.Provider>
