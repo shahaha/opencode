@@ -108,16 +108,26 @@ export const ProviderRoutes = lazy(() =>
         "json",
         z.object({
           method: z.number().meta({ description: "Auth method index" }),
+          inputs: z
+            .record(z.string(), z.string())
+            .optional()
+            .meta({ description: "Prompt inputs collected from the user" }),
         }),
       ),
       async (c) => {
         const providerID = c.req.valid("param").providerID
-        const { method } = c.req.valid("json")
-        const result = await ProviderAuth.authorize({
-          providerID,
-          method,
-        })
-        return c.json(result)
+        const body = c.req.valid("json")
+        try {
+          const result = await ProviderAuth.authorize({
+            providerID,
+            method: body.method,
+            inputs: body.inputs,
+          })
+          return c.json(result)
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Authorization failed"
+          return c.json({ error: message }, { status: 400 })
+        }
       },
     )
     .post(
@@ -131,7 +141,11 @@ export const ProviderRoutes = lazy(() =>
             description: "OAuth callback processed successfully",
             content: {
               "application/json": {
-                schema: resolver(z.boolean()),
+                schema: resolver(
+                  z.object({
+                    provider: z.string().optional(),
+                  }),
+                ),
               },
             },
           },
@@ -154,12 +168,12 @@ export const ProviderRoutes = lazy(() =>
       async (c) => {
         const providerID = c.req.valid("param").providerID
         const { method, code } = c.req.valid("json")
-        await ProviderAuth.callback({
+        const result = await ProviderAuth.callback({
           providerID,
           method,
           code,
         })
-        return c.json(true)
+        return c.json(result ?? {})
       },
     ),
 )

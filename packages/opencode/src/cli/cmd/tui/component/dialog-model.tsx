@@ -117,12 +117,12 @@ export function DialogModel(props: { providerID?: string }) {
         (provider) => provider.id !== "opencode",
         (provider) => provider.name,
       ),
+      filter((provider) => (props.providerID ? provider.id === props.providerID : true)),
       flatMap((provider) =>
         pipe(
           provider.models,
           entries(),
           filter(([_, info]) => info.status !== "deprecated"),
-          filter(([_, info]) => (props.providerID ? info.providerID === props.providerID : true)),
           map(([model, info]) => {
             const value = {
               providerID: provider.id,
