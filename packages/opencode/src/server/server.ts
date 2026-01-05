@@ -2750,7 +2750,8 @@ export namespace Server {
         "/event",
         describeRoute({
           summary: "Subscribe to events",
-          description: "Get events",
+          description:
+            "Subscribe to server-sent events. Optionally filter events by session ID to only receive events for a specific session.",
           operationId: "event.subscribe",
           responses: {
             200: {
@@ -2763,8 +2764,15 @@ export namespace Server {
             },
           },
         }),
+        validator(
+          "query",
+          z.object({
+            session: z.string().optional().meta({ description: "Filter events by session ID" }),
+          }),
+        ),
         async (c) => {
-          log.info("event connected")
+          const sessionFilter = c.req.valid("query").session
+          log.info("event connected", { session: sessionFilter })
           return streamSSE(c, async (stream) => {
             stream.writeSSE({
               data: JSON.stringify({
@@ -2773,6 +2781,19 @@ export namespace Server {
               }),
             })
             const unsub = Bus.subscribeAll(async (event) => {
+              // Filter by session if specified
+              if (sessionFilter) {
+                const eventSessionID =
+                  event.properties?.sessionID || event.properties?.info?.sessionID || event.properties?.part?.sessionID
+                // Only allow server.* events (connected, heartbeat, etc.) to pass through without sessionID
+                // All other events without sessionID are filtered out to prevent cross-session leakage
+                if (!eventSessionID && !event.type.startsWith("server.")) {
+                  return
+                }
+                if (eventSessionID && eventSessionID !== sessionFilter) {
+                  return
+                }
+              }
               await stream.writeSSE({
                 data: JSON.stringify(event),
               })
