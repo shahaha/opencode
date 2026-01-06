@@ -6,6 +6,7 @@ import { $ } from "bun"
 import { Storage } from "../storage/storage"
 import { Log } from "../util/log"
 import { Flag } from "@/flag/flag"
+import { Global } from "@/global"
 import { Session } from "../session"
 import { work } from "../util/queue"
 import { fn } from "@opencode-ai/util/fn"
@@ -158,6 +159,26 @@ export namespace Project {
           sandbox,
           worktree,
           vcs: "git",
+        }
+      }
+
+      const resolvedDirectory = path.resolve(directory)
+      const homeDirectory = path.resolve(Global.Path.home)
+      const rootDirectory = path.parse(resolvedDirectory).root
+
+      if (
+        Flag.OPENCODE_CLIENT === "desktop" &&
+        resolvedDirectory !== rootDirectory &&
+        resolvedDirectory !== homeDirectory
+      ) {
+        const hasher = new Bun.CryptoHasher("sha1")
+        hasher.update(resolvedDirectory)
+        const id = `dir_${hasher.digest("hex")}`
+        return {
+          id,
+          worktree: resolvedDirectory,
+          sandbox: resolvedDirectory,
+          vcs: Info.shape.vcs.parse(Flag.OPENCODE_FAKE_VCS),
         }
       }
 

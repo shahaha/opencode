@@ -26,9 +26,19 @@ export const { use: usePermission, provider: PermissionProvider } = createSimple
     const globalSDK = useGlobalSDK()
     const globalSync = useGlobalSync()
 
+    const directory = createMemo(() => {
+      if (!params.dir) return
+      try {
+        return base64Decode(params.dir)
+      } catch {
+        return
+      }
+    })
+
     const permissionsEnabled = createMemo(() => {
-      if (!params.dir || !base64Decode(params.dir)) return false
-      const [store] = globalSync.child(base64Decode(params.dir))
+      const dir = directory()
+      if (!dir) return false
+      const [store] = globalSync.child(dir)
       return store.config.permission !== undefined
     })
 

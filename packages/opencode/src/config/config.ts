@@ -114,6 +114,22 @@ export namespace Config {
       result.plugin.push(...(await loadPlugin(dir)))
     }
 
+    const claudeDirs = await Array.fromAsync(
+      Filesystem.up({
+        targets: [".claude"],
+        start: Instance.directory,
+        stop: Instance.worktree,
+      }),
+    )
+    const globalClaude = `${Global.Path.home}/.claude`
+    const globalClaudeExists = await fs.exists(globalClaude)
+    if (globalClaudeExists) claudeDirs.push(globalClaude)
+
+    const uniqueClaudeDirs = unique(claudeDirs)
+    for (const dir of uniqueClaudeDirs) {
+      result.command = mergeDeep(result.command ?? {}, await loadCommand(dir))
+    }
+
     // Migrate deprecated mode field to agent field
     for (const [name, mode] of Object.entries(result.mode)) {
       result.agent = mergeDeep(result.agent ?? {}, {
@@ -201,7 +217,7 @@ export namespace Config {
       if (!md.data) continue
 
       const name = (() => {
-        const patterns = ["/.opencode/command/", "/command/"]
+        const patterns = ["/.opencode/command/", "/.claude/commands/", "/command/"]
         const pattern = patterns.find((p) => item.includes(p))
 
         if (pattern) {
