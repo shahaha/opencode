@@ -26,7 +26,9 @@ export const ReadTool = Tool.define("read", {
     if (!path.isAbsolute(filepath)) {
       filepath = path.resolve(Instance.directory, filepath)
     }
-    const title = path.relative(Instance.worktree, filepath)
+    const title = Filesystem.contains(Instance.worktree, filepath)
+      ? path.relative(Instance.worktree, filepath)
+      : filepath
 
     await assertExternalDirectory(ctx, filepath, {
       bypass: Boolean(ctx.extra?.["bypassCwdCheck"]),
