@@ -985,6 +985,12 @@
           },
           {
             "in": "query",
+            "name": "archived",
+            "schema": {
+              "type": "boolean"
+            },
+          {
+            "in": "query",    
             "name": "start",
             "schema": {
               "type": "number"
