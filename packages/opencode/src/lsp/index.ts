@@ -10,6 +10,7 @@ import { Config } from "../config/config"
 import { spawn } from "child_process"
 import { Instance } from "../project/instance"
 import { Flag } from "@/flag/flag"
+import { Telemetry, traced } from "@/telemetry"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
@@ -275,6 +276,7 @@ export namespace LSP {
   }
 
   export async function touchFile(input: string, waitForDiagnostics?: boolean) {
+    using _span = Telemetry.span("lsp.touch_file", { "lsp.file": input })
     log.info("touching file", { file: input })
     const clients = await getClients(input)
     await Promise.all(
@@ -300,7 +302,14 @@ export namespace LSP {
     return results
   }
 
-  export async function hover(input: { file: string; line: number; character: number }) {
+  export const hover = traced<{ file: string; line: number; character: number }, (unknown | null)[]>(
+    "lsp.request.hover",
+    (input) => ({
+      "lsp.file": input.file,
+      "lsp.line": input.line,
+      "lsp.character": input.character,
+    }),
+  )(async (input) => {
     return run(input.file, (client) => {
       return client.connection
         .sendRequest("textDocument/hover", {
@@ -314,7 +323,7 @@ export namespace LSP {
         })
         .catch(() => null)
     })
-  }
+  })
 
   enum SymbolKind {
     File = 1,
@@ -383,7 +392,14 @@ export namespace LSP {
       .then((result) => result.filter(Boolean))
   }
 
-  export async function definition(input: { file: string; line: number; character: number }) {
+  export const definition = traced<{ file: string; line: number; character: number }, unknown[]>(
+    "lsp.request.definition",
+    (input) => ({
+      "lsp.file": input.file,
+      "lsp.line": input.line,
+      "lsp.character": input.character,
+    }),
+  )(async (input) => {
     return run(input.file, (client) =>
       client.connection
         .sendRequest("textDocument/definition", {
@@ -392,9 +408,16 @@ export namespace LSP {
         })
         .catch(() => null),
     ).then((result) => result.flat().filter(Boolean))
-  }
+  })
 
-  export async function references(input: { file: string; line: number; character: number }) {
+  export const references = traced<{ file: string; line: number; character: number }, unknown[]>(
+    "lsp.request.references",
+    (input) => ({
+      "lsp.file": input.file,
+      "lsp.line": input.line,
+      "lsp.character": input.character,
+    }),
+  )(async (input) => {
     return run(input.file, (client) =>
       client.connection
         .sendRequest("textDocument/references", {
@@ -404,7 +427,7 @@ export namespace LSP {
         })
         .catch(() => []),
     ).then((result) => result.flat().filter(Boolean))
-  }
+  })
 
   export async function implementation(input: { file: string; line: number; character: number }) {
     return run(input.file, (client) =>

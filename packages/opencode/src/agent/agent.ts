@@ -12,6 +12,7 @@ import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
+import { Telemetry } from "@/telemetry"
 
 export namespace Agent {
   export const Info = z
@@ -214,8 +215,12 @@ export namespace Agent {
   }
 
   export async function generate(input: { description: string; model?: { providerID: string; modelID: string } }) {
-    const cfg = await Config.get()
     const defaultModel = input.model ?? (await Provider.defaultModel())
+    using _ = Telemetry.span("agent.generate", {
+      "llm.provider_id": defaultModel.providerID,
+      "llm.model_id": defaultModel.modelID,
+    })
+    const cfg = await Config.get()
     const model = await Provider.getModel(defaultModel.providerID, defaultModel.modelID)
     const language = await Provider.getLanguage(model)
     const system = SystemPrompt.header(defaultModel.providerID)
@@ -223,9 +228,11 @@ export namespace Agent {
     const existing = await list()
     const result = await generateObject({
       experimental_telemetry: {
-        isEnabled: cfg.experimental?.openTelemetry,
+        isEnabled: Telemetry.isEnabled(),
+        functionId: "opencode.agent.generate",
         metadata: {
-          userId: cfg.username ?? "unknown",
+          "llm.provider_id": defaultModel.providerID,
+          "llm.model_id": defaultModel.modelID,
         },
       },
       temperature: 0.3,

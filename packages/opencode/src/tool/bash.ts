@@ -228,10 +228,14 @@ export const BashTool = Tool.define("bash", async () => {
         })
       })
 
+      const truncated = output.length > MAX_OUTPUT_LENGTH
+      if (truncated) {
+        output = output.slice(0, MAX_OUTPUT_LENGTH)
+      }
+
       let resultMetadata: String[] = ["<bash_metadata>"]
 
-      if (output.length > MAX_OUTPUT_LENGTH) {
-        output = output.slice(0, MAX_OUTPUT_LENGTH)
+      if (truncated) {
         resultMetadata.push(`bash tool truncated output as it exceeded ${MAX_OUTPUT_LENGTH} char limit`)
       }
 
@@ -254,6 +258,9 @@ export const BashTool = Tool.define("bash", async () => {
           output,
           exit: proc.exitCode,
           description: params.description,
+          aborted,
+          truncated,
+          timedOut,
         },
         output,
       }

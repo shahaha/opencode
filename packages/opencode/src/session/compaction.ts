@@ -14,6 +14,7 @@ import { fn } from "@/util/fn"
 import { Agent } from "@/agent/agent"
 import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
+import { traced } from "@/telemetry/traced"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -89,13 +90,21 @@ export namespace SessionCompaction {
     }
   }
 
-  export async function process(input: {
+  type ProcessInput = {
     parentID: string
     messages: MessageV2.WithParts[]
     sessionID: string
     abort: AbortSignal
     auto: boolean
-  }) {
+  }
+
+  type ProcessOutput = "stop" | "continue"
+
+  export const process = traced<ProcessInput, ProcessOutput>("session.compaction.process", (input) => ({
+    "session.id": input.sessionID,
+    "session.auto": input.auto,
+    "session.message_count": input.messages.length,
+  }))(async (input) => {
     const userMessage = input.messages.findLast((m) => m.info.id === input.parentID)!.info as MessageV2.User
     const agent = await Agent.get("compaction")
     const model = agent.model
@@ -190,7 +199,7 @@ export namespace SessionCompaction {
     if (processor.message.error) return "stop"
     Bus.publish(Event.Compacted, { sessionID: input.sessionID })
     return "continue"
-  }
+  })
 
   export const create = fn(
     z.object({

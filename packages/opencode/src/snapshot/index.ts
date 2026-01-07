@@ -6,6 +6,7 @@ import { Global } from "../global"
 import z from "zod"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
+import { Telemetry, traced } from "@/telemetry"
 
 export namespace Snapshot {
   const log = Log.create({ service: "snapshot" })
@@ -14,6 +15,9 @@ export namespace Snapshot {
     if (Instance.project.vcs !== "git") return
     const cfg = await Config.get()
     if (cfg.snapshot === false) return
+    using span = Telemetry.span("snapshot.track", {
+      "snapshot.vcs": Instance.project.vcs,
+    })
     const git = gitdir()
     if (await fs.mkdir(git, { recursive: true })) {
       await $`git init`
@@ -35,7 +39,11 @@ export namespace Snapshot {
       .nothrow()
       .text()
     log.info("tracking", { hash, cwd: Instance.directory, git })
-    return hash.trim()
+    const trimmedHash = hash.trim()
+    span.setAttributes({
+      "snapshot.hash": trimmedHash,
+    })
+    return trimmedHash
   }
 
   export const Patch = z.object({
@@ -71,7 +79,9 @@ export namespace Snapshot {
     }
   }
 
-  export async function restore(snapshot: string) {
+  export const restore = traced<string, void>("snapshot.restore", (snapshot) => ({ "snapshot.hash": snapshot }))(async (
+    snapshot,
+  ) => {
     log.info("restore", { commit: snapshot })
     const git = gitdir()
     const result =
@@ -88,7 +98,7 @@ export namespace Snapshot {
         stdout: result.stdout.toString(),
       })
     }
-  }
+  })
 
   export async function revert(patches: Patch[]) {
     const files = new Set<string>()

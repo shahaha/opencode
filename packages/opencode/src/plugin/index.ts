@@ -7,6 +7,7 @@ import { Server } from "../server/server"
 import { BunProc } from "../bun"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
+import { Telemetry } from "@/telemetry"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
@@ -71,7 +72,12 @@ export namespace Plugin {
     Output = Parameters<Required<Hooks>[Name]>[1],
   >(name: Name, input: Input, output: Output): Promise<Output> {
     if (!name) return output
-    for (const hook of await state().then((x) => x.hooks)) {
+    const hooks = await state().then((x) => x.hooks)
+    using _ = Telemetry.span("plugin.trigger", {
+      "plugin.hook_name": name,
+      "plugin.hooks_count": hooks.length,
+    })
+    for (const hook of hooks) {
       const fn = hook[name]
       if (!fn) continue
       // @ts-expect-error if you feel adventurous, please fix the typing, make sure to bump the try-counter if you

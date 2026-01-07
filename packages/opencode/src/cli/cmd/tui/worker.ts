@@ -17,6 +17,12 @@ await Log.init({
   })(),
 })
 
+const globalConfig = await Config.global()
+if (globalConfig?.experimental?.openTelemetry) {
+  const { Telemetry } = await import("@/telemetry")
+  Telemetry.init(Telemetry.resolveConfig("opencode-server", true))
+}
+
 process.on("unhandledRejection", (e) => {
   Log.Default.error("rejection", {
     e: e instanceof Error ? e.message : e,
@@ -58,7 +64,10 @@ export const rpc = {
   },
   async shutdown() {
     Log.Default.info("worker shutting down")
+    Log.Default.info("disposing all instances")
     await Instance.disposeAll()
+    const { Telemetry } = await import("@/telemetry")
+    await Telemetry.shutdown()
     // TODO: this should be awaited, but ws connections are
     // causing this to hang, need to revisit this
     server.stop(true)

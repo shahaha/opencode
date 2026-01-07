@@ -11,7 +11,6 @@ import {
 } from "ai"
 import { clone, mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
-import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
 import type { Agent } from "@/agent/agent"
 import type { MessageV2 } from "./message-v2"
@@ -19,6 +18,8 @@ import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
 import { PermissionNext } from "@/permission/next"
+import { traced } from "@/telemetry/traced"
+import { Telemetry } from "@/telemetry"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -40,7 +41,13 @@ export namespace LLM {
 
   export type StreamOutput = StreamTextResult<ToolSet, unknown>
 
-  export async function stream(input: StreamInput) {
+  export const stream = traced<StreamInput, StreamOutput>("llm.stream", (input) => ({
+    "llm.provider_id": input.model.providerID,
+    "llm.model_id": input.model.id,
+    "session.id": input.sessionID,
+    "llm.agent": input.agent.name,
+    "llm.tools_count": Object.keys(input.tools).length,
+  }))(async (input) => {
     const l = log
       .clone()
       .tag("providerID", input.model.providerID)
@@ -52,7 +59,7 @@ export namespace LLM {
       modelID: input.model.id,
       providerID: input.model.providerID,
     })
-    const [language, cfg] = await Promise.all([Provider.getLanguage(input.model), Config.get()])
+    const language = await Provider.getLanguage(input.model)
 
     const system = SystemPrompt.header(input.model.providerID)
     system.push(
@@ -196,9 +203,22 @@ export namespace LLM {
           extractReasoningMiddleware({ tagName: "think", startWithReasoning: false }),
         ],
       }),
-      experimental_telemetry: { isEnabled: cfg.experimental?.openTelemetry },
+      experimental_telemetry: {
+        isEnabled: Telemetry.isEnabled(),
+        functionId: `${input.agent.name}.chat`,
+        recordInputs: true,
+        recordOutputs: true,
+        metadata: {
+          "session.id": input.sessionID,
+          "llm.provider_id": input.model.providerID,
+          "llm.model_id": input.model.id,
+          "llm.agent": input.agent.name,
+          "llm.small": input.small ?? false,
+          "llm.tools_count": Object.keys(input.tools).length,
+        },
+      },
     })
-  }
+  })
 
   async function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "user">) {
     const disabled = PermissionNext.disabled(Object.keys(input.tools), input.agent.permission)

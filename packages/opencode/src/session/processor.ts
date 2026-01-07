@@ -14,6 +14,7 @@ import { LLM } from "./llm"
 import { Config } from "@/config/config"
 import { SessionCompaction } from "./compaction"
 import { PermissionNext } from "@/permission/next"
+import { Telemetry } from "@/telemetry"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
@@ -42,6 +43,12 @@ export namespace SessionProcessor {
         return toolcalls[toolCallID]
       },
       async process(streamInput: LLM.StreamInput) {
+        using _ = Telemetry.span("session.processor.process", {
+          "session.id": input.sessionID,
+          "session.message_id": input.assistantMessage.id,
+          "llm.model_id": input.model.id,
+          "llm.provider_id": input.model.providerID,
+        })
         log.info("process")
         needsCompaction = false
         const shouldBreak = (await Config.get()).experimental?.continue_loop_on_deny !== true

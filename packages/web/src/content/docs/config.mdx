@@ -564,6 +564,25 @@ The `experimental` key contains options that are under active development.
 Experimental options are not stable. They may change or be removed without notice.
 :::
 
+#### OpenTelemetry
+
+Enable OpenTelemetry tracing for monitoring and debugging. This exports traces and structured logs to an OTLP-compatible collector like [Aspire Dashboard](https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/dashboard/overview).
+
+```json title="opencode.json"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "experimental": {
+    "openTelemetry": true
+  }
+}
+```
+
+Set the endpoint using the standard `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable (defaults to `http://localhost:4317`).
+
+```bash title="Terminal"
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 opencode
+```
+
 ---
 
 ## Variables

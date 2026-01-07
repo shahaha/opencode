@@ -12,6 +12,7 @@ import { NamedError } from "@opencode-ai/util/error"
 import { withTimeout } from "../util/timeout"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
+import { Telemetry } from "@/telemetry"
 
 const DIAGNOSTICS_DEBOUNCE_MS = 150
 
@@ -40,6 +41,10 @@ export namespace LSPClient {
   }
 
   export async function create(input: { serverID: string; server: LSPServer.Handle; root: string }) {
+    using _span = Telemetry.span("lsp.client.create", {
+      "lsp.server_id": input.serverID,
+      "lsp.root": input.root,
+    })
     const l = log.clone().tag("serverID", input.serverID)
     l.info("starting client")
 
@@ -79,50 +84,58 @@ export namespace LSPClient {
     connection.listen()
 
     l.info("sending initialize")
-    await withTimeout(
-      connection.sendRequest("initialize", {
-        rootUri: pathToFileURL(input.root).href,
-        processId: input.server.process.pid,
-        workspaceFolders: [
-          {
-            name: "workspace",
-            uri: pathToFileURL(input.root).href,
-          },
-        ],
-        initializationOptions: {
-          ...input.server.initialization,
-        },
-        capabilities: {
-          window: {
-            workDoneProgress: true,
-          },
-          workspace: {
-            configuration: true,
-            didChangeWatchedFiles: {
-              dynamicRegistration: true,
+    await Telemetry.withSpan(
+      "lsp.request.initialize",
+      {
+        "lsp.server_id": input.serverID,
+      },
+      async () => {
+        await withTimeout(
+          connection.sendRequest("initialize", {
+            rootUri: pathToFileURL(input.root).href,
+            processId: input.server.process.pid,
+            workspaceFolders: [
+              {
+                name: "workspace",
+                uri: pathToFileURL(input.root).href,
+              },
+            ],
+            initializationOptions: {
+              ...input.server.initialization,
             },
-          },
-          textDocument: {
-            synchronization: {
-              didOpen: true,
-              didChange: true,
+            capabilities: {
+              window: {
+                workDoneProgress: true,
+              },
+              workspace: {
+                configuration: true,
+                didChangeWatchedFiles: {
+                  dynamicRegistration: true,
+                },
+              },
+              textDocument: {
+                synchronization: {
+                  didOpen: true,
+                  didChange: true,
+                },
+                publishDiagnostics: {
+                  versionSupport: true,
+                },
+              },
             },
-            publishDiagnostics: {
-              versionSupport: true,
+          }),
+          45_000,
+        ).catch((err) => {
+          l.error("initialize error", { error: err })
+          throw new InitializeError(
+            { serverID: input.serverID },
+            {
+              cause: err,
             },
-          },
-        },
-      }),
-      45_000,
-    ).catch((err) => {
-      l.error("initialize error", { error: err })
-      throw new InitializeError(
-        { serverID: input.serverID },
-        {
-          cause: err,
-        },
-      )
-    })
+          )
+        })
+      },
+    )
 
     await connection.sendNotification("initialized", {})
 

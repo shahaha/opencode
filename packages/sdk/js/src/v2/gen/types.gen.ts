@@ -1664,7 +1664,7 @@ export type Config = {
      */
     batch_tool?: boolean
     /**
-     * Enable OpenTelemetry spans for AI SDK calls (using the 'experimental_telemetry' flag)
+     * Enable OpenTelemetry tracing. Set OTEL_EXPORTER_OTLP_ENDPOINT env var for endpoint.
      */
     openTelemetry?: boolean
     /**

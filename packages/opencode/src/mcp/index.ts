@@ -23,6 +23,7 @@ import { BusEvent } from "../bus/bus-event"
 import { Bus } from "@/bus"
 import { TuiEvent } from "@/cli/cmd/tui/event"
 import open from "open"
+import { Telemetry } from "@/telemetry"
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
@@ -109,7 +110,7 @@ export namespace MCP {
   }
 
   // Convert MCP tool definition to AI SDK Tool type
-  async function convertMcpTool(mcpTool: MCPToolDef, client: MCPClient): Promise<Tool> {
+  async function convertMcpTool(mcpTool: MCPToolDef, client: MCPClient, serverName: string): Promise<Tool> {
     const inputSchema = mcpTool.inputSchema
 
     // Spread first, then override type to ensure it's always "object"
@@ -125,15 +126,24 @@ export namespace MCP {
       description: mcpTool.description ?? "",
       inputSchema: jsonSchema(schema),
       execute: async (args: unknown) => {
-        return client.callTool(
+        return Telemetry.withSpan(
+          "mcp.tool.call",
           {
-            name: mcpTool.name,
-            arguments: args as Record<string, unknown>,
+            "mcp.server_name": serverName,
+            "mcp.tool_name": mcpTool.name,
           },
-          CallToolResultSchema,
-          {
-            resetTimeoutOnProgress: true,
-            timeout: config.experimental?.mcp_timeout,
+          async () => {
+            return client.callTool(
+              {
+                name: mcpTool.name,
+                arguments: args as Record<string, unknown>,
+              },
+              CallToolResultSchema,
+              {
+                resetTimeoutOnProgress: true,
+                timeout: config.experimental?.mcp_timeout,
+              },
+            )
           },
         )
       },
@@ -204,6 +214,8 @@ export namespace MCP {
 
   // Helper function to fetch prompts for a specific client
   async function fetchPromptsForClient(clientName: string, client: Client) {
+    using span = Telemetry.span("mcp.prompts.list", { "mcp.server_name": clientName })
+
     const prompts = await client.listPrompts().catch((e) => {
       log.error("failed to get prompts", { clientName, error: e.message })
       return undefined
@@ -212,6 +224,8 @@ export namespace MCP {
     if (!prompts) {
       return
     }
+
+    span.setAttributes({ "mcp.prompt_count": prompts.prompts.length })
 
     const commands: Record<string, PromptInfo & { client: string }> = {}
 
@@ -336,7 +350,14 @@ export namespace MCP {
             name: "opencode",
             version: Installation.VERSION,
           })
-          await withTimeout(client.connect(transport), connectTimeout)
+          {
+            using _span = Telemetry.span("mcp.client.connect", {
+              "mcp.server_name": key,
+              "mcp.type": "remote",
+              "mcp.transport": name,
+            })
+            await withTimeout(client.connect(transport), connectTimeout)
+          }
           registerNotificationHandlers(client, key)
           mcpClient = client
           log.info("connected", { key, transport: name })
@@ -412,7 +433,13 @@ export namespace MCP {
           name: "opencode",
           version: Installation.VERSION,
         })
-        await withTimeout(client.connect(transport), connectTimeout)
+        {
+          using _span = Telemetry.span("mcp.client.connect", {
+            "mcp.server_name": key,
+            "mcp.type": "local",
+          })
+          await withTimeout(client.connect(transport), connectTimeout)
+        }
         registerNotificationHandlers(client, key)
         mcpClient = client
         status = {
@@ -446,10 +473,24 @@ export namespace MCP {
       }
     }
 
-    const result = await withTimeout(mcpClient.listTools(), mcp.timeout ?? DEFAULT_TIMEOUT).catch((err) => {
-      log.error("failed to get tools from client", { key, error: err })
-      return undefined
-    })
+    const result = await Telemetry.withSpan(
+      "mcp.tools.list",
+      {
+        "mcp.server_name": key,
+      },
+      async (span) => {
+        const tools = await withTimeout(mcpClient!.listTools(), mcp.timeout ?? DEFAULT_TIMEOUT).catch((err) => {
+          log.error("failed to get tools from client", { key, error: err })
+          return undefined
+        })
+        if (tools) {
+          span.setAttributes({
+            "mcp.tool_count": tools.tools.length,
+          })
+        }
+        return tools
+      },
+    )
     if (!result) {
       await mcpClient.close().catch((error) => {
         log.error("Failed to close MCP client", {
@@ -550,6 +591,7 @@ export namespace MCP {
         continue
       }
 
+      using span = Telemetry.span("mcp.tools.list", { "mcp.server_name": clientName })
       const toolsResult = await client.listTools().catch((e) => {
         log.error("failed to get tools", { clientName, error: e.message })
         const failedStatus = {
@@ -560,13 +602,18 @@ export namespace MCP {
         delete s.clients[clientName]
         return undefined
       })
+      if (toolsResult) {
+        span.setAttributes({
+          "mcp.tool_count": toolsResult.tools.length,
+        })
+      }
       if (!toolsResult) {
         continue
       }
       for (const mcpTool of toolsResult.tools) {
         const sanitizedClientName = clientName.replace(/[^a-zA-Z0-9_-]/g, "_")
         const sanitizedToolName = mcpTool.name.replace(/[^a-zA-Z0-9_-]/g, "_")
-        result[sanitizedClientName + "_" + sanitizedToolName] = await convertMcpTool(mcpTool, client)
+        result[sanitizedClientName + "_" + sanitizedToolName] = await convertMcpTool(mcpTool, client, clientName)
       }
     }
     return result
@@ -615,6 +662,11 @@ export namespace MCP {
   }
 
   export async function getPrompt(clientName: string, name: string, args?: Record<string, string>) {
+    using _span = Telemetry.span("mcp.prompt.get", {
+      "mcp.server_name": clientName,
+      "mcp.prompt_name": name,
+    })
+
     const clientsSnapshot = await clients()
     const client = clientsSnapshot[clientName]
 
