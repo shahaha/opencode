@@ -9,29 +9,27 @@ import { Log } from "@/util/log"
 import { Wildcard } from "@/util/wildcard"
 import z from "zod"
 
+// Generated from JSON Schema - see schema/*.schema.json
+import { permissionActionSchema, type PermissionAction } from "@generated/validators/permissionAction"
+import { permissionReplySchema, type PermissionReply } from "@generated/validators/permissionReply"
+import { permissionRequestSchema, type PermissionRequest } from "@generated/validators/permissionRequest"
+import { permissionRuleSchema, type PermissionRule } from "@generated/validators/permissionRule"
+import { permissionRulesetSchema, type PermissionRuleset } from "@generated/validators/permissionRuleset"
+
 export namespace PermissionNext {
   const log = Log.create({ service: "permission" })
 
-  export const Action = z.enum(["allow", "deny", "ask"]).meta({
-    ref: "PermissionAction",
-  })
-  export type Action = z.infer<typeof Action>
+  // Generated from JSON Schema - see schema/permissionAction.schema.json
+  export const Action = permissionActionSchema
+  export type Action = PermissionAction
 
-  export const Rule = z
-    .object({
-      permission: z.string(),
-      pattern: z.string(),
-      action: Action,
-    })
-    .meta({
-      ref: "PermissionRule",
-    })
-  export type Rule = z.infer<typeof Rule>
+  // Generated from JSON Schema - see schema/permissionRule.schema.json
+  export const Rule = permissionRuleSchema
+  export type Rule = PermissionRule
 
-  export const Ruleset = Rule.array().meta({
-    ref: "PermissionRuleset",
-  })
-  export type Ruleset = z.infer<typeof Ruleset>
+  // Generated from JSON Schema - see schema/permissionRuleset.schema.json
+  export const Ruleset = permissionRulesetSchema
+  export type Ruleset = PermissionRuleset
 
   export function fromConfig(permission: Config.Permission) {
     const ruleset: Ruleset = []
@@ -53,29 +51,13 @@ export namespace PermissionNext {
     return rulesets.flat()
   }
 
-  export const Request = z
-    .object({
-      id: Identifier.schema("permission"),
-      sessionID: Identifier.schema("session"),
-      permission: z.string(),
-      patterns: z.string().array(),
-      metadata: z.record(z.string(), z.any()),
-      always: z.string().array(),
-      tool: z
-        .object({
-          messageID: z.string(),
-          callID: z.string(),
-        })
-        .optional(),
-    })
-    .meta({
-      ref: "PermissionRequest",
-    })
+  // Generated from JSON Schema - see schema/permissionRequest.schema.json
+  export const Request = permissionRequestSchema
+  export type Request = PermissionRequest
 
-  export type Request = z.infer<typeof Request>
-
-  export const Reply = z.enum(["once", "always", "reject"])
-  export type Reply = z.infer<typeof Reply>
+  // Generated from JSON Schema - see schema/permissionReply.schema.json
+  export const Reply = permissionReplySchema
+  export type Reply = PermissionReply
 
   export const Approval = z.object({
     projectID: z.string(),
