@@ -10,6 +10,13 @@ const cache = path.join(xdgCache!, app)
 const config = path.join(xdgConfig!, app)
 const state = path.join(xdgState!, app)
 
+async function isDirectory(p: string): Promise<boolean> {
+  const stat = await Bun.file(p)
+    .stat()
+    .catch(() => undefined)
+  return stat?.isDirectory() ?? false
+}
+
 export namespace Global {
   export const Path = {
     // Allow override via OPENCODE_TEST_HOME for test isolation
@@ -22,6 +29,20 @@ export namespace Global {
     cache,
     config,
     state,
+  }
+
+  export async function claudeConfigDir(): Promise<string | undefined> {
+    const envDir = process.env.CLAUDE_CONFIG_DIR
+    if (envDir && (await isDirectory(envDir))) return envDir
+
+    const xdgPath = process.env.XDG_CONFIG_HOME || path.join(Path.home, ".config")
+    const xdgClaude = path.join(xdgPath, "claude")
+    if (await isDirectory(xdgClaude)) return xdgClaude
+
+    const legacy = path.join(Path.home, ".claude")
+    if (await isDirectory(legacy)) return legacy
+
+    return undefined
   }
 }
 
