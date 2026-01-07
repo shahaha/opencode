@@ -12,7 +12,14 @@ import { lazy } from "../util/lazy"
 import { NamedError } from "@opencode-ai/util/error"
 import { Flag } from "../flag/flag"
 import { Auth } from "../auth"
-import { type ParseError as JsoncParseError, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
+import {
+  type ParseError as JsoncParseError,
+  parse as parseJsonc,
+  printParseErrorCode,
+  modify,
+  applyEdits,
+  type FormattingOptions,
+} from "jsonc-parser"
 import { Instance } from "../project/instance"
 import { LSPServer } from "../lsp/server"
 import { BunProc } from "@/bun"
@@ -1144,6 +1151,40 @@ export namespace Config {
     const existing = await loadFile(filepath)
     await Bun.write(filepath, JSON.stringify(mergeDeep(existing, config), null, 2))
     await Instance.dispose()
+  }
+
+  export async function patch(edit: { path: (string | number)[]; value: any }) {
+    const opencodeDir = path.join(Instance.worktree, ".opencode")
+    const configPath = path.join(opencodeDir, "opencode.jsonc")
+
+    let configFile: string
+    if (await Bun.file(configPath).exists()) {
+      configFile = await Bun.file(configPath).text()
+    } else {
+      if (!existsSync(opencodeDir)) {
+        await fs.mkdir(opencodeDir, { recursive: true })
+      }
+      configFile = "{\n  \"$schema\": \"https://opencode.ai/config.json\"\n}"
+    }
+
+    const formattingOptions: FormattingOptions = {
+      tabSize: 2,
+      insertSpaces: true,
+      eol: "\n",
+    }
+
+    const edits = modify(configFile, edit.path, edit.value, { formattingOptions })
+    const updatedContent = applyEdits(configFile, edits)
+
+    await Bun.write(configPath, updatedContent)
+
+    const isToolOnlyChange = edit.path.length > 0 && edit.path[0] === "tools"
+
+    if (!isToolOnlyChange) {
+      await Instance.dispose()
+    } else {
+      ;(state as any).reset?.()
+    }
   }
 
   export async function directories() {
