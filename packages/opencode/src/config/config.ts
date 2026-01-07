@@ -447,6 +447,7 @@ export namespace Config {
           list: PermissionRule.optional(),
           bash: PermissionRule.optional(),
           task: PermissionRule.optional(),
+          task_async: PermissionRule.optional(),
           external_directory: PermissionRule.optional(),
           todowrite: PermissionAction.optional(),
           todoread: PermissionAction.optional(),
@@ -991,6 +992,13 @@ export namespace Config {
             .positive()
             .optional()
             .describe("Timeout in milliseconds for model context protocol (MCP) requests"),
+          async_task_limit: z
+            .number()
+            .int()
+            .positive()
+            .optional()
+            .describe("Maximum concurrent async background tasks per parent session (default: 3)"),
+          async_task_permissions: Permission.optional().describe("Permissions applied only to async subagent sessions"),
         })
         .optional(),
     })
