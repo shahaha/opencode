@@ -141,10 +141,17 @@ export function Session() {
   const [showThinking, setShowThinking] = createSignal(kv.get("thinking_visibility", true))
   const [showTimestamps, setShowTimestamps] = createSignal(kv.get("timestamps", "hide") === "show")
   const [showDetails, setShowDetails] = createSignal(kv.get("tool_details_visibility", true))
-  const [showAssistantMetadata, setShowAssistantMetadata] = createSignal(kv.get("assistant_metadata_visibility", true))
-  const [showScrollbar, setShowScrollbar] = createSignal(kv.get("scrollbar_visible", false))
+const [showAssistantMetadata, setShowAssistantMetadata] = createSignal(kv.get("assistant_metadata_visibility", true))
+  const [showScrollbar, setShowScrollbar] = createSignal(kv.get("scrollbar_visible", true))
   const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
   const [animationsEnabled, setAnimationsEnabled] = createSignal(kv.get("animations_enabled", true))
+  const [leftColumnHover, setLeftColumnHover] = createSignal(false)
+  const [canScroll, setCanScroll] = createSignal(false)
+
+  const scrollbarVisible = createMemo(() => {
+    if (!showScrollbar()) return false
+    return canScroll() && leftColumnHover()
+  })
 
   const wide = createMemo(() => dimensions().width > 120)
   const sidebarVisible = createMemo(() => {
@@ -197,12 +204,22 @@ export function Session() {
   let prompt: PromptRef
   const keybind = useKeybind()
 
-  // Allow exit when in child session (prompt is hidden)
+// Allow exit when in child session (prompt is hidden)
   const exit = useExit()
   useKeyboard((evt) => {
     if (!session()?.parentID) return
     if (keybind.match("app_exit", evt)) {
       exit()
+    }
+  })
+
+  createEffect(() => {
+    messages()
+    leftColumnHover()
+    if (scroll) {
+      setTimeout(() => {
+        setCanScroll(scroll.scrollHeight > scroll.height)
+      }, 0)
     }
   })
 
@@ -903,7 +920,16 @@ export function Session() {
       }}
     >
       <box flexDirection="row">
-        <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
+        <box
+          flexGrow={1}
+          paddingBottom={1}
+          paddingTop={1}
+          paddingLeft={2}
+          paddingRight={2}
+          gap={1}
+          onMouseOver={() => setLeftColumnHover(true)}
+          onMouseOut={() => setLeftColumnHover(false)}
+        >
           <Show when={session()}>
             <Show when={!sidebarVisible()}>
               <Header />
@@ -911,11 +937,11 @@ export function Session() {
             <scrollbox
               ref={(r) => (scroll = r)}
               viewportOptions={{
-                paddingRight: showScrollbar() ? 1 : 0,
+                paddingRight: scrollbarVisible() ? 1 : 0,
               }}
               verticalScrollbarOptions={{
                 paddingLeft: 1,
-                visible: showScrollbar(),
+                visible: scrollbarVisible(),
                 trackOptions: {
                   backgroundColor: theme.backgroundElement,
                   foregroundColor: theme.border,
