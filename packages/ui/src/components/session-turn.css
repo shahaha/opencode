@@ -59,6 +59,7 @@
 
   [data-slot="session-turn-message-content"] {
     margin-top: -18px;
+    max-width: 100%;
   }
 
   [data-slot="session-turn-message-title"] {
@@ -118,6 +119,7 @@
 
   [data-slot="session-turn-markdown"],
   [data-slot="session-turn-accordion"] [data-slot="accordion-content"] {
+    -webkit-user-select: text;
     user-select: text;
   }
 
