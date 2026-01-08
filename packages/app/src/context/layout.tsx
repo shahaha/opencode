@@ -60,6 +60,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           opened: true,
           diffStyle: "split" as ReviewDiffStyle,
         },
+
         session: {
           width: 600,
         },
@@ -341,6 +342,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           setStore("review", "opened", (x) => !x)
         },
       },
+
       session: {
         width: createMemo(() => store.session?.width ?? 600),
         resize(width: number) {
