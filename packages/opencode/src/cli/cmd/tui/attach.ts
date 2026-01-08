@@ -1,5 +1,6 @@
 import { cmd } from "../cmd"
 import { tui } from "./app"
+import { iife } from "@/util/iife"
 
 export const AttachCommand = cmd({
   command: "attach <url>",
@@ -19,6 +20,10 @@ export const AttachCommand = cmd({
         alias: ["s"],
         type: "string",
         describe: "session id to continue",
+      })
+      .option("prompt", {
+        type: "string",
+        describe: "prompt to use",
       }),
   handler: async (args) => {
     let directory = args.dir
@@ -30,9 +35,19 @@ export const AttachCommand = cmd({
         // If the directory doesn't exist locally (remote attach), pass it through.
       }
     }
+
+    const prompt = await iife(async () => {
+      const piped = !process.stdin.isTTY ? await Bun.stdin.text() : undefined
+      if (!args.prompt) return piped
+      return piped ? piped + "\n" + args.prompt : args.prompt
+    })
+
     await tui({
       url: args.url,
-      args: { sessionID: args.session },
+      args: {
+        sessionID: args.session,
+        prompt,
+      },
       directory,
     })
   },
