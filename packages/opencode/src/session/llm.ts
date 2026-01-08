@@ -96,8 +96,16 @@ export namespace LLM {
       system.push(header, rest.join("\n"))
     }
 
-    const variant =
-      !input.small && input.model.variants && input.user.variant ? input.model.variants[input.user.variant] : {}
+    const variant = (() => {
+      if (input.small) return {}
+      if (!input.model.variants) return {}
+      if (input.user.variant) return input.model.variants[input.user.variant] ?? {}
+      if (!input.agent.variant) return {}
+      if (!input.agent.model) return {}
+      if (input.model.providerID !== input.agent.model.providerID) return {}
+      if (input.model.id !== input.agent.model.modelID) return {}
+      return input.model.variants[input.agent.variant] ?? {}
+    })()
     const base = input.small
       ? ProviderTransform.smallOptions(input.model)
       : ProviderTransform.options({

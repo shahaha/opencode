@@ -1087,7 +1087,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                       class="text-text-base _hidden group-hover/prompt-input:inline-block capitalize text-12-regular"
                       onClick={() => local.model.variant.cycle()}
                     >
-                      {local.model.variant.current() ?? language.t("common.default")}
+                      {local.model.variant.effective() ?? language.t("common.default")}
                     </Button>
                   </TooltipKeybind>
                 </Show>
