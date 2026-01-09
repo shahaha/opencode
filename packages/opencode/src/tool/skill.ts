@@ -53,7 +53,9 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
         permission: "skill",
         patterns: [params.name],
         always: [params.name],
-        metadata: {},
+        metadata: {
+          skill: params.name,
+        },
       })
       // Load and parse skill content
       const parsed = await ConfigMarkdown.parse(skill.location)
