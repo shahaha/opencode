@@ -2,6 +2,7 @@ import { Bus } from "@/bus"
 import { Config } from "@/config/config"
 import { ulid } from "ulid"
 import { Provider } from "@/provider/provider"
+import { Instance } from "@/project/instance"
 import { Session } from "@/session"
 import { MessageV2 } from "@/session/message-v2"
 import { Storage } from "@/storage/storage"
@@ -11,55 +12,126 @@ import type * as SDK from "@opencode-ai/sdk/v2"
 export namespace ShareNext {
   const log = Log.create({ service: "share-next" })
 
+  interface ShareNextState {
+    subscriptions: (() => void)[]
+    queue: Map<string, { timeout: NodeJS.Timeout; data: Map<string, Data>; abortController: AbortController }>
+    disposed: boolean
+  }
+
+  const state = Instance.state<ShareNextState>(
+    () => ({
+      subscriptions: [],
+      queue: new Map(),
+      disposed: false,
+    }),
+    async (s) => {
+      // Perform cleanup inline using the provided state object.
+      // We cannot call the exported dispose() function here because it calls state(),
+      // which could reinitialize after the Instance has been disposed.
+      s.disposed = true
+      for (const unsub of s.subscriptions) {
+        unsub()
+      }
+      s.subscriptions.length = 0
+      for (const entry of s.queue.values()) {
+        clearTimeout(entry.timeout)
+        entry.abortController.abort()
+      }
+      s.queue.clear()
+      log.info("disposed share-next subscriptions (via Instance)")
+    },
+  )
+
   async function url() {
     return Config.get().then((x) => x.enterprise?.url ?? "https://opncd.ai")
   }
 
   export async function init() {
-    Bus.subscribe(Session.Event.Updated, async (evt) => {
-      await sync(evt.properties.info.id, [
-        {
-          type: "session",
-          data: evt.properties.info,
-        },
-      ])
-    })
-    Bus.subscribe(MessageV2.Event.Updated, async (evt) => {
-      await sync(evt.properties.info.sessionID, [
-        {
-          type: "message",
-          data: evt.properties.info,
-        },
-      ])
-      if (evt.properties.info.role === "user") {
-        await sync(evt.properties.info.sessionID, [
+    // Fully dispose existing state (subscriptions, queue, pending timeouts) to prevent duplicates on re-init
+    dispose()
+    const s = state()
+    // Reset disposed flag to allow operations after re-init
+    s.disposed = false
+    s.subscriptions.push(
+      Bus.subscribe(Session.Event.Updated, async (evt) => {
+        await sync(evt.properties.info.id, [
           {
-            type: "model",
-            data: [
-              await Provider.getModel(evt.properties.info.model.providerID, evt.properties.info.model.modelID).then(
-                (m) => m,
-              ),
-            ],
+            type: "session",
+            data: evt.properties.info,
           },
         ])
-      }
-    })
-    Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
-      await sync(evt.properties.part.sessionID, [
-        {
-          type: "part",
-          data: evt.properties.part,
-        },
-      ])
-    })
-    Bus.subscribe(Session.Event.Diff, async (evt) => {
-      await sync(evt.properties.sessionID, [
-        {
-          type: "session_diff",
-          data: evt.properties.diff,
-        },
-      ])
-    })
+      }),
+    )
+    s.subscriptions.push(
+      Bus.subscribe(MessageV2.Event.Updated, async (evt) => {
+        await sync(evt.properties.info.sessionID, [
+          {
+            type: "message",
+            data: evt.properties.info,
+          },
+        ])
+        if (evt.properties.info.role === "user") {
+          await sync(evt.properties.info.sessionID, [
+            {
+              type: "model",
+              data: [
+                await Provider.getModel(evt.properties.info.model.providerID, evt.properties.info.model.modelID).then(
+                  (m) => m,
+                ),
+              ],
+            },
+          ])
+        }
+      }),
+    )
+    s.subscriptions.push(
+      Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
+        await sync(evt.properties.part.sessionID, [
+          {
+            type: "part",
+            data: evt.properties.part,
+          },
+        ])
+      }),
+    )
+    s.subscriptions.push(
+      Bus.subscribe(Session.Event.Diff, async (evt) => {
+        await sync(evt.properties.sessionID, [
+          {
+            type: "session_diff",
+            data: evt.properties.diff,
+          },
+        ])
+      }),
+    )
+  }
+
+  export function dispose() {
+    const s = state()
+    // Mark as disposed to prevent new sync operations during cleanup
+    s.disposed = true
+    for (const unsub of s.subscriptions) {
+      unsub()
+    }
+    s.subscriptions.length = 0
+    for (const entry of s.queue.values()) {
+      clearTimeout(entry.timeout)
+      entry.abortController.abort()
+    }
+    s.queue.clear()
+    log.info("disposed share-next subscriptions")
+  }
+
+  /** @internal Test helper to get queue size */
+  export function _getQueueSize() {
+    return state().queue.size
+  }
+
+  /** @internal Test helper to add items to queue for testing dispose cleanup */
+  export function _addToQueueForTesting(sessionID: string) {
+    const s = state()
+    const timeout = setTimeout(() => {}, 100)
+    s.queue.set(sessionID, { timeout, data: new Map(), abortController: new AbortController() })
   }
 
   export async function create(sessionID: string) {
@@ -108,9 +180,11 @@ export namespace ShareNext {
         data: SDK.Model[]
       }
 
-  const queue = new Map<string, { timeout: NodeJS.Timeout; data: Map<string, Data> }>()
   async function sync(sessionID: string, data: Data[]) {
-    const existing = queue.get(sessionID)
+    const s = state()
+    // Skip if already disposed
+    if (s.disposed) return
+    const existing = s.queue.get(sessionID)
     if (existing) {
       for (const item of data) {
         existing.data.set("id" in item ? (item.id as string) : ulid(), item)
@@ -123,12 +197,19 @@ export namespace ShareNext {
       dataMap.set("id" in item ? (item.id as string) : ulid(), item)
     }
 
+    const abortController = new AbortController()
     const timeout = setTimeout(async () => {
-      const queued = queue.get(sessionID)
-      if (!queued) return
-      queue.delete(sessionID)
+      const queued = s.queue.get(sessionID)
+      // Check both existence and abort status atomically
+      if (!queued || queued.abortController.signal.aborted) return
+      // Store local references before any async operations to avoid race conditions
+      const queuedData = queued.data
+      const queuedSignal = queued.abortController.signal
+      s.queue.delete(sessionID)
       const share = await get(sessionID).catch(() => undefined)
       if (!share) return
+      // Re-check abort after async operation
+      if (queuedSignal.aborted) return
 
       await fetch(`${await url()}/api/share/${share.id}/sync`, {
         method: "POST",
@@ -137,11 +218,16 @@ export namespace ShareNext {
         },
         body: JSON.stringify({
           secret: share.secret,
-          data: Array.from(queued.data.values()),
+          data: Array.from(queuedData.values()),
         }),
+        signal: queuedSignal,
+      }).catch((err) => {
+        // Ignore abort errors during disposal
+        if (err.name === "AbortError") return
+        log.error("sync error", { sessionID, error: err })
       })
     }, 1000)
-    queue.set(sessionID, { timeout, data: dataMap })
+    s.queue.set(sessionID, { timeout, data: dataMap, abortController })
   }
 
   export async function remove(sessionID: string) {

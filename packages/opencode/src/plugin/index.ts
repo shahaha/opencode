@@ -81,6 +81,15 @@ export namespace Plugin {
     }
   })
 
+  // Separate state for subscriptions with dispose callback
+  const subscriptionState = Instance.state<(() => void)[]>(
+    () => [],
+    async () => {
+      // Delegate to the exported dispose function to keep cleanup logic centralized
+      dispose()
+    },
+  )
+
   export async function trigger<
     Name extends Exclude<keyof Required<Hooks>, "auth" | "event" | "tool">,
     Input = Parameters<Required<Hooks>[Name]>[0],
@@ -103,19 +112,33 @@ export namespace Plugin {
   }
 
   export async function init() {
+    // Clean up any existing subscriptions to prevent duplicates on re-init
+    dispose()
+    const subscriptions = subscriptionState()
     const hooks = await state().then((x) => x.hooks)
     const config = await Config.get()
     for (const hook of hooks) {
       // @ts-expect-error this is because we haven't moved plugin to sdk v2
       await hook.config?.(config)
     }
-    Bus.subscribeAll(async (input) => {
-      const hooks = await state().then((x) => x.hooks)
-      for (const hook of hooks) {
-        hook["event"]?.({
-          event: input,
-        })
-      }
-    })
+    subscriptions.push(
+      Bus.subscribeAll(async (input) => {
+        const hooks = await state().then((x) => x.hooks)
+        for (const hook of hooks) {
+          hook["event"]?.({
+            event: input,
+          })
+        }
+      }),
+    )
+  }
+
+  export function dispose() {
+    const subscriptions = subscriptionState()
+    for (const unsub of subscriptions) {
+      unsub()
+    }
+    subscriptions.length = 0
+    log.info("disposed plugin subscriptions")
   }
 }

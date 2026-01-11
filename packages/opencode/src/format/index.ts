@@ -63,6 +63,15 @@ export namespace Format {
     }
   })
 
+  // Separate state for subscriptions with dispose callback
+  const subscriptionState = Instance.state<(() => void)[]>(
+    () => [],
+    async () => {
+      // Delegate to the exported dispose function to keep cleanup logic centralized
+      dispose()
+    },
+  )
+
   async function isEnabled(item: Formatter.Info) {
     const s = await state()
     let status = s.enabled[item.name]
@@ -102,36 +111,50 @@ export namespace Format {
 
   export function init() {
     log.info("init")
-    Bus.subscribe(File.Event.Edited, async (payload) => {
-      const file = payload.properties.file
-      log.info("formatting", { file })
-      const ext = path.extname(file)
+    // Clean up any existing subscriptions to prevent duplicates on re-init
+    dispose()
+    const subscriptions = subscriptionState()
+    subscriptions.push(
+      Bus.subscribe(File.Event.Edited, async (payload) => {
+        const file = payload.properties.file
+        log.info("formatting", { file })
+        const ext = path.extname(file)
 
-      for (const item of await getFormatter(ext)) {
-        log.info("running", { command: item.command })
-        try {
-          const proc = Bun.spawn({
-            cmd: item.command.map((x) => x.replace("$FILE", file)),
-            cwd: Instance.directory,
-            env: { ...process.env, ...item.environment },
-            stdout: "ignore",
-            stderr: "ignore",
-          })
-          const exit = await proc.exited
-          if (exit !== 0)
-            log.error("failed", {
+        for (const item of await getFormatter(ext)) {
+          log.info("running", { command: item.command })
+          try {
+            const proc = Bun.spawn({
+              cmd: item.command.map((x) => x.replace("$FILE", file)),
+              cwd: Instance.directory,
+              env: { ...process.env, ...item.environment },
+              stdout: "ignore",
+              stderr: "ignore",
+            })
+            const exit = await proc.exited
+            if (exit !== 0)
+              log.error("failed", {
+                command: item.command,
+                ...item.environment,
+              })
+          } catch (error) {
+            log.error("failed to format file", {
+              error,
               command: item.command,
               ...item.environment,
+              file,
             })
-        } catch (error) {
-          log.error("failed to format file", {
-            error,
-            command: item.command,
-            ...item.environment,
-            file,
-          })
+          }
         }
-      }
-    })
+      }),
+    )
+  }
+
+  export function dispose() {
+    const subscriptions = subscriptionState()
+    for (const unsub of subscriptions) {
+      unsub()
+    }
+    subscriptions.length = 0
+    log.info("disposed format subscriptions")
   }
 }
