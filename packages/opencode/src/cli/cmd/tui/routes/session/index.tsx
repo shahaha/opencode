@@ -136,7 +136,9 @@ export function Session() {
   })
 
   const dimensions = useTerminalDimensions()
-  const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "hide")
+  const validSidebar = (v: unknown): v is "auto" | "hide" => v === "auto" || v === "hide"
+  const sidebarDefault = validSidebar(sync.data.config.tui?.sidebar) ? sync.data.config.tui.sidebar : "hide"
+  const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", sidebarDefault)
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
   const [conceal, setConceal] = createSignal(true)
   const [showThinking, setShowThinking] = kv.signal("thinking_visibility", true)
