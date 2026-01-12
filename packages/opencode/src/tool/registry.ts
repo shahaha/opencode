@@ -25,6 +25,8 @@ import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 import { LspTool } from "./lsp"
 import { Truncate } from "./truncation"
+import { PermissionNext } from "@/permission/next"
+import { Wildcard } from "@/util/wildcard"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -119,13 +121,53 @@ export namespace ToolRegistry {
 
   export async function tools(providerID: string, agent?: Agent.Info) {
     const tools = await all()
+    const config = await Config.get()
+
+    // Build permission ruleset: global config + agent permissions (agent takes precedence)
+    let permissionRuleset: PermissionNext.Ruleset = []
+    if (config.permission) {
+      // Global config permissions come first
+      permissionRuleset = PermissionNext.merge(permissionRuleset, PermissionNext.fromConfig(config.permission))
+    }
+    if (agent?.permission) {
+      // Agent permissions come last (they win on last-match-wins evaluation)
+      permissionRuleset = PermissionNext.merge(permissionRuleset, agent.permission)
+    }
+
+    // Filter out disabled tools based on permissions
+    // Only filter tools if there are no allow rules for that permission type
     const result = await Promise.all(
       tools
         .filter((t) => {
+          // Check if tool has an explicit deny rule with no allow rules
+          const permission = t.id
+
+          // Find all rules for this permission
+          const permissionRules = permissionRuleset.filter((r) => Wildcard.match(permission, r.permission))
+
+          // If no rules apply, allow the tool
+          if (permissionRules.length === 0) {
+            return true
+          }
+
+          // If there are allow rules, allow the tool (command-level filtering happens later)
+          const hasAllowRule = permissionRules.some((r) => r.action === "allow")
+          if (hasAllowRule) {
+            return true
+          }
+
+          // If there are only deny rules and one matches "*" pattern, filter out the tool
+          const hasWildcardDeny = permissionRules.some((r) => r.action === "deny" && r.pattern === "*")
+
+          if (hasWildcardDeny) {
+            return false
+          }
+
           // Enable websearch/codesearch for zen users OR via enable flag
           if (t.id === "codesearch" || t.id === "websearch") {
             return providerID === "opencode" || Flag.OPENCODE_ENABLE_EXA
           }
+
           return true
         })
         .map(async (t) => {

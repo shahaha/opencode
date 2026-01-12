@@ -165,10 +165,11 @@ export namespace SessionPrompt {
       })
     }
     if (permissions.length > 0) {
-      session.permission = permissions
-      await Session.update(session.id, (draft) => {
-        draft.permission = permissions
+      const updatedSession = await Session.update(session.id, (draft) => {
+        draft.permission = PermissionNext.merge(draft.permission ?? [], permissions)
       })
+      // Update session object to reflect the changes
+      session.permission = updatedSession.permission
     }
 
     if (input.noReply === true) {

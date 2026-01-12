@@ -7,7 +7,7 @@ import { MessageV2 } from "../session/message-v2"
 import { Identifier } from "../id/id"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
-import { iife } from "@/util/iife"
+
 import { defer } from "@/util/defer"
 import { Config } from "../config/config"
 import { PermissionNext } from "@/permission/next"
@@ -54,41 +54,50 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         })
       }
 
+      // Find the agent by subagent_type
       const agent = await Agent.get(params.subagent_type)
-      if (!agent) throw new Error(`Unknown agent type: ${params.subagent_type} is not a valid agent type`)
-      const session = await iife(async () => {
-        if (params.session_id) {
-          const found = await Session.get(params.session_id).catch(() => {})
-          if (found) return found
-        }
 
-        return await Session.create({
-          parentID: ctx.sessionID,
-          title: params.description + ` (@${agent.name} subagent)`,
-          permission: [
-            {
-              permission: "todowrite",
-              pattern: "*",
-              action: "deny",
-            },
-            {
-              permission: "todoread",
-              pattern: "*",
-              action: "deny",
-            },
-            {
-              permission: "task",
-              pattern: "*",
-              action: "deny",
-            },
-            ...(config.experimental?.primary_tools?.map((t) => ({
-              pattern: "*",
-              action: "allow" as const,
-              permission: t,
-            })) ?? []),
-          ],
-        })
+      // Create session for the subagent task with proper security restrictions
+      // IMPORTANT: Task restrictions must come AFTER agent permissions to override "*": "allow"
+      const taskPermissions = PermissionNext.merge(
+        agent.permission ?? [],
+        [
+          {
+            permission: "task",
+            pattern: "*",
+            action: "deny",
+          },
+          {
+            permission: "todowrite",
+            pattern: "*",
+            action: "deny",
+          },
+          {
+            permission: "todoread",
+            pattern: "*",
+            action: "deny",
+          },
+        ],
+        // Git-agent restrictions must be LAST to override agent defaults
+        [
+          {
+            permission: "git",
+            pattern: "*",
+            action: "deny",
+          },
+          ...(config.experimental?.primary_tools?.map((t) => ({
+            pattern: "*",
+            action: "allow" as const,
+            permission: t,
+          })) ?? []),
+        ],
+      )
+
+      const session = await Session.create({
+        parentID: ctx.sessionID,
+        permission: taskPermissions,
       })
+
       const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
       if (msg.info.role !== "assistant") throw new Error("Not an assistant message")
 
@@ -143,12 +152,6 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           providerID: model.providerID,
         },
         agent: agent.name,
-        tools: {
-          todowrite: false,
-          todoread: false,
-          task: false,
-          ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
-        },
         parts: promptParts,
       })
       unsub()
@@ -179,3 +182,10 @@ export const TaskTool = Tool.define("task", async (ctx) => {
     },
   }
 })
+
+export function filterSubagents(agents: Agent.Info[], ruleset: PermissionNext.Ruleset): Agent.Info[] {
+  return agents.filter((agent) => {
+    const permission = PermissionNext.evaluate("task", agent.name, ruleset)
+    return permission.action !== "deny"
+  })
+}
