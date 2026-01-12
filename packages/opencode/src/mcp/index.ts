@@ -46,6 +46,13 @@ export namespace MCP {
     }),
   )
 
+  export const InstructionsChanged = BusEvent.define(
+    "mcp.instructions.changed",
+    z.object({
+      server: z.string(),
+    }),
+  )
+
   export const Failed = NamedError.create(
     "MCPFailed",
     z.object({
@@ -159,7 +166,9 @@ export namespace MCP {
       const config = cfg.mcp ?? {}
       const clients: Record<string, MCPClient> = {}
       const status: Record<string, Status> = {}
+      const serverInstructions: Record<string, string> = {}
 
+      // Discover all configured MCP servers
       await Promise.all(
         Object.entries(config).map(async ([key, mcp]) => {
           if (!isMcpConfigured(mcp)) {
@@ -180,12 +189,20 @@ export namespace MCP {
 
           if (result.mcpClient) {
             clients[key] = result.mcpClient
+            // Fetch and cache instructions during initialization
+            const instructions = await fetchServerInstructions(key, result.mcpClient)
+            if (instructions) {
+              serverInstructions[key] = instructions
+              log.info("cached server instructions", { key })
+            }
           }
         }),
       )
+
       return {
         status,
         clients,
+        serverInstructions,
       }
     },
     async (state) => {
@@ -201,6 +218,23 @@ export namespace MCP {
       pendingOAuthTransports.clear()
     },
   )
+
+  // Helper function to fetch server instructions from an MCP client
+  // Server instructions are always fetched automatically per MCP protocol specification
+  async function fetchServerInstructions(serverName: string, client: MCPClient): Promise<string | undefined> {
+    try {
+      const instructions = await client.getInstructions()
+      if (instructions?.trim()) {
+        return instructions
+      }
+
+      log.debug("no server instructions available", { serverName })
+      return undefined
+    } catch (error) {
+      log.debug("failed to fetch server instructions", { serverName, error })
+      return undefined
+    }
+  }
 
   // Helper function to fetch prompts for a specific client
   async function fetchPromptsForClient(clientName: string, client: Client) {
@@ -245,6 +279,56 @@ export namespace MCP {
       commands[key] = { ...resource, client: clientName }
     }
     return commands
+  }
+
+  /**
+   * Refresh server instructions for a specific MCP server.
+   */
+  export async function refreshServerInstructions(serverName: string) {
+    const s = await state()
+    const client = s.clients[serverName]
+
+    if (!client) {
+      log.warn("cannot refresh instructions: client not found", { serverName })
+      return
+    }
+
+    const instructions = await fetchServerInstructions(serverName, client)
+    if (instructions) {
+      // Update the server instructions in state
+      s.serverInstructions = s.serverInstructions || {}
+      s.serverInstructions[serverName] = instructions
+      log.info("refreshed server instructions", { serverName })
+      // Publish event for instruction changes
+      Bus.publish(InstructionsChanged, { server: serverName })
+    }
+  }
+
+  /**
+   * Refresh server instructions for all connected MCP servers.
+   */
+  export async function refreshAllServerInstructions() {
+    const s = await state()
+
+    const refreshPromises = Object.keys(s.clients).map(async (serverName) => {
+      try {
+        const client = s.clients[serverName]
+        if (!client) return
+
+        const instructions = await fetchServerInstructions(serverName, client)
+        if (instructions) {
+          s.serverInstructions = s.serverInstructions || {}
+          s.serverInstructions[serverName] = instructions
+          log.info("refreshed server instructions", { serverName })
+          // Publish event for instruction changes
+          Bus.publish(InstructionsChanged, { server: serverName })
+        }
+      } catch (error) {
+        log.error("failed to refresh server instructions", { serverName, error })
+      }
+    })
+
+    await Promise.all(refreshPromises)
   }
 
   export async function add(name: string, mcp: Config.Mcp) {
@@ -493,6 +577,10 @@ export namespace MCP {
 
   export async function clients() {
     return state().then((state) => state.clients)
+  }
+
+  export async function serverInstructions() {
+    return state().then((state) => state.serverInstructions || {})
   }
 
   export async function connect(name: string) {

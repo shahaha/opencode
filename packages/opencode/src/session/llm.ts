@@ -58,18 +58,29 @@ export namespace LLM {
     const [language, cfg] = await Promise.all([Provider.getLanguage(input.model), Config.get()])
 
     const system = SystemPrompt.header(input.model.providerID)
-    system.push(
-      [
-        // use agent prompt otherwise provider prompt
-        ...(input.agent.prompt ? [input.agent.prompt] : SystemPrompt.provider(input.model)),
-        // any custom prompt passed into this call
-        ...input.system,
-        // any custom prompt from last user message
-        ...(input.user.system ? [input.user.system] : []),
-      ]
-        .filter((x) => x)
-        .join("\n"),
-    )
+
+    // Get MCP server instructions - handle errors gracefully
+    let mcpInstructions: string[] = []
+    try {
+      mcpInstructions = await SystemPrompt.mcpInstructions()
+    } catch (error) {
+      // Silently ignore MCP instruction errors to avoid breaking the system
+    }
+
+    const systemText = [
+      // use agent prompt otherwise provider prompt
+      ...(input.agent.prompt ? [input.agent.prompt] : SystemPrompt.provider(input.model)),
+      // any custom prompt passed into this call
+      ...input.system,
+      // any custom prompt from last user message
+      ...(input.user.system ? [input.user.system] : []),
+      // Include MCP server instructions
+      ...mcpInstructions,
+    ]
+      .filter((x) => x)
+      .join("\n")
+
+    system.push(systemText)
 
     const header = system[0]
     const original = clone(system)
