@@ -17,6 +17,7 @@ import { DialogThemeList } from "@tui/component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
 import { DialogAgent } from "@tui/component/dialog-agent"
+import { DialogAntigravity } from "@tui/component/dialog-antigravity"
 import { DialogSessionList } from "@tui/component/dialog-session-list"
 import { KeybindProvider } from "@tui/context/keybind"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
@@ -33,6 +34,7 @@ import { TuiEvent } from "./event"
 import { KVProvider, useKV } from "./context/kv"
 import { Provider } from "@/provider/provider"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
+import { Antigravity } from "@/antigravity"
 import open from "open"
 import { writeHeapSnapshot } from "v8"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
@@ -221,20 +223,20 @@ function App() {
     if (!terminalTitleEnabled() || Flag.OPENCODE_DISABLE_TERMINAL_TITLE) return
 
     if (route.data.type === "home") {
-      renderer.setTerminalTitle("OpenCode")
+      renderer.setTerminalTitle("ClosedCode")
       return
     }
 
     if (route.data.type === "session") {
       const session = sync.session.get(route.data.sessionID)
       if (!session || SessionApi.isDefaultTitle(session.title)) {
-        renderer.setTerminalTitle("OpenCode")
+        renderer.setTerminalTitle("ClosedCode")
         return
       }
 
       // Truncate title to 40 chars max
       const title = session.title.length > 40 ? session.title.slice(0, 37) + "..." : session.title
-      renderer.setTerminalTitle(`OC | ${title}`)
+      renderer.setTerminalTitle(`CC | ${title}`)
     }
   })
 
@@ -259,6 +261,19 @@ function App() {
         })
       }
     })
+
+    // Auto-start Antigravity proxy if configured
+    if (Antigravity.shouldAutoStart()) {
+      Antigravity.autoStart().then((started) => {
+        if (started) {
+          toast.show({
+            message: "Antigravity proxy started",
+            variant: "info",
+            duration: 2000,
+          })
+        }
+      })
+    }
   })
 
   let continued = false
@@ -272,6 +287,28 @@ function App() {
       continued = true
       route.navigate({ type: "session", sessionID: match })
     }
+  })
+
+  // Listen for model switch events from the model_switch tool
+  sdk.event.on(TuiEvent.ModelSwitch.type, (evt) => {
+    const { providerID, modelID } = evt.properties
+    local.model.set({ providerID, modelID }, { recent: true })
+    toast.show({
+      message: `Switched to ${providerID}/${modelID}`,
+      variant: "info",
+      duration: 3000,
+    })
+  })
+
+  // Listen for agent switch events from the agent_switch tool
+  sdk.event.on(TuiEvent.AgentSwitch.type, (evt) => {
+    const { agent } = evt.properties
+    local.agent.set(agent)
+    toast.show({
+      message: `Switched to ${agent} agent`,
+      variant: "info",
+      duration: 3000,
+    })
   })
 
   createEffect(
@@ -414,6 +451,14 @@ function App() {
       suggested: !connected(),
       onSelect: () => {
         dialog.replace(() => <DialogProviderList />)
+      },
+      category: "Provider",
+    },
+    {
+      title: "Antigravity proxy",
+      value: "antigravity.status",
+      onSelect: () => {
+        dialog.replace(() => <DialogAntigravity />)
       },
       category: "Provider",
     },

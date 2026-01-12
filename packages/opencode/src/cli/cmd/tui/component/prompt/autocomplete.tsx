@@ -361,6 +361,11 @@ export function Autocomplete(props: {
           onSelect: () => command.trigger("session.rename"),
         },
         {
+          display: "/rules",
+          description: "set session rules",
+          onSelect: () => command.trigger("session.rules"),
+        },
+        {
           display: "/copy",
           description: "copy session transcript to clipboard",
           onSelect: () => command.trigger("session.copy"),
@@ -404,6 +409,11 @@ export function Autocomplete(props: {
         onSelect: () => command.trigger("session.new"),
       },
       {
+        display: "/agthinking",
+        description: "toggle AG thinking visibility",
+        onSelect: () => command.trigger("session.toggle.ag_thinking"),
+      },
+      {
         display: "/models",
         description: "list models",
         onSelect: () => command.trigger("model.list"),
@@ -430,6 +440,26 @@ export function Autocomplete(props: {
         onSelect: () => command.trigger("mcp.list"),
       },
       {
+        display: "/memory",
+        description: "edit project memory",
+        onSelect: () => command.trigger("project.memory"),
+      },
+      {
+        display: "/fast",
+        description: "switch to fast model (Gemini 3 Flash)",
+        onSelect: () => command.trigger("model.preset.fast"),
+      },
+      {
+        display: "/smart",
+        description: "switch to smart model (Gemini 3 Pro High)",
+        onSelect: () => command.trigger("model.preset.smart"),
+      },
+      {
+        display: "/think",
+        description: "switch to thinking model (Claude Sonnet 4.5)",
+        onSelect: () => command.trigger("model.preset.think"),
+      },
+      {
         display: "/theme",
         description: "toggle theme",
         onSelect: () => command.trigger("theme.switch"),
@@ -443,6 +473,17 @@ export function Autocomplete(props: {
         display: "/connect",
         description: "connect to a provider",
         onSelect: () => command.trigger("provider.connect"),
+      },
+      {
+        display: "/antigravity",
+        aliases: ["/ag", "/proxy"],
+        description: "manage Antigravity proxy (free Claude/Gemini)",
+        onSelect: () => command.trigger("antigravity.status"),
+      },
+      {
+        display: "/quota",
+        description: "show Antigravity model quotas",
+        onSelect: () => command.trigger("antigravity.status"),
       },
       {
         display: "/help",
