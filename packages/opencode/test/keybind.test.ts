@@ -54,6 +54,17 @@ describe("Keybind.toString", () => {
     expect(Keybind.toString(info)).toBe("pgup")
   })
 
+  test("should convert space key to string", () => {
+    const info: Keybind.Info = {
+      ctrl: false,
+      meta: false,
+      shift: false,
+      leader: false,
+      name: "space",
+    }
+    expect(Keybind.toString(info)).toBe("space")
+  })
+
   test("should handle empty name", () => {
     const info: Keybind.Info = { ctrl: true, meta: false, shift: false, leader: false, name: "" }
     expect(Keybind.toString(info)).toBe("ctrl")
@@ -211,6 +222,19 @@ describe("Keybind.parse", () => {
         shift: false,
         leader: false,
         name: "x",
+      },
+    ])
+  })
+
+  test("should parse ctrl+space", () => {
+    const result = Keybind.parse("ctrl+space")
+    expect(result).toEqual([
+      {
+        ctrl: true,
+        meta: false,
+        shift: false,
+        leader: false,
+        name: "space",
       },
     ])
   })
