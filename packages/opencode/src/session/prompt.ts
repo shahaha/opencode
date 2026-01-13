@@ -797,12 +797,17 @@ export namespace SessionPrompt {
           }
         }
 
+        const text = textParts.join("\n\n")
+        const output = text.length > 30_000
+          ? text.slice(0, 30_000) + `\n\n[MCP output truncated: exceeded 30000 char limit]`
+          : text
+
         return {
           title: "",
           metadata: result.metadata ?? {},
-          output: textParts.join("\n\n"),
+          output,
           attachments,
-          content: result.content, // directly return content to preserve ordering when outputting to model
+          content: result.content,
         }
       }
       item.toModelOutput = (result) => {
