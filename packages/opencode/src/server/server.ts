@@ -949,6 +949,7 @@ export namespace Server {
                   archived: z.number().optional(),
                 })
                 .optional(),
+              permission: PermissionNext.Ruleset.optional(),
             }),
           ),
           async (c) => {
@@ -960,6 +961,7 @@ export namespace Server {
                 session.title = updates.title
               }
               if (updates.time?.archived !== undefined) session.time.archived = updates.time.archived
+              if (updates.permission !== undefined) session.permission = updates.permission
             })
 
             return c.json(updatedSession)
