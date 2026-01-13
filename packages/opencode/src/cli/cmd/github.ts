@@ -395,7 +395,7 @@ jobs:
       issues: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run opencode
         uses: anomalyco/opencode/github@latest${envStr}
@@ -518,7 +518,15 @@ export const GithubRunCommand = cmd({
 
         // Setup opencode session
         const repoData = await fetchRepo()
-        session = await Session.create({})
+        session = await Session.create({
+          permission: [
+            {
+              permission: "question",
+              action: "deny",
+              pattern: "*",
+            },
+          ],
+        })
         const unsubscribeEvents = subscribeSessionEvents()
         shareId = await (async () => {
           if (share === false) return
