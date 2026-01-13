@@ -527,7 +527,7 @@ export const GithubRunCommand = cmd({
             },
           ],
         })
-        const unsubscribeEvents = subscribeSessionEvents()
+        unsubscribeEvents = subscribeSessionEvents()
         shareId = await (async () => {
           if (share === false) return
           if (!share && repoData.data.private) return
