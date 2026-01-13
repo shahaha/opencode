@@ -19,6 +19,7 @@ import { Snapshot } from "@/snapshot"
 
 import type { Provider } from "@/provider/provider"
 import { PermissionNext } from "@/permission/next"
+import { SandboxContext } from "@/sandbox/context"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
@@ -35,6 +36,17 @@ export namespace Session {
       `^(${parentTitlePrefix}|${childTitlePrefix})\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$`,
     ).test(title)
   }
+
+  export const SandboxStatus = z
+    .object({
+      provider: z.enum(["local", "modal", "kubernetes"]),
+      status: z.enum(["running", "stopped", "error", "unknown"]),
+      sandboxId: z.string().optional(),
+    })
+    .meta({
+      ref: "SessionSandboxStatus",
+    })
+  export type SandboxStatus = z.output<typeof SandboxStatus>
 
   export const Info = z
     .object({
@@ -55,6 +67,7 @@ export namespace Session {
           url: z.string(),
         })
         .optional(),
+      sandbox: SandboxStatus.optional(),
       title: z.string(),
       version: z.string(),
       time: z.object({
@@ -319,6 +332,7 @@ export namespace Session {
         await remove(child.id)
       }
       await unshare(sessionID).catch(() => {})
+      await SandboxContext.terminateForSession(sessionID).catch(() => {})
       for (const msg of await Storage.list(["message", sessionID])) {
         for (const part of await Storage.list(["part", msg.at(-1)!])) {
           await Storage.remove(part)
@@ -395,6 +409,25 @@ export namespace Session {
       delta,
     })
     return part
+  })
+
+  export const getSandboxStatus = fn(Identifier.schema("session"), async (sessionID): Promise<SandboxStatus | undefined> => {
+    const instance = await SandboxContext.getForSession(sessionID)
+    if (!instance) {
+      return undefined
+    }
+    try {
+      const status = await instance.getStatus()
+      const info = instance.info
+      return {
+        provider: info.provider as "local" | "modal" | "kubernetes",
+        status: status as "running" | "stopped" | "error" | "unknown",
+        sandboxId: info.id,
+      }
+    } catch (err) {
+      log.error("failed to get sandbox status", { sessionID, error: err })
+      return undefined
+    }
   })
 
   export const getUsage = fn(
