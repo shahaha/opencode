@@ -9,6 +9,11 @@ import { Persist, persisted, removePersisted } from "@/utils/persist"
 import { same } from "@/utils/same"
 import { createScrollPersistence, type SessionScroll } from "./layout-scroll"
 
+// Check for kiosk mode from URL parameters (read once at load time)
+const kioskParams = new URLSearchParams(window.location.search)
+const kioskEnabled = kioskParams.get("kiosk") === "true"
+const kioskDir = kioskParams.get("dir") // Optional directory to auto-open in kiosk mode
+
 const AVATAR_COLOR_KEYS = ["pink", "mint", "orange", "purple", "cyan", "lime"] as const
 export type AvatarColorKey = (typeof AVATAR_COLOR_KEYS)[number]
 
@@ -268,6 +273,10 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
 
     return {
       ready,
+      kiosk: {
+        enabled: () => kioskEnabled,
+        dir: () => kioskDir,
+      },
       projects: {
         list,
         open(directory: string) {
