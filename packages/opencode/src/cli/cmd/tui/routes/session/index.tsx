@@ -15,7 +15,7 @@ import { Dynamic } from "solid-js/web"
 import path from "path"
 import { useRoute, useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
-import { SplitBorder } from "@tui/component/border"
+import { getSplitBorderChars } from "@tui/component/border"
 import { useTheme } from "@tui/context/theme"
 import {
   BoxRenderable,
@@ -74,6 +74,7 @@ import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatTranscript } from "../../util/transcript"
+import { useAccessibility } from "@tui/util/accessibility"
 
 addDefaultParsers(parsers.parsers)
 
@@ -111,6 +112,7 @@ export function Session() {
   const kv = useKV()
   const { theme } = useTheme()
   const promptRef = usePromptRef()
+  const accessibility = useAccessibility()
   const session = createMemo(() => sync.session.get(route.sessionID))
   const children = createMemo(() => {
     const parentID = session()?.parentID ?? session()?.id
@@ -1009,7 +1011,7 @@ export function Session() {
                             marginTop={1}
                             flexShrink={0}
                             border={["left"]}
-                            customBorderChars={SplitBorder.customBorderChars}
+                            customBorderChars={getSplitBorderChars(accessibility())}
                             borderColor={theme.backgroundPanel}
                           >
                             <box
@@ -1153,6 +1155,7 @@ function UserMessage(props: {
   const sync = useSync()
   const { theme } = useTheme()
   const [hover, setHover] = createSignal(false)
+  const accessibility = useAccessibility()
   const queued = createMemo(() => props.pending && props.message.id > props.pending)
   const color = createMemo(() => (queued() ? theme.accent : local.agent.color(props.message.agent)))
   const metadataVisible = createMemo(() => queued() || ctx.showTimestamps())
@@ -1166,7 +1169,7 @@ function UserMessage(props: {
           id={props.message.id}
           border={["left"]}
           borderColor={color()}
-          customBorderChars={SplitBorder.customBorderChars}
+          customBorderChars={getSplitBorderChars(accessibility())}
           marginTop={props.index === 0 ? 0 : 1}
         >
           <box
@@ -1240,6 +1243,8 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
   const { theme } = useTheme()
   const sync = useSync()
   const messages = createMemo(() => sync.data.message[props.message.sessionID] ?? [])
+  const accessibility = useAccessibility()
+  const separator = createMemo(() => (accessibility() ? " - " : " · "))
 
   const final = createMemo(() => {
     return props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish)
@@ -1278,7 +1283,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
           paddingLeft={2}
           marginTop={1}
           backgroundColor={theme.backgroundPanel}
-          customBorderChars={SplitBorder.customBorderChars}
+          customBorderChars={getSplitBorderChars(accessibility())}
           borderColor={theme.error}
         >
           <text fg={theme.textMuted}>{props.message.error?.data.message}</text>
@@ -1296,15 +1301,15 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
                       : local.agent.color(props.message.agent),
                 }}
               >
-                ▣{" "}
+                <Show when={!accessibility()}>▣{" "}</Show>
               </span>{" "}
               <span style={{ fg: theme.text }}>{Locale.titlecase(props.message.mode)}</span>
-              <span style={{ fg: theme.textMuted }}> · {props.message.modelID}</span>
+              <span style={{ fg: theme.textMuted }}>{separator() + props.message.modelID}</span>
               <Show when={duration()}>
-                <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
+                <span style={{ fg: theme.textMuted }}>{separator() + Locale.duration(duration())}</span>
               </Show>
               <Show when={props.message.error?.name === "MessageAbortedError"}>
-                <span style={{ fg: theme.textMuted }}> · interrupted</span>
+                <span style={{ fg: theme.textMuted }}>{separator() + "interrupted"}</span>
               </Show>
             </text>
           </box>
@@ -1323,6 +1328,7 @@ const PART_MAPPING = {
 function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: AssistantMessage }) {
   const { theme, subtleSyntax } = useTheme()
   const ctx = use()
+  const accessibility = useAccessibility()
   const content = createMemo(() => {
     // Filter out redacted reasoning chunks from OpenRouter
     // OpenRouter sends encrypted reasoning data that appears as [REDACTED]
@@ -1336,7 +1342,7 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
         marginTop={1}
         flexDirection="column"
         border={["left"]}
-        customBorderChars={SplitBorder.customBorderChars}
+        customBorderChars={getSplitBorderChars(accessibility())}
         borderColor={theme.backgroundElement}
       >
         <code
@@ -1480,10 +1486,14 @@ function GenericTool(props: ToolProps<any>) {
 
 function ToolTitle(props: { fallback: string; when: any; icon: string; children: JSX.Element }) {
   const { theme } = useTheme()
+  const accessibility = useAccessibility()
   return (
     <text paddingLeft={3} fg={props.when ? theme.textMuted : theme.text}>
       <Show fallback={<>~ {props.fallback}</>} when={props.when}>
-        <span style={{ bold: true }}>{props.icon}</span> {props.children}
+        <Show when={!accessibility()}>
+          <span style={{ bold: true }}>{props.icon}</span>{" "}
+        </Show>
+        {props.children}
       </Show>
     </text>
   )
@@ -1501,6 +1511,12 @@ function InlineTool(props: {
   const { theme } = useTheme()
   const ctx = use()
   const sync = useSync()
+  const accessibility = useAccessibility()
+  const displayIcon = createMemo(() => {
+    if (!accessibility()) return props.icon
+    if (!props.icon) return ""
+    return props.icon.length === 1 && props.icon.charCodeAt(0) <= 127 ? props.icon : ""
+  })
 
   const permission = createMemo(() => {
     const callID = sync.data.permission[ctx.sessionID]?.at(0)?.tool?.callID
@@ -1552,7 +1568,10 @@ function InlineTool(props: {
     >
       <text paddingLeft={3} fg={fg()} attributes={denied() ? TextAttributes.STRIKETHROUGH : undefined}>
         <Show fallback={<>~ {props.pending}</>} when={props.complete}>
-          <span style={{ fg: props.iconColor }}>{props.icon}</span> {props.children}
+          <Show when={displayIcon()}>
+            <span style={{ fg: props.iconColor }}>{displayIcon()}</span>{" "}
+          </Show>
+          {props.children}
         </Show>
       </text>
       <Show when={error() && !denied()}>
@@ -1566,6 +1585,7 @@ function BlockTool(props: { title: string; children: JSX.Element; onClick?: () =
   const { theme } = useTheme()
   const renderer = useRenderer()
   const [hover, setHover] = createSignal(false)
+  const accessibility = useAccessibility()
   const error = createMemo(() => (props.part?.state.status === "error" ? props.part.state.error : undefined))
   return (
     <box
@@ -1576,7 +1596,7 @@ function BlockTool(props: { title: string; children: JSX.Element; onClick?: () =
       marginTop={1}
       gap={1}
       backgroundColor={hover() ? theme.backgroundMenu : theme.backgroundPanel}
-      customBorderChars={SplitBorder.customBorderChars}
+      customBorderChars={getSplitBorderChars(accessibility())}
       borderColor={theme.background}
       onMouseOver={() => props.onClick && setHover(true)}
       onMouseOut={() => setHover(false)}
@@ -1599,13 +1619,14 @@ function BlockTool(props: { title: string; children: JSX.Element; onClick?: () =
 function Bash(props: ToolProps<typeof BashTool>) {
   const { theme } = useTheme()
   const sync = useSync()
+  const accessibility = useAccessibility()
   const output = createMemo(() => stripAnsi(props.metadata.output?.trim() ?? ""))
   const [expanded, setExpanded] = createSignal(false)
   const lines = createMemo(() => output().split("\n"))
   const overflow = createMemo(() => lines().length > 10)
   const limited = createMemo(() => {
     if (expanded() || !overflow()) return output()
-    return [...lines().slice(0, 10), "…"].join("\n")
+    return [...lines().slice(0, 10), accessibility() ? "..." : "…"].join("\n")
   })
 
   const workdirDisplay = createMemo(() => {
@@ -1777,6 +1798,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
   const keybind = useKeybind()
   const { navigate } = useRoute()
   const local = useLocal()
+  const accessibility = useAccessibility()
 
   const current = createMemo(() => props.metadata.summary?.findLast((x) => x.state.status !== "pending"))
   const color = createMemo(() => local.agent.color(props.input.subagent_type ?? "unknown"))
@@ -1799,7 +1821,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
             </text>
             <Show when={current()}>
               <text style={{ fg: current()!.state.status === "error" ? theme.error : theme.textMuted }}>
-                └ {Locale.titlecase(current()!.tool)}{" "}
+                {accessibility() ? "->" : "└"} {Locale.titlecase(current()!.tool)}{" "}
                 {current()!.state.status === "completed" ? current()!.state.title : ""}
               </text>
             </Show>
@@ -1829,6 +1851,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
 function Edit(props: ToolProps<typeof EditTool>) {
   const ctx = use()
   const { theme, syntax } = useTheme()
+  const accessibility = useAccessibility()
 
   const view = createMemo(() => {
     const diffStyle = ctx.sync.data.config.tui?.diff_style
@@ -1850,7 +1873,10 @@ function Edit(props: ToolProps<typeof EditTool>) {
   return (
     <Switch>
       <Match when={props.metadata.diff !== undefined}>
-        <BlockTool title={"← Edit " + normalizePath(props.input.filePath!)} part={props.part}>
+        <BlockTool
+          title={(accessibility() ? "Edit " : "← Edit ") + normalizePath(props.input.filePath!)}
+          part={props.part}
+        >
           <box paddingLeft={1}>
             <diff
               diff={diffContent()}
