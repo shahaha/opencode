@@ -2191,6 +2191,9 @@
                         },
                         {
                           "$ref": "#/components/schemas/SubtaskPartInput"
+                        },
+                        {
+                          "$ref": "#/components/schemas/CommandPartInput"
                         }
                       ]
                     }
@@ -2567,6 +2570,9 @@
                         },
                         {
                           "$ref": "#/components/schemas/SubtaskPartInput"
+                        },
+                        {
+                          "$ref": "#/components/schemas/CommandPartInput"
                         }
                       ]
                     }
@@ -6812,6 +6818,28 @@
         },
         "required": ["id", "sessionID", "messageID", "type", "auto"]
       },
+      "CommandPart": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sessionID": {
+            "type": "string"
+          },
+          "messageID": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "const": "command"
+          },
+          "command": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "sessionID", "messageID", "type", "command"]
+      },
       "Part": {
         "anyOf": [
           {
@@ -6877,6 +6905,9 @@
           },
           {
             "$ref": "#/components/schemas/CompactionPart"
+          },
+          {
+            "$ref": "#/components/schemas/CommandPart"
           }
         ]
       },
@@ -9802,6 +9833,22 @@
           }
         },
         "required": ["type", "prompt", "description", "agent"]
+      },
+      "CommandPartInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "const": "command"
+          },
+          "command": {
+            "type": "string"
+          }
+        },
+        "required": ["type", "command"]
       },
       "Command": {
         "type": "object",

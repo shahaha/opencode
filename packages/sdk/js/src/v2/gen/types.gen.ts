@@ -419,6 +419,14 @@ export type CompactionPart = {
   auto: boolean
 }
 
+export type CommandPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "command"
+  command: string
+}
+
 export type Part =
   | TextPart
   | {
@@ -441,6 +449,7 @@ export type Part =
   | AgentPart
   | RetryPart
   | CompactionPart
+  | CommandPart
 
 export type EventMessagePartUpdated = {
   type: "message.part.updated"
@@ -1856,6 +1865,12 @@ export type SubtaskPartInput = {
   command?: string
 }
 
+export type CommandPartInput = {
+  id?: string
+  type: "command"
+  command: string
+}
+
 export type Command = {
   name: string
   description?: string
@@ -3168,7 +3183,7 @@ export type SessionPromptData = {
     }
     system?: string
     variant?: string
-    parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+    parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput | CommandPartInput>
   }
   path: {
     /**
@@ -3355,7 +3370,7 @@ export type SessionPromptAsyncData = {
     }
     system?: string
     variant?: string
-    parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+    parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput | CommandPartInput>
   }
   path: {
     /**

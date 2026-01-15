@@ -142,6 +142,16 @@ export namespace SessionPrompt {
           .meta({
             ref: "SubtaskPartInput",
           }),
+        MessageV2.CommandPart.omit({
+          messageID: true,
+          sessionID: true,
+        })
+          .partial({
+            id: true,
+          })
+          .meta({
+            ref: "CommandPartInput",
+          }),
       ]),
     ),
   })
@@ -1673,8 +1683,12 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     }
 
     const templateParts = await resolvePromptParts(template)
-    const parts =
-      (agent.mode === "subagent" && command.subtask !== false) || command.subtask === true
+    const parts = [
+      {
+        type: "command" as const,
+        command: `/${input.command}${input.arguments ? " " + input.arguments : ""}`,
+      },
+      ...((agent.mode === "subagent" && command.subtask !== false) || command.subtask === true
         ? [
             {
               type: "subtask" as const,
@@ -1685,7 +1699,8 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               prompt: templateParts.find((y) => y.type === "text")?.text ?? "",
             },
           ]
-        : [...templateParts, ...(input.parts ?? [])]
+        : [...templateParts, ...(input.parts ?? [])]),
+    ]
 
     const result = (await prompt({
       sessionID: input.sessionID,

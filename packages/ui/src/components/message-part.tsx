@@ -14,6 +14,7 @@ import { Dynamic } from "solid-js/web"
 import {
   AgentPart,
   AssistantMessage,
+  CommandPart,
   FilePart,
   Message as MessageType,
   Part as PartType,
@@ -287,9 +288,26 @@ export function AssistantMessageDisplay(props: { message: AssistantMessage; part
   return <For each={filteredParts()}>{(part) => <Part part={part} message={props.message} />}</For>
 }
 
+function CommandDisplay(props: { command: string }) {
+  const parts = createMemo(() => {
+    const match = props.command.match(/^(\/\S+)(.*)$/)
+    if (!match) return { command: props.command, args: "" }
+    return { command: match[1], args: match[2] }
+  })
+
+  return (
+    <span>
+      <span class="text-syntax-string">{parts().command}</span>
+      {parts().args}
+    </span>
+  )
+}
+
 export function UserMessageDisplay(props: { message: UserMessage; parts: PartType[] }) {
   const dialog = useDialog()
   const [copied, setCopied] = createSignal(false)
+
+  const commandPart = createMemo(() => props.parts?.find((p) => p.type === "command") as CommandPart | undefined)
 
   const textPart = createMemo(
     () => props.parts?.find((p) => p.type === "text" && !(p as TextPart).synthetic) as TextPart | undefined,
@@ -356,6 +374,13 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
             )}
           </For>
         </div>
+      </Show>
+      <Show when={commandPart()}>
+        {(cmd) => (
+          <div data-slot="user-message-text">
+            <CommandDisplay command={cmd().command} />
+          </div>
+        )}
       </Show>
       <Show when={text()}>
         <div data-slot="user-message-text">
