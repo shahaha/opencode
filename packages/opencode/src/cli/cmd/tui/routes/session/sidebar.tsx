@@ -199,6 +199,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                     </box>
                   )}
                 </For>
+                <text fg={theme.textMuted}>
+                  Diagnostics: {sync.data.lsp_diagnostics ? "Enabled" : "Disabled"}
+                </text>
               </Show>
             </box>
             <Show when={todo().length > 0 && todo().some((t) => t.status !== "completed")}>

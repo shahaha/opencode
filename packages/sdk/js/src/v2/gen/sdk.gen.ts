@@ -35,6 +35,8 @@ import type {
   GlobalEventResponses,
   GlobalHealthResponses,
   InstanceDisposeResponses,
+  LspDiagnosticsStatusResponses,
+  LspDiagnosticsToggleResponses,
   LspStatusResponses,
   McpAddErrors,
   McpAddResponses,
@@ -2578,6 +2580,46 @@ export class Experimental extends HeyApiClient {
   resource = new Resource({ client: this.client })
 }
 
+export class Diagnostics extends HeyApiClient {
+  /**
+   * Get LSP diagnostics toggle status
+   *
+   * Returns the current state of LSP diagnostics toggle
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<LspDiagnosticsStatusResponses, unknown, ThrowOnError>({
+      url: "/tui/control/lsp/diagnostics/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Toggle LSP diagnostics
+   *
+   * Toggle whether LSP diagnostics are sent to the model
+   */
+  public toggle<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<LspDiagnosticsToggleResponses, unknown, ThrowOnError>({
+      url: "/tui/control/lsp/diagnostics/toggle",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Lsp extends HeyApiClient {
   /**
    * Get LSP status
@@ -2597,6 +2639,8 @@ export class Lsp extends HeyApiClient {
       ...params,
     })
   }
+
+  diagnostics = new Diagnostics({ client: this.client })
 }
 
 export class Formatter extends HeyApiClient {

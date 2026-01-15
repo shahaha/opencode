@@ -58,6 +58,7 @@ type State = {
     [name: string]: McpStatus
   }
   lsp: LspStatus[]
+  lsp_diagnostics: boolean
   vcs: VcsInfo | undefined
   limit: number
   message: {
@@ -107,6 +108,7 @@ function createGlobalSync() {
         question: {},
         mcp: {},
         lsp: [],
+        lsp_diagnostics: true,
         vcs: undefined,
         limit: 5,
         message: {},
@@ -186,6 +188,7 @@ function createGlobalSync() {
           loadSessions(directory),
           sdk.mcp.status().then((x) => setStore("mcp", x.data!)),
           sdk.lsp.status().then((x) => setStore("lsp", x.data!)),
+          sdk.lsp.diagnostics.status().then((x) => setStore("lsp_diagnostics", x.data?.enabled ?? true)),
           sdk.vcs.get().then((x) => setStore("vcs", x.data)),
           sdk.permission.list().then((x) => {
             const grouped: Record<string, PermissionRequest[]> = {}
