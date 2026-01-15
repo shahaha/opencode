@@ -36,7 +36,7 @@ export const GrepTool = Tool.define("grep", {
     searchPath = path.isAbsolute(searchPath) ? searchPath : path.resolve(Instance.directory, searchPath)
     await assertExternalDirectory(ctx, searchPath, { kind: "directory" })
 
-    const rgPath = await Ripgrep.filepath()
+    const rgPath = await Ripgrep.rg()
     const args = ["-nH", "--hidden", "--follow", "--field-match-separator=|", "--regexp", params.pattern]
     if (params.include) {
       args.push("--glob", params.include)
