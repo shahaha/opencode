@@ -1673,6 +1673,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     }
 
     const templateParts = await resolvePromptParts(template)
+    const agentInfo = await Agent.get(agentName)
     const parts =
       (agent.mode === "subagent" && command.subtask !== false) || command.subtask === true
         ? [
@@ -1681,8 +1682,8 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               agent: agent.name,
               description: command.description ?? "",
               command: input.command,
-              // TODO: how can we make task tool accept a more complex input?
-              prompt: templateParts.find((y) => y.type === "text")?.text ?? "",
+              // If agent already has a prompt defined, don't duplicate it in the user message
+              prompt: agentInfo?.prompt ? "" : (templateParts.find((y) => y.type === "text")?.text ?? ""),
             },
           ]
         : [...templateParts, ...(input.parts ?? [])]
