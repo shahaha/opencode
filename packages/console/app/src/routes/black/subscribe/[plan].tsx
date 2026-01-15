@@ -271,7 +271,7 @@ export default function BlackSubscribe() {
 
   // Resolve stripe promise once
   createEffect(() => {
-    stripePromise.then((s) => {
+    stripePromise.then((s: Stripe | null) => {
       if (s) setStripe(s)
     })
   })

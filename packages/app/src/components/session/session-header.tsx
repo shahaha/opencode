@@ -3,8 +3,9 @@ import { Portal } from "solid-js/web"
 import { useParams } from "@solidjs/router"
 import { useLayout } from "@/context/layout"
 import { useCommand } from "@/context/command"
-// import { useServer } from "@/context/server"
-// import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { useServer } from "@/context/server"
+import { useSsh } from "@/context/ssh"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useSync } from "@/context/sync"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { getFilename } from "@opencode-ai/util/path"
@@ -22,8 +23,9 @@ export function SessionHeader() {
   const layout = useLayout()
   const params = useParams()
   const command = useCommand()
-  // const server = useServer()
-  // const dialog = useDialog()
+  const ssh = useSsh()
+  const server = useServer()
+  const dialog = useDialog()
   const sync = useSync()
 
   const projectDirectory = createMemo(() => base64Decode(params.dir ?? ""))
@@ -43,6 +45,10 @@ export function SessionHeader() {
   const shareEnabled = createMemo(() => sync.data.config.share !== "disabled")
   const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
   const view = createMemo(() => layout.view(sessionKey()))
+  const serverDisplayName = createMemo(() => {
+    const sshAddress = ssh.getProfileAddressForUrl(server.url)
+    return sshAddress || server.name
+  })
 
   const centerMount = createMemo(() => document.getElementById("opencode-titlebar-center"))
   const rightMount = createMemo(() => document.getElementById("opencode-titlebar-right"))
@@ -161,14 +167,48 @@ export function SessionHeader() {
                   </Button>
                 </TooltipKeybind>
               </div>
-              <Show when={shareEnabled() && currentSession()}>
-                <Popover
-                  title="Share session"
-                  trigger={
-                    <Tooltip class="shrink-0" value="Share session">
-                      <IconButton icon="share" variant="ghost" class="" />
-                    </Tooltip>
-                  }
+            </Show>
+          </div>
+          <Show when={currentSession() && !parentSession()}>
+            <TooltipKeybind class="hidden xl:block" title="New session" keybind={command.keybind("session.new")}>
+              <IconButton as={A} href={`/${params.dir}/session`} icon="edit-small-2" variant="ghost" />
+            </TooltipKeybind>
+          </Show>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="hidden md:flex items-center gap-1">
+            <Button
+              size="small"
+              variant="ghost"
+              onClick={() => {
+                dialog.show(() => <DialogSelectServer />)
+              }}
+            >
+              <div
+                classList={{
+                  "size-1.5 rounded-full": true,
+                  "bg-icon-success-base": server.healthy() === true,
+                  "bg-icon-critical-base": server.healthy() === false,
+                  "bg-border-weak-base": server.healthy() === undefined,
+                }}
+              />
+              <Icon name="server" size="small" class="text-icon-weak" />
+              <span class="text-12-regular text-text-weak truncate max-w-[200px]">{serverDisplayName()}</span>
+            </Button>
+            <SessionLspIndicator />
+            <SessionMcpIndicator />
+          </div>
+          <div class="flex items-center gap-1">
+            <Show when={currentSession()?.summary?.files}>
+              <TooltipKeybind
+                class="hidden md:block shrink-0"
+                title="Toggle review"
+                keybind={command.keybind("review.toggle")}
+              >
+                <Button
+                  variant="ghost"
+                  class="group/review-toggle size-6 p-0"
+                  onClick={() => view().reviewPanel.toggle()}
                 >
                   {iife(() => {
                     const [url] = createResource(
