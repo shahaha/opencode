@@ -885,6 +885,51 @@ export type EventWorktreeFailed = {
   }
 }
 
+export type EventUsageUpdated = {
+  type: "usage.updated"
+  properties: {
+    provider: string
+    snapshot: {
+      primary: {
+        usedPercent: number
+        windowMinutes: number | null
+        resetsAt: number | null
+      } | null
+      secondary: {
+        usedPercent: number
+        windowMinutes: number | null
+        resetsAt: number | null
+      } | null
+      tertiary: {
+        usedPercent: number
+        windowMinutes: number | null
+        resetsAt: number | null
+      } | null
+      credits: {
+        hasCredits: boolean
+        unlimited: boolean
+        balance: string | null
+      } | null
+      planType:
+        | "guest"
+        | "free"
+        | "go"
+        | "plus"
+        | "pro"
+        | "free_workspace"
+        | "team"
+        | "business"
+        | "education"
+        | "quorum"
+        | "k12"
+        | "enterprise"
+        | "edu"
+        | null
+      updatedAt: number
+    }
+  }
+}
+
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
@@ -928,6 +973,7 @@ export type Event =
   | EventPtyDeleted
   | EventWorktreeReady
   | EventWorktreeFailed
+  | EventUsageUpdated
 
 export type GlobalEvent = {
   directory: string
@@ -1641,6 +1687,10 @@ export type Config = {
      * Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column
      */
     diff_style?: "auto" | "stacked"
+    /**
+     * Show usage for the current provider or all providers
+     */
+    show_usage_scope?: "current" | "all"
   }
   server?: ServerConfig
   /**
@@ -1840,6 +1890,7 @@ export type OAuth = {
   type: "oauth"
   refresh: string
   access: string
+  usage?: string
   expires: number
   accountId?: string
   enterpriseUrl?: string
@@ -3945,6 +3996,74 @@ export type QuestionRejectResponses = {
 }
 
 export type QuestionRejectResponse = QuestionRejectResponses[keyof QuestionRejectResponses]
+
+export type UsageGetData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    provider?: string
+    refresh?: boolean
+  }
+  url: "/usage"
+}
+
+export type UsageGetResponses = {
+  /**
+   * Usage response
+   */
+  200: {
+    entries: Array<{
+      provider: string
+      displayName: string
+      snapshot: {
+        primary: {
+          usedPercent: number
+          windowMinutes: number | null
+          resetsAt: number | null
+        } | null
+        secondary: {
+          usedPercent: number
+          windowMinutes: number | null
+          resetsAt: number | null
+        } | null
+        tertiary: {
+          usedPercent: number
+          windowMinutes: number | null
+          resetsAt: number | null
+        } | null
+        credits: {
+          hasCredits: boolean
+          unlimited: boolean
+          balance: string | null
+        } | null
+        planType:
+          | "guest"
+          | "free"
+          | "go"
+          | "plus"
+          | "pro"
+          | "free_workspace"
+          | "team"
+          | "business"
+          | "education"
+          | "quorum"
+          | "k12"
+          | "enterprise"
+          | "edu"
+          | null
+        updatedAt: number
+      }
+    }>
+    error?: string
+    errors?: Array<{
+      provider: string
+      message: string
+    }>
+  }
+}
+
+export type UsageGetResponse = UsageGetResponses[keyof UsageGetResponses]
 
 export type ProviderListData = {
   body?: never

@@ -928,6 +928,10 @@ export namespace Config {
       .enum(["auto", "stacked"])
       .optional()
       .describe("Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column"),
+    show_usage_scope: z
+      .enum(["current", "all"])
+      .optional()
+      .describe("Show usage for the current provider or all providers"),
   })
 
   export const Server = z

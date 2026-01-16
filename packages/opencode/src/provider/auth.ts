@@ -108,6 +108,12 @@ export namespace ProviderAuth {
           if (result.accountId) {
             info.accountId = result.accountId
           }
+          if (result.enterpriseUrl) {
+            info.enterpriseUrl = result.enterpriseUrl
+          }
+          if (result.usage) {
+            info.usage = result.usage
+          }
           await Auth.set(input.providerID, info)
         }
         return
