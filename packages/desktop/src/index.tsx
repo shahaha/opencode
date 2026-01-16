@@ -13,12 +13,11 @@ import { AsyncStorage } from "@solid-primitives/storage"
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http"
 import { Store } from "@tauri-apps/plugin-store"
 import { Logo } from "@opencode-ai/ui/logo"
-import { Accessor, JSX, createResource } from "solid-js"
+import { createSignal, Show, Accessor, JSX, createResource, onMount, onCleanup } from "solid-js"
 
 import { UPDATER_ENABLED } from "./updater"
 import { createMenu } from "./menu"
 import pkg from "../package.json"
-import { Show } from "solid-js"
 
 const root = document.getElementById("root")
 if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
@@ -29,8 +28,13 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
 
 let update: Update | null = null
 
-const platform: Platform = {
+const createPlatform = (password: Accessor<string | null>): Platform => ({
   platform: "desktop",
+  os: (() => {
+    const type = ostype()
+    if (type === "macos" || type === "windows" || type === "linux") return type
+    return undefined
+  })(),
   version: pkg.version,
 
   async openDirectoryPickerDialog(opts) {
@@ -256,7 +260,25 @@ const platform: Platform = {
   },
 
   // @ts-expect-error
-  fetch: tauriFetch,
+  fetch: (input, init) => {
+    const pw = password()
+
+    const addHeader = (headers: Headers, password: string) => {
+      headers.append("Authorization", `Basic ${btoa(`opencode:${password}`)}`)
+    }
+
+    if (input instanceof Request) {
+      if (pw) addHeader(input.headers, pw)
+      return tauriFetch(input)
+    } else {
+      const headers = new Headers(init?.headers)
+      if (pw) addHeader(headers, pw)
+      return tauriFetch(input, {
+        ...(init as any),
+        headers: headers,
+      })
+    }
+  },
 
   getDefaultServerUrl: async () => {
     const result = await invoke<string | null>("get_default_server_url").catch(() => null)
@@ -266,7 +288,7 @@ const platform: Platform = {
   setDefaultServerUrl: async (url: string | null) => {
     await invoke("set_default_server_url", { url })
   },
-}
+})
 
 createMenu()
 
@@ -276,26 +298,51 @@ root?.addEventListener("mousewheel", (e) => {
 })
 
 render(() => {
+  const [serverPassword, setServerPassword] = createSignal<string | null>(null)
+  const platform = createPlatform(() => serverPassword())
+
+  function handleClick(e: MouseEvent) {
+    const link = (e.target as HTMLElement).closest("a.external-link") as HTMLAnchorElement | null
+    if (link?.href) {
+      e.preventDefault()
+      platform.openLink(link.href)
+    }
+  }
+
+  onMount(() => {
+    document.addEventListener("click", handleClick)
+    onCleanup(() => {
+      document.removeEventListener("click", handleClick)
+    })
+  })
+
   return (
     <PlatformProvider value={platform}>
-      {ostype() === "macos" && (
-        <div class="mx-px bg-background-base border-b border-border-weak-base h-8" data-tauri-drag-region />
-      )}
       <AppBaseProviders>
-        <ServerGate>{(serverUrl) => <AppInterface defaultUrl={serverUrl()} />}</ServerGate>
+        <ServerGate>
+          {(data) => {
+            setServerPassword(data().password)
+            window.__OPENCODE__ ??= {}
+            window.__OPENCODE__.serverPassword = data().password ?? undefined
+
+            return <AppInterface defaultUrl={data().url} />
+          }}
+        </ServerGate>
       </AppBaseProviders>
     </PlatformProvider>
   )
 }, root!)
 
+type ServerReadyData = { url: string; password: string | null }
+
 // Gate component that waits for the server to be ready
-function ServerGate(props: { children: (url: Accessor<string>) => JSX.Element }) {
-  const [serverUrl] = createResource<string>(() => invoke("ensure_server_ready"))
+function ServerGate(props: { children: (data: Accessor<ServerReadyData>) => JSX.Element }) {
+  const [serverData] = createResource<ServerReadyData>(() => invoke("ensure_server_ready"))
 
   return (
     // Not using suspense as not all components are compatible with it (undefined refs)
     <Show
-      when={serverUrl.state !== "pending" && serverUrl()}
+      when={serverData.state !== "pending" && serverData()}
       fallback={
         <div class="h-screen w-screen flex flex-col items-center justify-center bg-background-base">
           <Logo class="w-xl opacity-12 animate-pulse" />
@@ -303,7 +350,7 @@ function ServerGate(props: { children: (url: Accessor<string>) => JSX.Element })
         </div>
       }
     >
-      {(serverUrl) => props.children(serverUrl)}
+      {(data) => props.children(data)}
     </Show>
   )
 }
