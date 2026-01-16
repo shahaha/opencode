@@ -190,6 +190,23 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     applyingHistory: false,
   })
 
+  const placeholderText = createMemo(() => {
+    const currentAgent = local.agent.current()
+    if (currentAgent?.name === "build" || !currentAgent?.description) {
+      // TODO: Padding workaround for rendering bug where ghost characters from previous
+      // placeholder remain visible when switching to shorter text. Browser doesn't properly
+      // clear cached text layout with truncate/ellipsis CSS. Proper fix would be to force
+      // element recreation or use a different rendering approach.
+      return `Ask anything... "${PLACEHOLDERS[store.placeholder]}"`.padEnd(70, " ")
+    }
+    return currentAgent.description.padEnd(70, " ")
+  })
+
+  const shouldRotatePlaceholder = createMemo(() => {
+    const currentAgent = local.agent.current()
+    return currentAgent?.name === "build" || !currentAgent?.description
+  })
+
   const MAX_HISTORY = 100
   const [history, setHistory] = persisted(
     Persist.global("prompt-history", ["prompt-history.v1"]),
@@ -256,7 +273,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   createEffect(() => {
     params.id
     editorRef.focus()
-    if (params.id) return
+    if (params.id || !shouldRotatePlaceholder()) return
     const interval = setInterval(() => {
       setStore("placeholder", (prev) => (prev + 1) % PLACEHOLDERS.length)
     }, 6500)
@@ -1541,9 +1558,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           />
           <Show when={!prompt.dirty()}>
             <div class="absolute top-0 inset-x-0 px-5 py-3 pr-12 text-14-regular text-text-weak pointer-events-none whitespace-nowrap truncate">
-              {store.mode === "shell"
-                ? "Enter shell command..."
-                : `Ask anything... "${PLACEHOLDERS[store.placeholder]}"`}
+              {store.mode === "shell" ? "Enter shell command..." : placeholderText()}
             </div>
           </Show>
         </div>
