@@ -63,6 +63,7 @@ import type {
   PermissionRespondErrors,
   PermissionRespondResponses,
   PermissionRuleset,
+  PluginFailedResponses,
   ProjectCurrentResponses,
   ProjectListResponses,
   ProjectUpdateErrors,
@@ -2026,6 +2027,27 @@ export class Provider extends HeyApiClient {
   oauth = new Oauth({ client: this.client })
 }
 
+export class Plugin extends HeyApiClient {
+  /**
+   * Get failed plugins
+   *
+   * Retrieve diagnostic information about authentication plugins that failed to install. Useful for troubleshooting missing OAuth options.
+   */
+  public failed<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<PluginFailedResponses, unknown, ThrowOnError>({
+      url: "/plugin/failed",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Find extends HeyApiClient {
   /**
    * Find text
@@ -3013,6 +3035,8 @@ export class OpencodeClient extends HeyApiClient {
   command = new Command({ client: this.client })
 
   provider = new Provider({ client: this.client })
+
+  plugin = new Plugin({ client: this.client })
 
   find = new Find({ client: this.client })
 
