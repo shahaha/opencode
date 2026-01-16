@@ -201,6 +201,21 @@ test("evaluate - glob pattern match", () => {
   expect(result.action).toBe("allow")
 })
 
+test("evaluate - url pattern match", () => {
+  const result = PermissionNext.evaluate("webfetch", "example.com/path", [
+    { permission: "webfetch", pattern: "example.com/*", action: "allow" },
+  ])
+  expect(result.action).toBe("allow")
+})
+
+test("evaluate - protocol specific wins when ordered last", () => {
+  const result = PermissionNext.evaluate("webfetch", "https://example.com/path", [
+    { permission: "webfetch", pattern: "example.com/*", action: "allow" },
+    { permission: "webfetch", pattern: "https://example.com/*", action: "deny" },
+  ])
+  expect(result.action).toBe("deny")
+})
+
 test("evaluate - last matching glob wins", () => {
   const result = PermissionNext.evaluate("edit", "src/components/Button.tsx", [
     { permission: "edit", pattern: "src/*", action: "deny" },
