@@ -6,6 +6,7 @@ import {
   type PermissionRequest,
   TextPart,
   ToolPart,
+  UserMessage,
 } from "@opencode-ai/sdk/v2/client"
 import { type FileDiff } from "@opencode-ai/sdk/v2"
 import { useData } from "../context"
@@ -17,12 +18,15 @@ import { getDirectory, getFilename } from "@opencode-ai/util/path"
 import { Binary } from "@opencode-ai/util/binary"
 import { createEffect, createMemo, createSignal, For, Match, on, onCleanup, ParentProps, Show, Switch } from "solid-js"
 import { DiffChanges } from "./diff-changes"
+import { Typewriter } from "./typewriter"
 import { Message, Part } from "./message-part"
 import { Markdown } from "./markdown"
 import { Accordion } from "./accordion"
 import { StickyAccordionHeader } from "./sticky-accordion-header"
 import { FileIcon } from "./file-icon"
 import { Icon } from "./icon"
+import { ProviderIcon } from "./provider-icon"
+import type { IconName } from "./provider-icons/types"
 import { IconButton } from "./icon-button"
 import { Card } from "./card"
 import { Dynamic } from "solid-js/web"
@@ -133,6 +137,8 @@ export function SessionTurn(
     stepsExpanded?: boolean
     onStepsExpandedToggle?: () => void
     onUserInteracted?: () => void
+    onRevert?: () => void
+    onFork?: () => void
     classes?: {
       root?: string
       content?: string
@@ -542,6 +548,47 @@ export function SessionTurn(
                     <div data-slot="session-turn-sticky" ref={setStickyRef}>
                       {/* User Message */}
                       <div data-slot="session-turn-message-content" aria-live="off">
+                        <div data-slot="session-turn-message-header">
+                          <div data-slot="session-turn-message-title">
+                            <Switch>
+                              <Match when={working()}>
+                                <Typewriter as="h1" text={msg().summary?.title} data-slot="session-turn-typewriter" />
+                              </Match>
+                              <Match when={true}>
+                                <h1>{msg().summary?.title}</h1>
+                              </Match>
+                            </Switch>
+                          </div>
+                          <div data-slot="session-turn-header">
+                            <div data-slot="session-turn-message-actions">
+                              <Show when={props.onRevert}>
+                                <Tooltip value="Revert to this message" placement="top" gutter={8}>
+                                  <IconButton icon="arrow-left" variant="secondary" onClick={props.onRevert} />
+                                </Tooltip>
+                              </Show>
+                              <Show when={props.onFork}>
+                                <Tooltip value="Fork from this message" placement="top" gutter={8}>
+                                  <IconButton icon="branch" variant="secondary" onClick={props.onFork} />
+                                </Tooltip>
+                              </Show>
+                            </div>
+                            <div data-slot="session-turn-user-badges">
+                              <Show when={(msg() as UserMessage).agent}>
+                                <span data-slot="session-turn-badge">{(msg() as UserMessage).agent}</span>
+                              </Show>
+                              <Show when={(msg() as UserMessage).model?.modelID}>
+                                <span data-slot="session-turn-badge" class="inline-flex items-center gap-1">
+                                  <ProviderIcon
+                                    id={(msg() as UserMessage).model!.providerID as IconName}
+                                    class="size-3.5 shrink-0"
+                                  />
+                                  {(msg() as UserMessage).model?.modelID}
+                                </span>
+                              </Show>
+                              <span data-slot="session-turn-badge">{(msg() as UserMessage).variant || "default"}</span>
+                            </div>
+                          </div>
+                        </div>
                         <Message message={msg()} parts={stickyParts()} />
                       </div>
 

@@ -2032,6 +2032,33 @@ export default function Page() {
                                     onStepsExpandedToggle={() =>
                                       setStore("expanded", message.id, (open: boolean | undefined) => !open)
                                     }
+                                    onRevert={async () => {
+                                      const sessionID = params.id
+                                      if (!sessionID) return
+                                      if (status()?.type !== "idle") {
+                                        await sdk.client.session.abort({ sessionID }).catch(() => {})
+                                      }
+                                      await sdk.client.session.revert({ sessionID, messageID: message.id })
+                                      const parts = sync.data.part[message.id]
+                                      if (parts) {
+                                        const restored = extractPromptFromParts(parts, { directory: sdk.directory })
+                                        prompt.set(restored)
+                                      }
+                                      const priorMessage = userMessages().findLast((x) => x.id < message.id)
+                                      setActiveMessage(priorMessage)
+                                    }}
+                                    onFork={async () => {
+                                      const sessionID = params.id
+                                      if (!sessionID) return
+                                      const parts = sync.data.part[message.id]
+                                      const restored = extractPromptFromParts(parts, { directory: sdk.directory })
+                                      const forked = await sdk.client.session.fork({ sessionID, messageID: message.id })
+                                      if (!forked.data) return
+                                      navigate(`/${base64Encode(sdk.directory)}/session/${forked.data.id}`)
+                                      requestAnimationFrame(() => {
+                                        prompt.set(restored)
+                                      })
+                                    }}
                                     classes={{
                                       root: "min-w-0 w-full relative",
                                       content: "flex flex-col justify-between !overflow-visible",
