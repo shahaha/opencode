@@ -1,16 +1,20 @@
 mod cli;
+#[cfg(windows)]
+mod job_object;
 mod window_customizer;
 
 use cli::{install_cli, sync_cli};
 use futures::FutureExt;
 use futures::future;
+#[cfg(windows)]
+use job_object::*;
 use std::{
     collections::VecDeque,
     net::TcpListener,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
-use tauri::{AppHandle, LogicalSize, Manager, RunEvent, State, WebviewUrl, WebviewWindow};
+use tauri::{AppHandle, LogicalSize, Manager, RunEvent, State, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogResult};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_store::StoreExt;
@@ -194,7 +198,7 @@ fn spawn_sidecar(app: &AppHandle, port: u32, password: &str) -> CommandChild {
 }
 
 async fn check_server_health(url: &str, password: Option<&str>) -> bool {
-    let health_url = format!("{}/health", url.trim_end_matches('/'));
+    let health_url = format!("{}/global/health", url.trim_end_matches('/'));
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(3))
         .build();
@@ -219,6 +223,11 @@ async fn check_server_health(url: &str, password: Option<&str>) -> bool {
 pub fn run() {
     let updater_enabled = option_env!("TAURI_SIGNING_PRIVATE_KEY").is_some();
 
+    #[cfg(all(target_os = "macos", not(debug_assertions)))]
+    let _ = std::process::Command::new("killall")
+        .arg("opencode-cli")
+        .output();
+
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // Focus existing window when another instance is launched
@@ -228,7 +237,14 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_os::init())
-        .plugin(tauri_plugin_window_state::Builder::new().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        - tauri_plugin_window_state::StateFlags::DECORATIONS,
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
@@ -251,34 +267,38 @@ pub fn run() {
             // Initialize log state
             app.manage(LogState(Arc::new(Mutex::new(VecDeque::new()))));
 
+            #[cfg(windows)]
+            app.manage(JobObjectState::new());
+
             let primary_monitor = app.primary_monitor().ok().flatten();
             let size = primary_monitor
                 .map(|m| m.size().to_logical(m.scale_factor()))
                 .unwrap_or(LogicalSize::new(1920, 1080));
 
-            #[allow(unused_mut)]
-            let mut window_builder =
-                WebviewWindow::builder(&app, "main", WebviewUrl::App("/".into()))
-                    .title("OpenCode")
-                    .inner_size(size.width as f64, size.height as f64)
-                    .decorations(true)
-                    .zoom_hotkeys_enabled(true)
-                    .disable_drag_drop_handler()
-                    .initialization_script(format!(
-                        r#"
+            let config = app
+                .config()
+                .app
+                .windows
+                .iter()
+                .find(|w| w.label == "main")
+                .expect("main window config missing");
+
+            let window_builder = WebviewWindowBuilder::from_config(&app, config)
+                .expect("Failed to create window builder from config")
+                .inner_size(size.width as f64, size.height as f64)
+                .initialization_script(format!(
+                    r#"
                       window.__OPENCODE__ ??= {{}};
                       window.__OPENCODE__.updaterEnabled = {updater_enabled};
                     "#
-                    ));
+                ));
 
             #[cfg(target_os = "macos")]
-            {
-                window_builder = window_builder
-                    .title_bar_style(tauri::TitleBarStyle::Overlay)
-                    .hidden_title(true);
-            }
+            let window_builder = window_builder
+                .title_bar_style(tauri::TitleBarStyle::Overlay)
+                .hidden_title(true);
 
-            window_builder.build().expect("Failed to create window");
+            let _window = window_builder.build().expect("Failed to create window");
 
             let (tx, rx) = oneshot::channel();
             app.manage(ServerState::new(None, rx));
@@ -303,7 +323,14 @@ pub fn run() {
 
                     let res = match setup_server_connection(&app, custom_url).await {
                         Ok((child, url)) => {
+                            #[cfg(windows)]
+                            if let Some(child) = &child {
+                                let job_state = app.state::<JobObjectState>();
+                                job_state.assign_pid(child.pid());
+                            }
+
                             app.state::<ServerState>().set_child(child);
+
                             Ok(url)
                         }
                         Err(e) => Err(e),
@@ -427,7 +454,7 @@ async fn spawn_local_server(
 
     let timestamp = Instant::now();
     loop {
-        if timestamp.elapsed() > Duration::from_secs(7) {
+        if timestamp.elapsed() > Duration::from_secs(30) {
             break Err(format!(
                 "Failed to spawn OpenCode Server. Logs:\n{}",
                 get_logs(app.clone()).await.unwrap()
