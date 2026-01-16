@@ -1877,6 +1877,18 @@ export type SubtaskPartInput = {
   command?: string
 }
 
+export type PermissionSource = "default" | "global" | "project" | "session"
+
+export type PermissionRuleWithSource = {
+  permission: string
+  pattern: string
+  action: PermissionAction
+  source: PermissionSource
+  readonly: boolean
+}
+
+export type PermissionRulesetWithSource = Array<PermissionRuleWithSource>
+
 export type Command = {
   name: string
   description?: string
@@ -3667,6 +3679,241 @@ export type PermissionListResponses = {
 }
 
 export type PermissionListResponse = PermissionListResponses[keyof PermissionListResponses]
+
+export type PermissionDeleteData = {
+  body?: PermissionRule
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/permission/approved"
+}
+
+export type PermissionDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type PermissionDeleteError = PermissionDeleteErrors[keyof PermissionDeleteErrors]
+
+export type PermissionDeleteResponses = {
+  /**
+   * Permission deleted successfully
+   */
+  200: boolean
+}
+
+export type PermissionDeleteResponse = PermissionDeleteResponses[keyof PermissionDeleteResponses]
+
+export type PermissionApprovedData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/permission/approved"
+}
+
+export type PermissionApprovedResponses = {
+  /**
+   * List of approved permission rules
+   */
+  200: PermissionRuleset
+}
+
+export type PermissionApprovedResponse = PermissionApprovedResponses[keyof PermissionApprovedResponses]
+
+export type PermissionAddData = {
+  body?: PermissionRule
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/permission/approved"
+}
+
+export type PermissionAddErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type PermissionAddError = PermissionAddErrors[keyof PermissionAddErrors]
+
+export type PermissionAddResponses = {
+  /**
+   * Permission added successfully
+   */
+  200: boolean
+}
+
+export type PermissionAddResponse = PermissionAddResponses[keyof PermissionAddResponses]
+
+export type PermissionUpdateData = {
+  body?: {
+    oldRule: PermissionRule
+    newRule: PermissionRule
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/permission/approved"
+}
+
+export type PermissionUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type PermissionUpdateError = PermissionUpdateErrors[keyof PermissionUpdateErrors]
+
+export type PermissionUpdateResponses = {
+  /**
+   * Permission updated successfully
+   */
+  200: boolean
+}
+
+export type PermissionUpdateResponse = PermissionUpdateResponses[keyof PermissionUpdateResponses]
+
+export type PermissionAllData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    agent?: string
+  }
+  url: "/permission/all"
+}
+
+export type PermissionAllResponses = {
+  /**
+   * List of all permission rules with source information
+   */
+  200: PermissionRulesetWithSource
+}
+
+export type PermissionAllResponse = PermissionAllResponses[keyof PermissionAllResponses]
+
+export type PermissionDeleteProjectData = {
+  body?: {
+    permission: string
+    pattern: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/permission/project"
+}
+
+export type PermissionDeleteProjectErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type PermissionDeleteProjectError = PermissionDeleteProjectErrors[keyof PermissionDeleteProjectErrors]
+
+export type PermissionDeleteProjectResponses = {
+  /**
+   * Permission deleted successfully
+   */
+  200: boolean
+}
+
+export type PermissionDeleteProjectResponse = PermissionDeleteProjectResponses[keyof PermissionDeleteProjectResponses]
+
+export type PermissionUpdateProjectData = {
+  body?: PermissionRule
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/permission/project"
+}
+
+export type PermissionUpdateProjectErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type PermissionUpdateProjectError = PermissionUpdateProjectErrors[keyof PermissionUpdateProjectErrors]
+
+export type PermissionUpdateProjectResponses = {
+  /**
+   * Permission updated successfully
+   */
+  200: boolean
+}
+
+export type PermissionUpdateProjectResponse = PermissionUpdateProjectResponses[keyof PermissionUpdateProjectResponses]
+
+export type PermissionDeleteGlobalData = {
+  body?: {
+    permission: string
+    pattern: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/permission/global"
+}
+
+export type PermissionDeleteGlobalErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type PermissionDeleteGlobalError = PermissionDeleteGlobalErrors[keyof PermissionDeleteGlobalErrors]
+
+export type PermissionDeleteGlobalResponses = {
+  /**
+   * Permission deleted successfully
+   */
+  200: boolean
+}
+
+export type PermissionDeleteGlobalResponse = PermissionDeleteGlobalResponses[keyof PermissionDeleteGlobalResponses]
+
+export type PermissionUpdateGlobalData = {
+  body?: PermissionRule
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/permission/global"
+}
+
+export type PermissionUpdateGlobalErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type PermissionUpdateGlobalError = PermissionUpdateGlobalErrors[keyof PermissionUpdateGlobalErrors]
+
+export type PermissionUpdateGlobalResponses = {
+  /**
+   * Permission updated successfully
+   */
+  200: boolean
+}
+
+export type PermissionUpdateGlobalResponse = PermissionUpdateGlobalResponses[keyof PermissionUpdateGlobalResponses]
 
 export type QuestionListData = {
   body?: never
