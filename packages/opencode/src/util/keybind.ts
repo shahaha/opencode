@@ -17,8 +17,8 @@ export namespace Keybind {
     return key
   }
 
-  export function match(a: Info, b: Info): boolean {
-    // Normalize super field (undefined and false are equivalent)
+  export function match(a: Info | undefined, b: Info): boolean {
+    if (!a) return false
     const normalizedA = { ...a, super: a.super ?? false }
     const normalizedB = { ...b, super: b.super ?? false }
     return isDeepEqual(normalizedA, normalizedB)
@@ -40,7 +40,8 @@ export namespace Keybind {
     }
   }
 
-  export function toString(info: Info): string {
+  export function toString(info: Info | undefined): string {
+    if (!info) return ""
     const parts: string[] = []
 
     if (info.ctrl) parts.push("ctrl")
