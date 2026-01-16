@@ -685,6 +685,26 @@ export type EventTuiSessionSelect = {
   }
 }
 
+export type EventTuiServerStart = {
+  type: "tui.server.start"
+  properties: {
+    /**
+     * Open browser after starting
+     */
+    openBrowser?: boolean
+  }
+}
+
+export type EventTuiServerStarted = {
+  type: "tui.server.started"
+  properties: {
+    url: string
+    hostname: string
+    port: number
+    password: string
+  }
+}
+
 export type EventMcpToolsChanged = {
   type: "mcp.tools.changed"
   properties: {
@@ -882,6 +902,8 @@ export type Event =
   | EventTuiCommandExecute
   | EventTuiToastShow
   | EventTuiSessionSelect
+  | EventTuiServerStart
+  | EventTuiServerStarted
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
   | EventCommandExecuted
@@ -1314,6 +1336,14 @@ export type ServerConfig = {
    * Additional domains to allow for CORS
    */
   cors?: Array<string>
+  /**
+   * Username for server basic auth
+   */
+  username?: string
+  /**
+   * Password for server basic auth
+   */
+  password?: string
 }
 
 export type PermissionActionConfig = "ask" | "allow" | "deny"
@@ -2141,6 +2171,22 @@ export type GlobalHealthResponses = {
 }
 
 export type GlobalHealthResponse = GlobalHealthResponses[keyof GlobalHealthResponses]
+
+export type ServerStatusData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/server/status"
+}
+
+export type ServerStatusResponses = {
+  /**
+   * Server status
+   */
+  200: string
+}
+
+export type ServerStatusResponse = ServerStatusResponses[keyof ServerStatusResponses]
 
 export type GlobalEventData = {
   body?: never
@@ -4658,7 +4704,13 @@ export type TuiShowToastResponses = {
 export type TuiShowToastResponse = TuiShowToastResponses[keyof TuiShowToastResponses]
 
 export type TuiPublishData = {
-  body?: EventTuiPromptAppend | EventTuiCommandExecute | EventTuiToastShow | EventTuiSessionSelect
+  body?:
+    | EventTuiPromptAppend
+    | EventTuiCommandExecute
+    | EventTuiToastShow
+    | EventTuiSessionSelect
+    | EventTuiServerStart
+    | EventTuiServerStarted
   path?: never
   query?: {
     directory?: string
