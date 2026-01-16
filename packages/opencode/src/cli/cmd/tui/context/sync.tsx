@@ -18,6 +18,7 @@ import type {
   ProviderAuthMethod,
   VcsInfo,
 } from "@opencode-ai/sdk/v2"
+import { Skill } from "@/skill"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useSDK } from "@tui/context/sdk"
 import { Binary } from "@opencode-ai/util/binary"
@@ -71,6 +72,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         [key: string]: McpResource
       }
       formatter: FormatterStatus[]
+      skill: Skill.Info[]
       vcs: VcsInfo | undefined
       path: Path
     }>({
@@ -98,6 +100,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       mcp: {},
       mcp_resource: {},
       formatter: [],
+      skill: [],
       vcs: undefined,
       path: { state: "", config: "", worktree: "", directory: "" },
     })
@@ -346,6 +349,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             sdk.client.mcp.status().then((x) => setStore("mcp", reconcile(x.data!))),
             sdk.client.experimental.resource.list().then((x) => setStore("mcp_resource", reconcile(x.data ?? {}))),
             sdk.client.formatter.status().then((x) => setStore("formatter", reconcile(x.data!))),
+            sdk.client.skill.status().then((x) => setStore("skill", reconcile(x.data!))),
             sdk.client.session.status().then((x) => {
               setStore("session_status", reconcile(x.data!))
             }),

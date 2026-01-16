@@ -25,10 +25,13 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     diff: true,
     todo: true,
     lsp: true,
+    skill: true,
   })
 
   // Sort MCP servers alphabetically for consistent display order
   const mcpEntries = createMemo(() => Object.entries(sync.data.mcp).sort(([a], [b]) => a.localeCompare(b)))
+
+  const skillEntries = createMemo(() => sync.data.skill.toSorted((a, b) => a.name.localeCompare(b.name)))
 
   // Count connected and error MCP servers for collapsed header display
   const connectedMcpCount = createMemo(() => mcpEntries().filter(([_, item]) => item.status === "connected").length)
@@ -201,6 +204,34 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 </For>
               </Show>
             </box>
+            <Show when={skillEntries().length > 0}>
+              <box>
+                <box
+                  flexDirection="row"
+                  gap={1}
+                  onMouseDown={() => skillEntries().length > 2 && setExpanded("skill", !expanded.skill)}
+                >
+                  <Show when={skillEntries().length > 2}>
+                    <text fg={theme.text}>{expanded.skill ? "▼" : "▶"}</text>
+                  </Show>
+                  <text fg={theme.text}>
+                    <b>Skills</b>
+                  </text>
+                </box>
+                <Show when={skillEntries().length <= 2 || expanded.skill}>
+                  <For each={skillEntries()}>
+                    {(item) => (
+                      <box flexDirection="row" gap={1}>
+                        <text flexShrink={0} style={{ fg: theme.success }}>
+                          •
+                        </text>
+                        <text fg={theme.textMuted}>{item.name}</text>
+                      </box>
+                    )}
+                  </For>
+                </Show>
+              </box>
+            </Show>
             <Show when={todo().length > 0 && todo().some((t) => t.status !== "completed")}>
               <box>
                 <box
