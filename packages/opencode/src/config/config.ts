@@ -1,6 +1,6 @@
 import { Log } from "../util/log"
 import path from "path"
-import { pathToFileURL } from "url"
+import { fileURLToPath, pathToFileURL } from "url"
 import os from "os"
 import z from "zod"
 import { Filesystem } from "../util/filesystem"
@@ -356,17 +356,36 @@ export namespace Config {
 
   /**
    * Extracts a canonical plugin name from a plugin specifier.
-   * - For file:// URLs: extracts filename without extension
+   * - For file:// URLs: extracts filename, or walks up to find non-generic parent directory
    * - For npm packages: extracts package name without version
    *
    * @example
    * getPluginName("file:///path/to/plugin/foo.js") // "foo"
+   * getPluginName("file:///path/to/plugin-a/index.js") // "plugin-a"
+   * getPluginName("file:///path/to/oh-my-opencode/dist/index.js") // "oh-my-opencode"
    * getPluginName("oh-my-opencode@2.4.3") // "oh-my-opencode"
    * getPluginName("@scope/pkg@1.0.0") // "@scope/pkg"
    */
   export function getPluginName(plugin: string): string {
     if (plugin.startsWith("file://")) {
-      return path.parse(new URL(plugin).pathname).name
+      const filePath = fileURLToPath(plugin)
+      const parsed = path.parse(filePath)
+      const filename = parsed.name
+      const genericNames = new Set(["index", "main", "plugin", "dist", "build", "out", "lib"])
+
+      if (!genericNames.has(filename)) {
+        return filename
+      }
+
+      const parts = filePath.split(path.sep).filter(Boolean)
+      for (let i = parts.length - 2; i >= 0; i--) {
+        const dirName = parts[i]
+        if (!genericNames.has(dirName) && dirName !== ".opencode") {
+          return dirName
+        }
+      }
+
+      return plugin
     }
     const lastAt = plugin.lastIndexOf("@")
     if (lastAt > 0) {
@@ -1194,6 +1213,7 @@ export namespace Config {
       if (data.plugin) {
         for (let i = 0; i < data.plugin.length; i++) {
           const plugin = data.plugin[i]
+          if (plugin.startsWith("file://")) continue // Already absolute
           try {
             data.plugin[i] = import.meta.resolve!(plugin, configFilepath)
           } catch (err) {}
