@@ -9,7 +9,7 @@ import { Config } from "@/config/config"
 import { GlobalBus } from "@/bus/global"
 import { createOpencodeClient, type Event } from "@opencode-ai/sdk/v2"
 import type { BunWebSocketData } from "hono/bun"
-import { Flag } from "@/flag/flag"
+import { getAuthorizationHeader } from "./auth"
 
 await Log.init({
   print: process.argv.includes("--print-logs"),
@@ -143,10 +143,3 @@ export const rpc = {
 }
 
 Rpc.listen(rpc)
-
-function getAuthorizationHeader(): string | undefined {
-  const password = Flag.OPENCODE_SERVER_PASSWORD
-  if (!password) return undefined
-  const username = Flag.OPENCODE_SERVER_USERNAME ?? "opencode"
-  return `Basic ${btoa(`${username}:${password}`)}`
-}
