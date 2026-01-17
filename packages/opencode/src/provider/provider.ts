@@ -507,6 +507,9 @@ export namespace Provider {
       }
     },
     databricks: async (input) => {
+      // Azure Databricks resource ID for OAuth/AAD authentication
+      const AZURE_DATABRICKS_RESOURCE_ID = "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d"
+
       const config = await Config.get()
       const providerConfig = config.provider?.["databricks"]
       const auth = await Auth.get("databricks")
@@ -526,6 +529,8 @@ export namespace Provider {
       const token = Env.get("DATABRICKS_TOKEN") ?? (auth?.type === "api" ? auth.key : undefined)
 
       // OAuth M2M credentials for Azure Databricks
+      // Note: Standard OAuth auth type doesn't include clientId/clientSecret fields,
+      // so we use type assertion. In practice, these come from env vars or config.
       const clientId =
         Env.get("DATABRICKS_CLIENT_ID") ??
         providerConfig?.options?.clientId ??
@@ -573,9 +578,16 @@ export namespace Provider {
           if (response.ok) {
             const data = (await response.json()) as { access_token: string }
             accessToken = data.access_token
+          } else {
+            log.debug("Failed to fetch Databricks OAuth token", {
+              status: response.status,
+              statusText: response.statusText,
+            })
           }
         } catch (e) {
-          log.error("Failed to fetch Databricks OAuth token", { error: e })
+          log.debug("Failed to fetch Databricks OAuth token", {
+            error: e instanceof Error ? e.message : "Unknown error",
+          })
         }
       }
 
@@ -591,15 +603,22 @@ export namespace Provider {
               grant_type: "client_credentials",
               client_id: azureClientId,
               client_secret: azureClientSecret,
-              scope: "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d/.default", // Azure Databricks resource ID
+              scope: `${AZURE_DATABRICKS_RESOURCE_ID}/.default`,
             }).toString(),
           })
           if (response.ok) {
             const data = (await response.json()) as { access_token: string }
             accessToken = data.access_token
+          } else {
+            log.debug("Failed to fetch Azure AD token for Databricks", {
+              status: response.status,
+              statusText: response.statusText,
+            })
           }
         } catch (e) {
-          log.error("Failed to fetch Azure AD token for Databricks", { error: e })
+          log.debug("Failed to fetch Azure AD token for Databricks", {
+            error: e instanceof Error ? e.message : "Unknown error",
+          })
         }
       }
 
@@ -608,18 +627,28 @@ export namespace Provider {
         try {
           // Try to get token from Azure CLI
           const proc = Bun.spawn(
-            ["az", "account", "get-access-token", "--resource", "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d", "-o", "json"],
+            ["az", "account", "get-access-token", "--resource", AZURE_DATABRICKS_RESOURCE_ID, "-o", "json"],
             { stdout: "pipe", stderr: "pipe" },
           )
           const output = await new Response(proc.stdout).text()
           const exitCode = await proc.exited
           if (exitCode === 0) {
-            const data = JSON.parse(output) as { accessToken: string }
-            accessToken = data.accessToken
-            log.info("Using Azure CLI token for Databricks authentication")
+            try {
+              const data = JSON.parse(output) as { accessToken: string }
+              accessToken = data.accessToken
+              log.info("Using Azure CLI token for Databricks authentication")
+            } catch (parseError) {
+              log.debug("Failed to parse Azure CLI token response", {
+                error: parseError instanceof Error ? parseError.message : "Unknown error",
+              })
+            }
+          } else {
+            log.debug("Azure CLI returned non-zero exit code", { exitCode })
           }
         } catch (e) {
-          log.debug("Azure CLI not available for Databricks auth", { error: e })
+          log.debug("Azure CLI not available for Databricks auth", {
+            error: e instanceof Error ? e.message : "Unknown error",
+          })
         }
       }
 
