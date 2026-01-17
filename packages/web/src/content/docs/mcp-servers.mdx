@@ -272,6 +272,7 @@ If you want to disable automatic OAuth for a server (e.g., for servers that use 
 | `clientId`     | String          | OAuth client ID. If not provided, dynamic client registration will be attempted. |
 | `clientSecret` | String          | OAuth client secret, if required by the authorization server.                    |
 | `scope`        | String          | OAuth scopes to request during authorization.                                    |
+| `callbackHost` | String          | Bind address for the callback server. See [Debugging](#debugging).               |
 
 #### Debugging
 
@@ -286,6 +287,26 @@ opencode mcp debug my-oauth-server
 ```
 
 The `mcp debug` command shows the current auth status, tests HTTP connectivity, and attempts the OAuth discovery flow.
+
+If you're running OpenCode in WSL2, Docker, or a devcontainer and OAuth callbacks fail, the callback server may not be reachable from your host browser. Set `callbackHost` to an address your host can reach (commonly `0.0.0.0`).
+
+:::caution
+Binding to `0.0.0.0` exposes the callback listener on your network, not just localhost. Use only when needed.
+:::
+
+`callbackHost` only affects the bind address; it does not change `redirectUri`.
+
+```json title="opencode.json" {4}
+{
+  "mcp": {
+    "my-server": {
+      "oauth": { "callbackHost": "0.0.0.0" }
+    }
+  }
+}
+```
+
+In containers, you may also need to publish/forward port `19876` (or your configured redirect port) to the host.
 
 ---
 

@@ -720,8 +720,11 @@ export namespace MCP {
       throw new Error(`MCP server ${mcpName} has OAuth explicitly disabled`)
     }
 
+    // OAuth config is optional - if not provided, we'll use auto-discovery
+    const oauthConfig = typeof mcpConfig.oauth === "object" ? mcpConfig.oauth : undefined
+
     // Start the callback server
-    await McpOAuthCallback.ensureRunning()
+    await McpOAuthCallback.ensureRunning({ callbackHost: oauthConfig?.callbackHost })
 
     // Generate and store a cryptographically secure state parameter BEFORE creating the provider
     // The SDK will call provider.state() to read this value
@@ -729,10 +732,6 @@ export namespace MCP {
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("")
     await McpAuth.updateOAuthState(mcpName, oauthState)
-
-    // Create a new auth provider for this flow
-    // OAuth config is optional - if not provided, we'll use auto-discovery
-    const oauthConfig = typeof mcpConfig.oauth === "object" ? mcpConfig.oauth : undefined
     let capturedUrl: URL | undefined
     const authProvider = new McpOAuthProvider(
       mcpName,
