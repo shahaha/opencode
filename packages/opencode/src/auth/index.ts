@@ -20,6 +20,7 @@ export namespace Auth {
     .object({
       type: z.literal("api"),
       key: z.string(),
+      host: z.string().optional(), // For providers like Databricks that need a host URL
     })
     .meta({ ref: "ApiAuth" })
 
