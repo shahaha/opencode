@@ -1740,6 +1740,80 @@ Some useful routing options:
 
 ---
 
+### Databricks
+
+To use Databricks Foundation Model APIs with OpenCode:
+
+1. Run the `/connect` command and search for **Databricks**.
+
+   ```txt
+   /connect
+   ```
+
+2. Enter your Databricks workspace URL and Personal Access Token.
+
+   ```txt
+   ┌ Databricks Host URL
+   │ https://your-workspace.cloud.databricks.com
+   │
+   └ enter
+   ```
+
+   ```txt
+   ┌ API key (Personal Access Token)
+   │
+   │
+   └ enter
+   ```
+
+   :::tip
+   Create a Personal Access Token at: Workspace → Settings → Developer → Access tokens
+   :::
+
+3. Run the `/models` command to see available Databricks models.
+
+   ```txt
+   /models
+   ```
+
+#### Authentication Methods
+
+Databricks supports multiple authentication methods (in priority order):
+
+1. **Personal Access Token (PAT)**: Set `DATABRICKS_TOKEN` environment variable or use `/connect` command
+2. **OAuth M2M**: Set `DATABRICKS_CLIENT_ID` and `DATABRICKS_CLIENT_SECRET` environment variables
+3. **Azure AD Service Principal**: Set `ARM_CLIENT_ID`, `ARM_CLIENT_SECRET`, and `ARM_TENANT_ID` environment variables
+4. **Azure CLI**: Automatically used for Azure Databricks workspaces when logged in with `az login`
+
+#### Configuration
+
+You can also configure Databricks through your `opencode.json` file:
+
+```json title="opencode.json"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "databricks": {
+      "options": {
+        "baseURL": "https://your-workspace.cloud.databricks.com/serving-endpoints"
+      },
+      "models": {
+        "custom-model": {
+          "name": "My Custom Model"
+        }
+      }
+    }
+  }
+}
+```
+
+#### Workspace URL Formats
+
+- **AWS/GCP**: `https://dbc-xxx.cloud.databricks.com`
+- **Azure**: `https://adb-xxx.azuredatabricks.net`
+
+---
+
 ## Custom provider
 
 To add any **OpenAI-compatible** provider that's not listed in the `/connect` command:
