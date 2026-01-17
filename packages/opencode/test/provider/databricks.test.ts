@@ -229,6 +229,12 @@ test("Databricks: loads when bearer token from auth.json is present", async () =
   })
 
   const authPath = path.join(Global.Path.data, "auth.json")
+
+  // Backup existing auth.json if it exists
+  const authFile = Bun.file(authPath)
+  const existingAuth = await authFile.exists() ? await authFile.text() : null
+
+  // Write test auth
   await Bun.write(
     authPath,
     JSON.stringify({
@@ -239,17 +245,26 @@ test("Databricks: loads when bearer token from auth.json is present", async () =
     }),
   )
 
-  await Instance.provide({
-    directory: tmp.path,
-    init: async () => {
-      Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
-      // No DATABRICKS_TOKEN env var - using auth.json instead
-    },
-    fn: async () => {
-      const providers = await Provider.list()
-      expect(providers["databricks"]).toBeDefined()
-    },
-  })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
+        // No DATABRICKS_TOKEN env var - using auth.json instead
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(providers["databricks"]).toBeDefined()
+      },
+    })
+  } finally {
+    // Restore original auth.json or delete if it didn't exist
+    if (existingAuth !== null) {
+      await Bun.write(authPath, existingAuth)
+    } else {
+      await Bun.write(authPath, JSON.stringify({}))
+    }
+  }
 })
 
 test("Databricks: appends /serving-endpoints to host URL", async () => {
