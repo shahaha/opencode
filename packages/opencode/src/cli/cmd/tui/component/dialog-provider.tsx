@@ -97,6 +97,10 @@ export function createDialogProviderOptions() {
               }
             }
             if (method.type === "api") {
+              // Databricks requires both host and API key
+              if (provider.id === "databricks") {
+                return dialog.replace(() => <DatabricksApiMethod providerID={provider.id} title={method.label} />)
+              }
               return dialog.replace(() => <ApiMethod providerID={provider.id} title={method.label} />)
             }
           },
@@ -208,6 +212,70 @@ function CodeMethod(props: CodeMethodProps) {
           </Show>
         </box>
       )}
+    />
+  )
+}
+
+interface DatabricksApiMethodProps {
+  providerID: string
+  title: string
+}
+function DatabricksApiMethod(props: DatabricksApiMethodProps) {
+  const dialog = useDialog()
+  const sdk = useSDK()
+  const sync = useSync()
+  const { theme } = useTheme()
+  const [host, setHost] = createSignal<string | null>(null)
+
+  // First prompt for host
+  if (!host()) {
+    return (
+      <DialogPrompt
+        title="Databricks Host URL"
+        placeholder="https://your-workspace.cloud.databricks.com"
+        description={
+          <box gap={1}>
+            <text fg={theme.textMuted}>Enter your Databricks workspace URL</text>
+            <text fg={theme.textMuted}>Examples:</text>
+            <text fg={theme.textMuted}>  • https://dbc-xxx.cloud.databricks.com (AWS/GCP)</text>
+            <text fg={theme.textMuted}>  • https://adb-xxx.azuredatabricks.net (Azure)</text>
+          </box>
+        }
+        onConfirm={(value) => {
+          if (!value) return
+          // Remove trailing slash if present
+          const cleanHost = value.replace(/\/$/, "")
+          setHost(cleanHost)
+        }}
+      />
+    )
+  }
+
+  // Then prompt for API key
+  return (
+    <DialogPrompt
+      title={props.title}
+      placeholder="API key (Personal Access Token)"
+      description={
+        <box gap={1}>
+          <text fg={theme.textMuted}>Enter your Databricks Personal Access Token</text>
+          <text fg={theme.textMuted}>Create at: Workspace → Settings → Developer → Access tokens</text>
+        </box>
+      }
+      onConfirm={async (value) => {
+        if (!value) return
+        sdk.client.auth.set({
+          providerID: props.providerID,
+          auth: {
+            type: "api",
+            key: value,
+            host: host()!,
+          },
+        })
+        await sdk.client.instance.dispose()
+        await sync.bootstrap()
+        dialog.replace(() => <DialogModel providerID={props.providerID} />)
+      }}
     />
   )
 }
