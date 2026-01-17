@@ -233,14 +233,14 @@ function DatabricksApiMethod(props: DatabricksApiMethodProps) {
       <DialogPrompt
         title="Databricks Host URL"
         placeholder="https://your-workspace.cloud.databricks.com"
-        description={
+        description={() => (
           <box gap={1}>
             <text fg={theme.textMuted}>Enter your Databricks workspace URL</text>
             <text fg={theme.textMuted}>Examples:</text>
             <text fg={theme.textMuted}>  • https://dbc-xxx.cloud.databricks.com (AWS/GCP)</text>
             <text fg={theme.textMuted}>  • https://adb-xxx.azuredatabricks.net (Azure)</text>
           </box>
-        }
+        )}
         onConfirm={(value) => {
           if (!value) return
           // Remove trailing slash if present
