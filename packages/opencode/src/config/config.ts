@@ -1114,48 +1114,122 @@ export namespace Config {
     return load(text, filepath)
   }
 
-  async function load(text: string, configFilepath: string) {
-    text = text.replace(/\{env:([^}]+)\}/g, (_, varName) => {
-      return process.env[varName] || ""
-    })
+  async function expandTemplates(value: unknown, configDir: string, configFilepath: string): Promise<void> {
+    // First pass: collect all file references
+    const fileRefs = new Map<string, string>() // match -> resolvedPath
+    collectFileReferences(value, configDir, fileRefs)
 
-    const fileMatches = text.match(/\{file:[^}]+\}/g)
-    if (fileMatches) {
-      const configDir = path.dirname(configFilepath)
-      const lines = text.split("\n")
+    // Read all files in parallel
+    const fileContents = new Map<string, string>()
+    await Promise.all(
+      Array.from(fileRefs.entries()).map(async ([match, resolvedPath]) => {
+        const content = await Bun.file(resolvedPath)
+          .text()
+          .catch((error) => {
+            const errMsg = `bad file reference: "${match}"`
+            if (error.code === "ENOENT") {
+              throw new InvalidError(
+                {
+                  path: configFilepath,
+                  message: errMsg + ` ${resolvedPath} does not exist`,
+                },
+                { cause: error },
+              )
+            }
+            throw new InvalidError({ path: configFilepath, message: errMsg }, { cause: error })
+          })
+        fileContents.set(match, content.trim())
+      }),
+    )
 
-      for (const match of fileMatches) {
-        const lineIndex = lines.findIndex((line) => line.includes(match))
-        if (lineIndex !== -1 && lines[lineIndex].trim().startsWith("//")) {
-          continue // Skip if line is commented
+    // Second pass: expand templates in-place
+    replaceTemplates(value, fileContents)
+  }
+
+  function collectFileReferences(value: unknown, configDir: string, fileRefs: Map<string, string>): void {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item === "string") {
+          extractFileReferences(item, configDir, fileRefs)
+        } else {
+          collectFileReferences(item, configDir, fileRefs)
         }
+      }
+      return
+    }
+
+    if (value && typeof value === "object") {
+      const obj = value as Record<string, unknown>
+      for (const key in obj) {
+        const val = obj[key]
+        if (typeof val === "string") {
+          extractFileReferences(val, configDir, fileRefs)
+        } else {
+          collectFileReferences(val, configDir, fileRefs)
+        }
+      }
+      return
+    }
+  }
+
+  function extractFileReferences(str: string, configDir: string, fileRefs: Map<string, string>): void {
+    const fileMatches = str.match(/\{file:[^}]+\}/g)
+    if (fileMatches) {
+      for (const match of fileMatches) {
+        if (fileRefs.has(match)) continue
+
         let filePath = match.replace(/^\{file:/, "").replace(/\}$/, "")
         if (filePath.startsWith("~/")) {
           filePath = path.join(os.homedir(), filePath.slice(2))
         }
         const resolvedPath = path.isAbsolute(filePath) ? filePath : path.resolve(configDir, filePath)
-        const fileContent = (
-          await Bun.file(resolvedPath)
-            .text()
-            .catch((error) => {
-              const errMsg = `bad file reference: "${match}"`
-              if (error.code === "ENOENT") {
-                throw new InvalidError(
-                  {
-                    path: configFilepath,
-                    message: errMsg + ` ${resolvedPath} does not exist`,
-                  },
-                  { cause: error },
-                )
-              }
-              throw new InvalidError({ path: configFilepath, message: errMsg }, { cause: error })
-            })
-        ).trim()
-        // escape newlines/quotes, strip outer quotes
-        text = text.replace(match, JSON.stringify(fileContent).slice(1, -1))
+        fileRefs.set(match, resolvedPath)
       }
     }
+  }
 
+  function replaceTemplates(value: unknown, fileContents: Map<string, string>): void {
+    if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) {
+        if (typeof value[i] === "string") {
+          value[i] = expandString(value[i], fileContents)
+        } else {
+          replaceTemplates(value[i], fileContents)
+        }
+      }
+      return
+    }
+
+    if (value && typeof value === "object") {
+      const obj = value as Record<string, unknown>
+      for (const key in obj) {
+        const val = obj[key]
+        if (typeof val === "string") {
+          obj[key] = expandString(val, fileContents)
+        } else {
+          replaceTemplates(val, fileContents)
+        }
+      }
+      return
+    }
+  }
+
+  function expandString(str: string, fileContents: Map<string, string>): string {
+    // Expand {env:VAR} templates
+    str = str.replace(/\{env:([^}]+)\}/g, (_, varName) => {
+      return process.env[varName] || ""
+    })
+
+    // Expand {file:path} templates
+    for (const [match, content] of fileContents) {
+      str = str.replaceAll(match, content)
+    }
+
+    return str
+  }
+
+  async function load(text: string, configFilepath: string) {
+    // Parse JSONC first, letting the parser handle comments correctly
     const errors: JsoncParseError[] = []
     const data = parseJsonc(text, errors, { allowTrailingComma: true })
     if (errors.length) {
@@ -1179,6 +1253,10 @@ export namespace Config {
         message: `\n--- JSONC Input ---\n${text}\n--- Errors ---\n${errorDetails}\n--- End ---`,
       })
     }
+
+    // Expand templates in the parsed object tree
+    const configDir = path.dirname(configFilepath)
+    await expandTemplates(data, configDir, configFilepath)
 
     const parsed = Info.safeParse(data)
     if (parsed.success) {
