@@ -793,7 +793,6 @@ export function Session() {
       value: "session.child.next",
       keybind: "session_child_cycle",
       category: "Session",
-      disabled: true,
       onSelect: (dialog) => {
         moveChild(1)
         dialog.clear()
@@ -804,7 +803,6 @@ export function Session() {
       value: "session.child.previous",
       keybind: "session_child_cycle_reverse",
       category: "Session",
-      disabled: true,
       onSelect: (dialog) => {
         moveChild(-1)
         dialog.clear()
