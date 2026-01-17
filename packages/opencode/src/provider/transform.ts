@@ -249,7 +249,9 @@ export namespace ProviderTransform {
       model.api.id.includes("claude") ||
       model.id.includes("anthropic") ||
       model.id.includes("claude") ||
-      model.api.npm === "@ai-sdk/anthropic"
+      model.api.npm === "@ai-sdk/anthropic" ||
+      // Apply caching for Databricks models that support it (GPT, Gemini)
+      (model.providerID === "databricks" && model.cost.cache.read > 0)
     ) {
       msgs = applyCaching(msgs, model.providerID)
     }
