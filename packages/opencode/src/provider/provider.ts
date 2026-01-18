@@ -579,6 +579,7 @@ export namespace Provider {
       env: z.string().array(),
       key: z.string().optional(),
       options: z.record(z.string(), z.any()),
+      requestOptions: z.record(z.string(), z.any()).optional(),
       models: z.record(z.string(), Model),
     })
     .meta({
@@ -725,6 +726,7 @@ export namespace Provider {
         name: provider.name ?? existing?.name ?? providerID,
         env: provider.env ?? existing?.env ?? [],
         options: mergeDeep(existing?.options ?? {}, provider.options ?? {}),
+        requestOptions: mergeDeep(existing?.requestOptions ?? {}, provider.requestOptions ?? {}),
         source: "config",
         models: existing?.models ?? {},
       }
