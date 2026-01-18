@@ -2,7 +2,7 @@ import { createMemo, createSignal } from "solid-js"
 import { useLocal } from "@tui/context/local"
 import { useSync } from "@tui/context/sync"
 import { map, pipe, flatMap, entries, filter, sortBy, take } from "remeda"
-import { DialogSelect, type DialogSelectRef } from "@tui/ui/dialog-select"
+import { DialogSelect, type DialogSelectRef, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
 import { createDialogProviderOptions, DialogProvider } from "./dialog-provider"
 import { useKeybind } from "../context/keybind"
@@ -22,6 +22,7 @@ export function DialogModel(props: { providerID?: string }) {
   const keybind = useKeybind()
   const [ref, setRef] = createSignal<DialogSelectRef<unknown>>()
   const [query, setQuery] = createSignal("")
+  const [selected, setSelected] = createSignal<DialogSelectOption<unknown>>()
 
   const connected = useConnected()
   const providers = createDialogProviderOptions()
@@ -222,9 +223,18 @@ export function DialogModel(props: { providerID?: string }) {
             local.model.toggleFavorite(option.value as { providerID: string; modelID: string })
           },
         },
+        {
+          keybind: keybind.all.model_recent_remove?.[0],
+          title: "Remove",
+          disabled: selected()?.category !== "Recent",
+          onTrigger: (option) => {
+            local.model.removeRecent(option.value as { providerID: string; modelID: string })
+          },
+        },
       ]}
       ref={setRef}
       onFilter={setQuery}
+      onMove={setSelected}
       skipFilter={true}
       title={title()}
       current={local.model.current()}
