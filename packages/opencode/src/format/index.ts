@@ -100,9 +100,14 @@ export namespace Format {
     return result
   }
 
+  // Store unsubscribe functions for cleanup
+  const unsubscribers: Array<() => void> = []
+
   export function init() {
     log.info("init")
-    Bus.subscribe(File.Event.Edited, async (payload) => {
+    // Clean up any existing subscriptions before adding new ones
+    dispose()
+    const unsub = Bus.subscribe(File.Event.Edited, async (payload) => {
       const file = payload.properties.file
       log.info("formatting", { file })
       const ext = path.extname(file)
@@ -133,5 +138,18 @@ export namespace Format {
         }
       }
     })
+    unsubscribers.push(unsub)
+  }
+
+  export function dispose() {
+    const toUnsubscribe = unsubscribers.splice(0)
+    for (const unsub of toUnsubscribe) {
+      try {
+        unsub()
+      } catch (error) {
+        log.error("failed to unsubscribe format handler", { error })
+      }
+    }
+    log.info("disposed format subscriptions")
   }
 }

@@ -10,29 +10,44 @@ import type * as SDK from "@opencode-ai/sdk/v2"
 
 export namespace ShareNext {
   const log = Log.create({ service: "share-next" })
+  // Generation counter to invalidate in-flight operations from previous init cycles
+  let generation = 0
+  let disposed = false
+
+  // Store unsubscribe functions for cleanup
+  const unsubscribers: Array<() => void> = []
 
   async function url() {
     return Config.get().then((x) => x.enterprise?.url ?? "https://opncd.ai")
   }
 
   export async function init() {
-    Bus.subscribe(Session.Event.Updated, async (evt) => {
-      await sync(evt.properties.info.id, [
+    // Clean up any existing subscriptions before adding new ones
+    dispose()
+    disposed = false
+    // Increment generation so in-flight operations from previous cycle are invalidated
+    const gen = ++generation
+
+    const unsub1 = Bus.subscribe(Session.Event.Updated, async (evt) => {
+      if (disposed || gen !== generation) return
+      await sync(gen, evt.properties.info.id, [
         {
           type: "session",
           data: evt.properties.info,
         },
       ])
     })
-    Bus.subscribe(MessageV2.Event.Updated, async (evt) => {
-      await sync(evt.properties.info.sessionID, [
+    const unsub2 = Bus.subscribe(MessageV2.Event.Updated, async (evt) => {
+      if (disposed || gen !== generation) return
+      await sync(gen, evt.properties.info.sessionID, [
         {
           type: "message",
           data: evt.properties.info,
         },
       ])
+      if (gen !== generation) return
       if (evt.properties.info.role === "user") {
-        await sync(evt.properties.info.sessionID, [
+        await sync(gen, evt.properties.info.sessionID, [
           {
             type: "model",
             data: [
@@ -44,22 +59,44 @@ export namespace ShareNext {
         ])
       }
     })
-    Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
-      await sync(evt.properties.part.sessionID, [
+    const unsub3 = Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
+      if (disposed || gen !== generation) return
+      await sync(gen, evt.properties.part.sessionID, [
         {
           type: "part",
           data: evt.properties.part,
         },
       ])
     })
-    Bus.subscribe(Session.Event.Diff, async (evt) => {
-      await sync(evt.properties.sessionID, [
+    const unsub4 = Bus.subscribe(Session.Event.Diff, async (evt) => {
+      if (disposed || gen !== generation) return
+      await sync(gen, evt.properties.sessionID, [
         {
           type: "session_diff",
           data: evt.properties.diff,
         },
       ])
     })
+    unsubscribers.push(unsub1, unsub2, unsub3, unsub4)
+  }
+
+  export function dispose() {
+    disposed = true
+    const toUnsubscribe = unsubscribers.splice(0)
+    for (const unsub of toUnsubscribe) {
+      try {
+        unsub()
+      } catch (error) {
+        log.error("failed to unsubscribe", { error })
+      }
+    }
+    // Hardened: snapshot and clear atomically to avoid race during iteration
+    const pending = Array.from(queue.values())
+    queue.clear()
+    for (const entry of pending) {
+      clearTimeout(entry.timeout)
+    }
+    log.info("disposed share-next subscriptions")
   }
 
   export async function create(sessionID: string) {
@@ -109,7 +146,10 @@ export namespace ShareNext {
       }
 
   const queue = new Map<string, { timeout: NodeJS.Timeout; data: Map<string, Data> }>()
-  async function sync(sessionID: string, data: Data[]) {
+  async function sync(gen: number, sessionID: string, data: Data[]) {
+    // Check generation before any work
+    if (gen !== generation) return
+
     const existing = queue.get(sessionID)
     if (existing) {
       for (const item of data) {
@@ -124,11 +164,15 @@ export namespace ShareNext {
     }
 
     const timeout = setTimeout(async () => {
+      // Check generation before processing queued data
+      if (gen !== generation) return
       const queued = queue.get(sessionID)
       if (!queued) return
       queue.delete(sessionID)
       const share = await get(sessionID).catch(() => undefined)
       if (!share) return
+      // Check generation after async operation
+      if (gen !== generation) return
 
       await fetch(`${await url()}/api/share/${share.id}/sync`, {
         method: "POST",
@@ -161,17 +205,23 @@ export namespace ShareNext {
   }
 
   async function fullSync(sessionID: string) {
+    // Capture current generation for this sync operation
+    const gen = generation
     log.info("full sync", { sessionID })
     const session = await Session.get(sessionID)
+    if (gen !== generation) return
     const diffs = await Session.diff(sessionID)
+    if (gen !== generation) return
     const messages = await Array.fromAsync(MessageV2.stream(sessionID))
+    if (gen !== generation) return
     const models = await Promise.all(
       messages
         .filter((m) => m.info.role === "user")
         .map((m) => (m.info as SDK.UserMessage).model)
         .map((m) => Provider.getModel(m.providerID, m.modelID).then((m) => m)),
     )
-    await sync(sessionID, [
+    if (gen !== generation) return
+    await sync(gen, sessionID, [
       {
         type: "session",
         data: session,
@@ -190,5 +240,18 @@ export namespace ShareNext {
         data: models,
       },
     ])
+  }
+
+  /** @internal Test helper to get queue size */
+  export function _getQueueSize(): number {
+    return queue.size
+  }
+
+  /** @internal Test helper to add items to queue for testing dispose cleanup */
+  export function _addToQueueForTesting(sessionID: string) {
+    const dataMap = new Map<string, Data>()
+    // Use short timeout for tests - this is a no-op callback that won't cause issues if it fires
+    const timeout = setTimeout(() => {}, 100)
+    queue.set(sessionID, { timeout, data: dataMap })
   }
 }
