@@ -1,4 +1,4 @@
-import { createMemo, createSignal, onMount, Show } from "solid-js"
+import { createMemo, createSignal, onMount, Show, createEffect } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { map, pipe, sortBy } from "remeda"
 import { DialogSelect } from "@tui/ui/dialog-select"
@@ -221,37 +221,47 @@ interface DatabricksApiMethodProps {
   title: string
 }
 function DatabricksApiMethod(props: DatabricksApiMethodProps) {
+  const { theme } = useTheme()
+  const dialog = useDialog()
+  // Get host from environment variable as default placeholder, but always prompt the user
+  const envHost = typeof process !== "undefined" ? process.env["DATABRICKS_HOST"] : undefined
+
+  return (
+    <DialogPrompt
+      title="Databricks Host URL"
+      placeholder="https://your-workspace.cloud.databricks.com"
+      value={envHost ? envHost.replace(/\/$/, "") : undefined}
+      description={() => (
+        <box gap={1}>
+          <text fg={theme.textMuted}>Enter your Databricks workspace URL</text>
+          <text fg={theme.textMuted}>Examples:</text>
+          <text fg={theme.textMuted}>  • https://dbc-xxx.cloud.databricks.com (AWS/GCP)</text>
+          <text fg={theme.textMuted}>  • https://adb-xxx.azuredatabricks.net (Azure)</text>
+        </box>
+      )}
+      onConfirm={(value) => {
+        if (!value) return
+        // Remove trailing slash if present
+        const cleanHost = value.replace(/\/$/, "")
+        dialog.replace(() => (
+          <DatabricksApiKeyMethod providerID={props.providerID} title={props.title} host={cleanHost} />
+        ))
+      }}
+    />
+  )
+}
+
+interface DatabricksApiKeyMethodProps {
+  providerID: string
+  title: string
+  host: string
+}
+function DatabricksApiKeyMethod(props: DatabricksApiKeyMethodProps) {
   const dialog = useDialog()
   const sdk = useSDK()
   const sync = useSync()
   const { theme } = useTheme()
-  const [host, setHost] = createSignal<string | null>(null)
 
-  // First prompt for host
-  if (!host()) {
-    return (
-      <DialogPrompt
-        title="Databricks Host URL"
-        placeholder="https://your-workspace.cloud.databricks.com"
-        description={() => (
-          <box gap={1}>
-            <text fg={theme.textMuted}>Enter your Databricks workspace URL</text>
-            <text fg={theme.textMuted}>Examples:</text>
-            <text fg={theme.textMuted}>  • https://dbc-xxx.cloud.databricks.com (AWS/GCP)</text>
-            <text fg={theme.textMuted}>  • https://adb-xxx.azuredatabricks.net (Azure)</text>
-          </box>
-        )}
-        onConfirm={(value) => {
-          if (!value) return
-          // Remove trailing slash if present
-          const cleanHost = value.replace(/\/$/, "")
-          setHost(cleanHost)
-        }}
-      />
-    )
-  }
-
-  // Then prompt for API key
   return (
     <DialogPrompt
       title={props.title}
@@ -269,7 +279,7 @@ function DatabricksApiMethod(props: DatabricksApiMethodProps) {
           auth: {
             type: "api",
             key: value,
-            host: host()!,
+            host: props.host,
           },
         })
         await sdk.client.instance.dispose()

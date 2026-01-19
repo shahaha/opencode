@@ -552,7 +552,20 @@ export namespace Provider {
       // Check if Azure CLI is available for Azure Databricks workspaces
       const isAzureDatabricks = host.includes("azuredatabricks.net")
 
-      if (!hasPAT && !hasOAuthM2M && !hasAzureAD && !isAzureDatabricks) return { autoload: false }
+      // Check for Databricks CLI token cache
+      const hasDatabricksCLI = await (async () => {
+        try {
+          const homedir = Env.get("HOME") ?? Env.get("USERPROFILE")
+          if (!homedir) return false
+          const tokenCachePath = `${homedir}/.databricks/token-cache.json`
+          const file = Bun.file(tokenCachePath)
+          return await file.exists()
+        } catch {
+          return false
+        }
+      })()
+
+      if (!hasPAT && !hasOAuthM2M && !hasAzureAD && !isAzureDatabricks && !hasDatabricksCLI) return { autoload: false }
 
       // Databricks Foundation Model APIs use OpenAI-compatible endpoints
       // The base URL format is: https://<workspace-url>/serving-endpoints
@@ -617,6 +630,98 @@ export namespace Provider {
           }
         } catch (e) {
           log.debug("Failed to fetch Azure AD token for Databricks", {
+            error: e instanceof Error ? e.message : "Unknown error",
+          })
+        }
+      }
+
+      // Try Databricks CLI token cache (from `databricks auth login`)
+      if (!accessToken) {
+        try {
+          const homedir = Env.get("HOME") ?? Env.get("USERPROFILE")
+          if (homedir) {
+            const tokenCachePath = `${homedir}/.databricks/token-cache.json`
+            const file = Bun.file(tokenCachePath)
+            if (await file.exists()) {
+              const cacheContent = await file.text()
+              const cache = JSON.parse(cacheContent) as {
+                version: number
+                tokens: Record<
+                  string,
+                  {
+                    access_token: string
+                    token_type: string
+                    refresh_token: string
+                    expiry: string
+                    expires_in?: number
+                  }
+                >
+              }
+
+              // Normalize host for lookup (remove trailing slash)
+              const normalizedHost = host.replace(/\/$/, "")
+
+              // Find token for this host
+              const tokenEntry = cache.tokens[normalizedHost]
+              if (tokenEntry) {
+                const expiry = new Date(tokenEntry.expiry)
+                const now = new Date()
+
+                // Check if token is still valid (with 5 minute buffer)
+                if (expiry.getTime() - 5 * 60 * 1000 > now.getTime()) {
+                  accessToken = tokenEntry.access_token
+                  log.info("Using Databricks CLI token cache for authentication")
+                } else if (tokenEntry.refresh_token) {
+                  // Token expired, try to refresh it
+                  log.debug("Databricks CLI token expired, attempting refresh")
+                  const tokenEndpoint = `${normalizedHost}/oidc/v1/token`
+                  try {
+                    const response = await fetch(tokenEndpoint, {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                      },
+                      body: new URLSearchParams({
+                        grant_type: "refresh_token",
+                        refresh_token: tokenEntry.refresh_token,
+                        client_id: "databricks-cli",
+                      }).toString(),
+                    })
+                    if (response.ok) {
+                      const data = (await response.json()) as {
+                        access_token: string
+                        refresh_token?: string
+                        expires_in?: number
+                      }
+                      accessToken = data.access_token
+                      log.info("Refreshed Databricks CLI token successfully")
+
+                      // Update the token cache with new tokens
+                      cache.tokens[normalizedHost] = {
+                        ...tokenEntry,
+                        access_token: data.access_token,
+                        refresh_token: data.refresh_token ?? tokenEntry.refresh_token,
+                        expiry: new Date(Date.now() + (data.expires_in ?? 3600) * 1000).toISOString(),
+                        expires_in: data.expires_in ?? 3600,
+                      }
+                      await Bun.write(tokenCachePath, JSON.stringify(cache, null, 2))
+                    } else {
+                      log.debug("Failed to refresh Databricks CLI token", {
+                        status: response.status,
+                        statusText: response.statusText,
+                      })
+                    }
+                  } catch (refreshError) {
+                    log.debug("Failed to refresh Databricks CLI token", {
+                      error: refreshError instanceof Error ? refreshError.message : "Unknown error",
+                    })
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          log.debug("Failed to read Databricks CLI token cache", {
             error: e instanceof Error ? e.message : "Unknown error",
           })
         }
