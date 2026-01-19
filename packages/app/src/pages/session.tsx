@@ -1,4 +1,4 @@
-import { For, onCleanup, onMount, Show, Match, Switch, createMemo, createEffect, on } from "solid-js"
+import { For, onCleanup, onMount, Show, Match, Switch, createMemo, createEffect, createSignal, on } from "solid-js"
 import { createMediaQuery } from "@solid-primitives/media"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { Dynamic } from "solid-js/web"
@@ -161,6 +161,7 @@ export default function Page() {
   const dialog = useDialog()
   const codeComponent = useCodeComponent()
   const command = useCommand()
+  const [showThinking, setShowThinking] = createSignal(true)
   const platform = usePlatform()
   const params = useParams()
   const navigate = useNavigate()
@@ -471,6 +472,14 @@ export default function Page() {
         if (!msg) return
         setStore("expanded", msg.id, (open: boolean | undefined) => !open)
       },
+    },
+    {
+      id: "thinking.toggle",
+      title: showThinking() ? "Hide thinking" : "Show thinking",
+      description: "Show or hide thinking/reasoning blocks",
+      category: "View",
+      slash: "thinking",
+      onSelect: () => setShowThinking((prev) => !prev),
     },
     {
       id: "message.previous",
@@ -1266,6 +1275,7 @@ export default function Page() {
                                     messageID={message.id}
                                     lastUserMessageID={lastUserMessage()?.id}
                                     stepsExpanded={store.expanded[message.id] ?? false}
+                                    showThinking={showThinking()}
                                     onStepsExpandedToggle={() =>
                                       setStore("expanded", message.id, (open: boolean | undefined) => !open)
                                     }
