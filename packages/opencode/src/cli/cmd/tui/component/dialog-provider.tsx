@@ -223,8 +223,47 @@ interface DatabricksApiMethodProps {
 function DatabricksApiMethod(props: DatabricksApiMethodProps) {
   const { theme } = useTheme()
   const dialog = useDialog()
-  // Get host from environment variable as default placeholder, but always prompt the user
+  const sdk = useSDK()
+  const sync = useSync()
+  // Get host from environment variable
   const envHost = typeof process !== "undefined" ? process.env["DATABRICKS_HOST"] : undefined
+
+  // Check if we have a valid token in the CLI cache for this host
+  onMount(async () => {
+    if (!envHost) return
+
+    const normalizedHost = envHost.replace(/\/$/, "")
+    const homedir = typeof process !== "undefined" ? (process.env["HOME"] ?? process.env["USERPROFILE"]) : undefined
+    if (!homedir) return
+
+    try {
+      const tokenCachePath = `${homedir}/.databricks/token-cache.json`
+      const file = Bun.file(tokenCachePath)
+      if (!(await file.exists())) return
+
+      const cache = (await file.json()) as {
+        tokens: Record<string, { access_token: string; expiry: string; refresh_token?: string }>
+      }
+
+      const tokenEntry = cache.tokens[normalizedHost]
+      if (!tokenEntry) return
+
+      // Check if token is valid or can be refreshed
+      const expiry = new Date(tokenEntry.expiry)
+      const hasValidToken = expiry.getTime() - 5 * 60 * 1000 > Date.now()
+      const canRefresh = Boolean(tokenEntry.refresh_token)
+
+      if (hasValidToken || canRefresh) {
+        // We have CLI auth available, skip prompts and go straight to model selection
+        // Dispose and bootstrap to pick up the CLI token
+        await sdk.client.instance.dispose()
+        await sync.bootstrap()
+        dialog.replace(() => <DialogModel providerID={props.providerID} />)
+      }
+    } catch {
+      // Token cache not available or invalid, continue with normal flow
+    }
+  })
 
   return (
     <DialogPrompt
