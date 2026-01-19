@@ -120,6 +120,7 @@ export type UserMessage = {
     [key: string]: boolean
   }
   variant?: string
+  pinned?: boolean
 }
 
 export type ProviderAuthError = {
@@ -3364,6 +3365,7 @@ export type SessionPromptData = {
     }
     agent?: string
     noReply?: boolean
+    pinned?: boolean
     /**
      * @deprecated tools and permissions have been merged, you can set permissions on the session itself now
      */
@@ -3542,6 +3544,51 @@ export type PartUpdateResponses = {
 
 export type PartUpdateResponse = PartUpdateResponses[keyof PartUpdateResponses]
 
+export type SessionMessagePinData = {
+  body?: {
+    /**
+     * Whether to pin (true) or unpin (false) the message
+     */
+    pinned: boolean
+  }
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+    /**
+     * Message ID
+     */
+    messageID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/message/{messageID}/pin"
+}
+
+export type SessionMessagePinErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionMessagePinError = SessionMessagePinErrors[keyof SessionMessagePinErrors]
+
+export type SessionMessagePinResponses = {
+  /**
+   * Message pinned status updated
+   */
+  200: UserMessage
+}
+
+export type SessionMessagePinResponse = SessionMessagePinResponses[keyof SessionMessagePinResponses]
+
 export type SessionPromptAsyncData = {
   body?: {
     messageID?: string
@@ -3551,6 +3598,7 @@ export type SessionPromptAsyncData = {
     }
     agent?: string
     noReply?: boolean
+    pinned?: boolean
     /**
      * @deprecated tools and permissions have been merged, you can set permissions on the session itself now
      */

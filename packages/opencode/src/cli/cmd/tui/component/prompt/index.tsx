@@ -40,6 +40,7 @@ export type PromptProps = {
   ref?: (ref: PromptRef) => void
   hint?: JSX.Element
   showPlaceholder?: boolean
+  pinned?: boolean
 }
 
 export type PromptRef = {
@@ -585,6 +586,7 @@ export function Prompt(props: PromptProps) {
           agent: local.agent.current().name,
           model: selectedModel,
           variant,
+          pinned: props.pinned,
           parts: [
             {
               id: Identifier.ascending("part"),

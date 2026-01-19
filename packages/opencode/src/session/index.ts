@@ -319,12 +319,10 @@ export namespace Session {
       limit: z.number().optional(),
     }),
     async (input) => {
-      const result = [] as MessageV2.WithParts[]
-      for await (const msg of MessageV2.stream(input.sessionID)) {
-        if (input.limit && result.length >= input.limit) break
-        result.push(msg)
+      const result = await MessageV2.filterCompacted(MessageV2.stream(input.sessionID))
+      if (input.limit && result.length > input.limit) {
+        return result.slice(-input.limit)
       }
-      result.reverse()
       return result
     },
   )
@@ -377,6 +375,24 @@ export namespace Session {
     })
     return msg
   })
+
+  export const pinMessage = fn(
+    z.object({
+      sessionID: Identifier.schema("session"),
+      messageID: Identifier.schema("message"),
+      pinned: z.boolean(),
+    }),
+    async (input) => {
+      const msg = await MessageV2.get({ sessionID: input.sessionID, messageID: input.messageID })
+      if (msg.info.role !== "user") {
+        throw new Error("Only user messages can be pinned")
+      }
+      const userMsg = msg.info as MessageV2.User
+      userMsg.pinned = input.pinned
+      await updateMessage(userMsg)
+      return userMsg
+    },
+  )
 
   export const removeMessage = fn(
     z.object({
