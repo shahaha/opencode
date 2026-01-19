@@ -53,6 +53,7 @@ import {
 import { usePlatform } from "@/context/platform"
 import { navMark, navParams } from "@/utils/perf"
 import { same } from "@/utils/same"
+import { useForkSession } from "@/hooks/use-fork-session"
 
 type DiffStyle = "unified" | "split"
 
@@ -167,6 +168,7 @@ export default function Page() {
   const sdk = useSDK()
   const prompt = usePrompt()
   const permission = usePermission()
+  const forkSession = useForkSession()
   const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
   const tabs = createMemo(() => layout.tabs(sessionKey()))
   const view = createMemo(() => layout.view(sessionKey()))
@@ -1169,6 +1171,7 @@ export default function Page() {
                             messages={visibleUserMessages()}
                             current={activeMessage()}
                             onMessageSelect={scrollToMessage}
+                            onFork={(msg) => forkSession(msg.id)}
                             wide={!showTabs()}
                             class="pointer-events-auto"
                           />
