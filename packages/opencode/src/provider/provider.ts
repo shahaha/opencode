@@ -13,6 +13,7 @@ import { Env } from "../env"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
 import { iife } from "@/util/iife"
+import { createLruCache } from "@/util/cache"
 
 // Direct imports for bundled providers
 import { createAmazonBedrock, type AmazonBedrockProviderSettings } from "@ai-sdk/amazon-bedrock"
@@ -680,7 +681,9 @@ export namespace Provider {
     }
 
     const providers: { [providerID: string]: Info } = {}
-    const languages = new Map<string, LanguageModelV2>()
+    const languages = createLruCache<string, LanguageModelV2>({
+      maxEntries: 100,
+    })
     const modelLoaders: {
       [providerID: string]: CustomModelLoader
     } = {}
@@ -948,7 +951,15 @@ export namespace Provider {
     return {
       models: languages,
       providers,
-      sdk,
+      sdk: createLruCache({
+        maxEntries: 50,
+        onEvict: (key, sdk) => {
+          // SDK may have cleanup methods
+          if (sdk && typeof sdk === "object" && "destroy" in sdk) {
+            sdk.destroy?.()
+          }
+        },
+      }),
       modelLoaders,
     }
   })
