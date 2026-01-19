@@ -514,11 +514,48 @@ export namespace Provider {
       const providerConfig = config.provider?.["databricks"]
       const auth = await Auth.get("databricks")
 
-      // Host resolution: 1) stored auth, 2) config file, 3) env var
+      // Helper to read host from ~/.databrickscfg profile
+      const getHostFromProfile = async (profileName: string): Promise<string | undefined> => {
+        try {
+          const homedir = Env.get("HOME") ?? Env.get("USERPROFILE")
+          if (!homedir) return undefined
+          const configPath = Env.get("DATABRICKS_CONFIG_FILE") ?? `${homedir}/.databrickscfg`
+          const file = Bun.file(configPath)
+          if (!(await file.exists())) return undefined
+
+          const content = await file.text()
+          const lines = content.split("\n")
+
+          let currentSection = ""
+          for (const line of lines) {
+            const trimmed = line.trim()
+            // Check for section header [profile-name]
+            const sectionMatch = trimmed.match(/^\[(.+)\]$/)
+            if (sectionMatch) {
+              currentSection = sectionMatch[1]
+              continue
+            }
+            // Check for host = value in the target section
+            if (currentSection === profileName) {
+              const hostMatch = trimmed.match(/^host\s*=\s*(.+)$/)
+              if (hostMatch) {
+                return hostMatch[1].trim().replace(/\/$/, "")
+              }
+            }
+          }
+          return undefined
+        } catch {
+          return undefined
+        }
+      }
+
+      // Host resolution: 1) stored auth, 2) config file, 3) env var, 4) profile from ~/.databrickscfg
       const authHost = auth?.type === "api" ? auth.host : undefined
       const configHost = providerConfig?.options?.baseURL ?? providerConfig?.options?.host
       const envHost = Env.get("DATABRICKS_HOST")
-      const host = authHost ?? configHost ?? envHost
+      const profileName = Env.get("DATABRICKS_CONFIG_PROFILE") ?? providerConfig?.options?.profile ?? "DEFAULT"
+      const profileHost = await getHostFromProfile(profileName)
+      const host = authHost ?? configHost ?? envHost ?? profileHost
 
       if (!host) return { autoload: false }
 
@@ -758,6 +795,53 @@ export namespace Provider {
       }
 
       if (!accessToken) return { autoload: false }
+
+      // Store normalized host for token lookups
+      const normalizedHost = host.replace(/\/$/, "")
+
+      // Function to get fresh token from Databricks CLI token cache
+      const getFreshToken = async (): Promise<string> => {
+        try {
+          const homedir = Env.get("HOME") ?? Env.get("USERPROFILE")
+          if (homedir) {
+            const tokenCachePath = `${homedir}/.databricks/token-cache.json`
+            const file = Bun.file(tokenCachePath)
+            if (await file.exists()) {
+              const cacheContent = await file.text()
+              const cache = JSON.parse(cacheContent) as {
+                version: number
+                tokens: Record<
+                  string,
+                  {
+                    access_token: string
+                    expiry: string
+                  }
+                >
+              }
+
+              const tokenEntry = cache.tokens[normalizedHost]
+              if (tokenEntry) {
+                const expiry = new Date(tokenEntry.expiry)
+                const now = new Date()
+
+                // Check if cached token is still valid (with 5 minute buffer)
+                if (expiry.getTime() - 5 * 60 * 1000 > now.getTime()) {
+                  return tokenEntry.access_token
+                }
+                // Token expired - user needs to run `databricks auth login`
+                log.warn("Databricks CLI token expired. Run `databricks auth login --profile <profile>` to refresh.")
+              }
+            }
+          }
+        } catch (e) {
+          log.debug("Failed to read Databricks CLI token cache", {
+            error: e instanceof Error ? e.message : "Unknown error",
+          })
+        }
+
+        // Fall back to the token we got at initialization
+        return accessToken
+      }
 
       // Define default Databricks Foundation Model API endpoints
       // These are the pay-per-token endpoints available in most workspaces
@@ -1179,6 +1263,14 @@ export namespace Provider {
         }
       }
 
+      // Custom fetch that gets fresh token before each request
+      const databricksFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const freshToken = await getFreshToken()
+        const headers = new Headers(init?.headers)
+        headers.set("Authorization", `Bearer ${freshToken}`)
+        return fetch(input, { ...init, headers })
+      }
+
       return {
         autoload: true,
         async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
@@ -1194,6 +1286,8 @@ export namespace Provider {
             // Prevent Claude beta headers from breaking Databricks Model Serving
             "x-databricks-disable-beta-headers": "true",
           },
+          // Use custom fetch that refreshes token when expired
+          fetch: databricksFetch,
         },
       }
     },
