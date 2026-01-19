@@ -348,6 +348,18 @@ export function Prompt(props: PromptProps) {
     },
   }
 
+  const placeholderText = createMemo(() => {
+    const currentAgent = local.agent.current()
+    if (currentAgent.name === "build" || !currentAgent.description) {
+      // TODO: Padding workaround for rendering bug where ghost characters from previous
+      // placeholder remain visible when switching to shorter text. Browser/terminal doesn't
+      // properly clear cached text layout. Proper fix would be to force element recreation
+      // or find why OpenTUI textarea doesn't invalidate placeholder rendering.
+      return `Ask anything... "${PLACEHOLDERS[store.placeholder]}"`.padEnd(70, " ")
+    }
+    return currentAgent.description.padEnd(70, " ")
+  })
+
   createEffect(() => {
     if (props.visible !== false) input?.focus()
     if (props.visible === false) input?.blur()
@@ -765,7 +777,7 @@ export function Prompt(props: PromptProps) {
             flexGrow={1}
           >
             <textarea
-              placeholder={props.sessionID ? undefined : `Ask anything... "${PLACEHOLDERS[store.placeholder]}"`}
+              placeholder={props.sessionID ? undefined : placeholderText()}
               textColor={keybind.leader ? theme.textMuted : theme.text}
               focusedTextColor={keybind.leader ? theme.textMuted : theme.text}
               minHeight={1}
