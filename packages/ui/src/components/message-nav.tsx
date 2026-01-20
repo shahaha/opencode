@@ -2,6 +2,7 @@ import { UserMessage } from "@opencode-ai/sdk/v2"
 import { ComponentProps, For, Match, Show, splitProps, Switch } from "solid-js"
 import { DiffChanges } from "./diff-changes"
 import { Tooltip } from "@kobalte/core/tooltip"
+import { ScrollReveal } from "./scroll-reveal"
 
 export function MessageNav(
   props: ComponentProps<"ul"> & {
@@ -43,14 +44,16 @@ export function MessageNav(
                 </Match>
                 <Match when={local.size === "normal"}>
                   <button data-slot="message-nav-message-button" onClick={handleClick} onKeyDown={handleKeyPress}>
-                    <DiffChanges changes={message.summary?.diffs ?? []} variant="bars" />
+                    <DiffChanges changes={message.summary?.diffs ?? []} variant="bars" class="-ml-1" />
                     <div
                       data-slot="message-nav-title-preview"
                       data-active={message.id === local.current?.id || undefined}
                     >
-                      <Show when={local.getLabel?.(message) ?? message.summary?.title} fallback="New message">
-                        {local.getLabel?.(message) ?? message.summary?.title}
-                      </Show>
+                      <ScrollReveal fadeEndSize={12}>
+                        <Show when={local.getLabel?.(message) ?? message.summary?.title} fallback="New message">
+                          {local.getLabel?.(message) ?? message.summary?.title}
+                        </Show>
+                      </ScrollReveal>
                     </div>
                   </button>
                 </Match>

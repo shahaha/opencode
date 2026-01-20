@@ -3,14 +3,19 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { Icon } from "@opencode-ai/ui/icon"
+import { Avatar } from "@opencode-ai/ui/avatar"
 import { createMemo, createSignal, For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { type LocalProject, getAvatarColors } from "@/context/layout"
-import { getFilename } from "@opencode-ai/util/path"
-import { Avatar } from "@opencode-ai/ui/avatar"
+import { ProjectAvatar, isValidImageFile } from "@/components/project-avatar"
 
 const AVATAR_COLOR_KEYS = ["pink", "mint", "orange", "purple", "cyan", "lime"] as const
+
+function getFilename(input: string) {
+  const parts = input.split("/")
+  return parts[parts.length - 1] || input
+}
 
 export function DialogEditProject(props: { project: LocalProject }) {
   const dialog = useDialog()
@@ -30,7 +35,7 @@ export function DialogEditProject(props: { project: LocalProject }) {
   const [iconHover, setIconHover] = createSignal(false)
 
   function handleFileSelect(file: File) {
-    if (!file.type.startsWith("image/")) return
+    if (!isValidImageFile(file)) return
     const reader = new FileReader()
     reader.onload = (e) => {
       setStore("iconUrl", e.target?.result as string)
@@ -98,7 +103,7 @@ export function DialogEditProject(props: { project: LocalProject }) {
             <div class="flex gap-3 items-start">
               <div class="relative" onMouseEnter={() => setIconHover(true)} onMouseLeave={() => setIconHover(false)}>
                 <div
-                  class="relative size-16 rounded-md transition-colors cursor-pointer"
+                  class="size-16 rounded-md overflow-hidden border border-dashed transition-colors cursor-pointer"
                   classList={{
                     "border-text-interactive-base bg-surface-info-base/20": dragOver(),
                     "border-border-base hover:border-border-strong": !dragOver(),
@@ -115,20 +120,13 @@ export function DialogEditProject(props: { project: LocalProject }) {
                     }
                   }}
                 >
-                  <Show
-                    when={store.iconUrl}
-                    fallback={
-                      <div class="size-full flex items-center justify-center">
-                        <Avatar
-                          fallback={store.name || defaultName()}
-                          {...getAvatarColors(store.color)}
-                          class="size-full"
-                        />
-                      </div>
-                    }
-                  >
-                    <img src={store.iconUrl} alt="Project icon" class="size-full object-cover" />
-                  </Show>
+                  <ProjectAvatar
+                    name={store.name || defaultName()}
+                    projectId={props.project.id}
+                    iconUrl={store.iconUrl}
+                    iconColor={store.color}
+                    class="size-full"
+                  />
                 </div>
                 <div
                   style={{

@@ -794,7 +794,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       .abort({
         sessionID: params.id!,
       })
-      .catch(() => {})
+      .catch(() => { })
 
   const addToHistory = (prompt: Prompt, mode: "normal" | "shell") => {
     const text = prompt
@@ -1255,7 +1255,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
     const optimisticParts = requestParts.map((part) => ({
       ...part,
-      sessionID: session.id,
+      sessionID: session?.id ?? "",
       messageID,
     })) as unknown as Part[]
 
@@ -1273,9 +1273,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     const addOptimisticMessage = () => {
       setSyncStore(
         produce((draft) => {
-          const messages = draft.message[session.id]
+          const messages = draft.message[session?.id ?? ""]
           if (!messages) {
-            draft.message[session.id] = [optimisticMessage]
+            draft.message[session?.id ?? ""] = [optimisticMessage]
           } else {
             const result = Binary.search(messages, messageID, (m) => m.id)
             messages.splice(result.index, 0, optimisticMessage)
@@ -1291,7 +1291,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     const removeOptimisticMessage = () => {
       setSyncStore(
         produce((draft) => {
-          const messages = draft.message[session.id]
+          const messages = draft.message[session?.id ?? ""]
           if (messages) {
             const result = Binary.search(messages, messageID, (m) => m.id)
             if (result.found) messages.splice(result.index, 1)
@@ -1567,7 +1567,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           </Show>
         </div>
         <div class="relative p-3 flex items-center justify-between">
-          <div class="flex items-center justify-start gap-0.5">
+          <div class="flex items-center justify-start gap-1">
             <Switch>
               <Match when={store.mode === "shell"}>
                 <div class="flex items-center gap-2 px-2 h-6">
@@ -1618,13 +1618,60 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     title="Thinking effort"
                     keybind={command.keybind("model.variant.cycle")}
                   >
-                    <Button
-                      variant="ghost"
-                      class="text-text-base _hidden group-hover/prompt-input:inline-block capitalize text-12-regular"
-                      onClick={() => local.model.variant.cycle()}
-                    >
-                      {local.model.variant.current() ?? "Default"}
-                    </Button>
+                    {(() => {
+                      const [text, setText] = createSignal(local.model.variant.current() ?? "Default")
+                      const [animating, setAnimating] = createSignal(false)
+                      let locked = false
+
+                      const handleClick = async () => {
+                        if (locked) return
+
+                        local.model.variant.cycle()
+                        const newText = local.model.variant.current() ?? "Default"
+
+                        if (newText === text()) return
+
+                        locked = true
+                        setAnimating(true)
+
+                        // Wait for exit animation
+                        const charCount = text().length
+                        await new Promise((r) => setTimeout(r, charCount * 40 + 400))
+
+                        // Reset animating before setting new text so @starting-style works
+                        setAnimating(false)
+                        setText(newText)
+
+                        // Wait for enter animation
+                        const newCharCount = newText.length
+                        await new Promise((r) => setTimeout(r, newCharCount * 40 + 400))
+
+                        locked = false
+                      }
+
+                      return (
+                        <Button
+                          variant="ghost"
+                          class="text-text-base _hidden text-12-regular"
+                          onClick={handleClick}
+                        >
+                          <span data-slot="cycle-text" data-animating={animating()}>
+                            <For each={text().split("")}>
+                              {(char, i) =>
+                                char === " " ? (
+                                  <span data-slot="space" />
+                                ) : (
+                                  <span data-slot="char" style={{ "--i": i() }}>
+                                    {i() === 0 ? char.toUpperCase() : char}
+                                  </span>
+                                )
+                              }
+                            </For>
+                          </span>
+                          <Icon name="chevron-down" size="small" />
+                        </Button>
+                      )
+                    })()}
                   </TooltipKeybind>
                 </Show>
                 <Show when={permission.permissionsEnabled() && params.id}>
@@ -1700,7 +1747,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 disabled={!prompt.dirty() && !working()}
                 icon={working() ? "stop" : "arrow-up"}
                 variant="primary"
-                class="h-6 w-4.5"
+                class="h-6 w-6"
               />
             </Tooltip>
           </div>

@@ -20,7 +20,6 @@ import { useLayout, getAvatarColors, LocalProject } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { Persist, persisted } from "@/utils/persist"
 import { base64Decode, base64Encode } from "@opencode-ai/util/encode"
-import { Avatar } from "@opencode-ai/ui/avatar"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -35,7 +34,7 @@ import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { getFilename } from "@opencode-ai/util/path"
-import { Session, type Message, type TextPart } from "@opencode-ai/sdk/v2/client"
+import { Session, type Message, type TextPart, UserMessage } from "@opencode-ai/sdk/v2/client"
 import { usePlatform } from "@/context/platform"
 import { createStore, produce, reconcile } from "solid-js/store"
 import {
@@ -60,12 +59,14 @@ import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme"
 import { DialogSelectProvider } from "@/components/dialog-select-provider"
 import { DialogSelectServer } from "@/components/dialog-select-server"
 import { useCommand, type CommandOption } from "@/context/command"
+import { ProjectAvatar } from "@/components/project-avatar"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
 import { navStart } from "@/utils/perf"
 import { DialogSelectDirectory } from "@/components/dialog-select-directory"
 import { DialogEditProject } from "@/components/dialog-edit-project"
 import { Titlebar } from "@/components/titlebar"
 import { useServer } from "@/context/server"
+import { ScrollReveal } from "@opencode-ai/ui/scroll-reveal"
 
 export default function Layout(props: ParentProps) {
   const [store, setStore, , ready] = persisted(
@@ -187,7 +188,9 @@ export default function Layout(props: ParentProps) {
             onClick={stopPropagation}
             onTouchStart={stopPropagation}
           >
-            {props.value()}
+            <ScrollReveal>
+              {props.value()}
+            </ScrollReveal>
           </span>
         }
       >
@@ -1277,15 +1280,16 @@ export default function Layout(props: ParentProps) {
     const hasError = createMemo(() => notifications().some((n) => n.type === "error"))
     const name = createMemo(() => props.project.name || getFilename(props.project.worktree))
     const mask = "radial-gradient(circle 5px at calc(100% - 4px) 4px, transparent 5px, black 5.5px)"
-    const opencode = "4b0ea68d7af9a6031a7ffda7ad66e0cb83315750"
 
     return (
-      <div class={`relative size-8 shrink-0 rounded ${props.class ?? ""}`}>
-        <div class="size-full rounded overflow-clip">
-          <Avatar
-            fallback={name()}
-            src={props.project.id === opencode ? "https://opencode.ai/favicon.svg" : props.project.icon?.override}
-            {...getAvatarColors(props.project.icon?.color)}
+      <div class={`relative size-8 shrink-0 rounded-sm ${props.class ?? ""}`}>
+        <div class="size-full rounded-sm overflow-clip">
+          <ProjectAvatar
+            name={name()}
+            projectId={props.project.id}
+            iconUrl={props.project.icon?.url}
+            iconColor={props.project.icon?.color}
+            size="small"
             class="size-full rounded"
             style={
               notifications().length > 0 && props.notify
@@ -1348,7 +1352,7 @@ export default function Layout(props: ParentProps) {
     })
 
     const hoverMessages = createMemo(() =>
-      sessionStore.message[props.session.id]?.filter((message) => message.role === "user"),
+      sessionStore.message[props.session.id]?.filter((message) => message.role === "user") as UserMessage[],
     )
     const hoverReady = createMemo(() => sessionStore.message[props.session.id] !== undefined)
     const hoverAllowed = createMemo(() => !props.mobile && layout.sidebar.opened())
@@ -1421,7 +1425,7 @@ export default function Layout(props: ParentProps) {
             </Tooltip>
           }
         >
-          <HoverCard openDelay={150} closeDelay={100} placement="right-start" gutter={16} trigger={item}>
+          <HoverCard openDelay={150} closeDelay={100} placement="right" gutter={28} trigger={item}>
             <Show when={hoverReady()} fallback={<div class="text-12-regular text-text-weak">Loading messages…</div>}>
               <MessageNav
                 messages={hoverMessages() ?? []}
@@ -1539,7 +1543,7 @@ export default function Layout(props: ParentProps) {
 
     return (
       // @ts-ignore
-      <div use:sortable classList={{ "opacity-30": sortable.isActiveDraggable }}>
+      <div use: sortable classList={{ "opacity-30": sortable.isActiveDraggable }}>
         <Collapsible variant="ghost" open={open()} class="shrink-0" onOpenChange={openWrapper}>
           <div class="px-2 py-1">
             <div class="group/workspace relative">
@@ -1653,7 +1657,7 @@ export default function Layout(props: ParentProps) {
                     size="large"
                     onClick={(e: MouseEvent) => {
                       loadMore()
-                      ;(e.currentTarget as HTMLButtonElement).blur()
+                        ; (e.currentTarget as HTMLButtonElement).blur()
                     }}
                   >
                     Load more
@@ -1721,7 +1725,7 @@ export default function Layout(props: ParentProps) {
 
     return (
       // @ts-ignore
-      <div use:sortable classList={{ "opacity-30": sortable.isActiveDraggable }}>
+      <div use: sortable classList={{ "opacity-30": sortable.isActiveDraggable }}>
         <HoverCard
           openDelay={0}
           closeDelay={0}
@@ -1819,7 +1823,7 @@ export default function Layout(props: ParentProps) {
         class="size-full flex flex-col py-2 overflow-y-auto no-scrollbar"
         style={{ "overflow-anchor": "none" }}
       >
-        <nav class="flex flex-col gap-1 px-2">
+        <nav class="flex flex-col gap-2 px-2">
           <Show when={loading()}>
             <SessionSkeleton />
           </Show>
@@ -1834,7 +1838,7 @@ export default function Layout(props: ParentProps) {
                 size="large"
                 onClick={(e: MouseEvent) => {
                   loadMore()
-                  ;(e.currentTarget as HTMLButtonElement).blur()
+                    ; (e.currentTarget as HTMLButtonElement).blur()
                 }}
               >
                 Load more
