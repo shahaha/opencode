@@ -34,25 +34,55 @@ export namespace SessionSummary {
     },
   )
 
-  async function summarizeSession(input: { sessionID: string; messages: MessageV2.WithParts[] }) {
+  async function computeSessionDiffData(messages: MessageV2.WithParts[]) {
     const files = new Set(
-      input.messages
+      messages
         .flatMap((x) => x.parts)
         .filter((x) => x.type === "patch")
         .flatMap((x) => x.files)
         .map((x) => path.relative(Instance.worktree, x)),
     )
-    const diffs = await computeDiff({ messages: input.messages }).then((x) =>
+    const diffs = await computeDiff({ messages }).then((x) =>
       x.filter((x) => {
         return files.has(x.file)
       }),
     )
-    await Session.update(input.sessionID, (draft) => {
-      draft.summary = {
+    return {
+      diffs,
+      summary: {
         additions: diffs.reduce((sum, x) => sum + x.additions, 0),
         deletions: diffs.reduce((sum, x) => sum + x.deletions, 0),
         files: diffs.length,
-      }
+      },
+    }
+  }
+
+  export async function refreshDiff(input: {
+    sessionID: string
+    messages?: MessageV2.WithParts[]
+    setSummary?: (summary: Session.Info["summary"]) => Promise<void> | void
+  }) {
+    const messages = input.messages ?? (await Session.messages({ sessionID: input.sessionID }))
+    const { diffs, summary } = await computeSessionDiffData(messages)
+    if (input.setSummary) {
+      await input.setSummary(summary)
+    } else {
+      await Session.update(input.sessionID, (draft) => {
+        draft.summary = summary
+      })
+    }
+    await Storage.write(["session_diff", input.sessionID], diffs)
+    Bus.publish(Session.Event.Diff, {
+      sessionID: input.sessionID,
+      diff: diffs,
+    })
+    return diffs
+  }
+
+  async function summarizeSession(input: { sessionID: string; messages: MessageV2.WithParts[] }) {
+    const { diffs, summary } = await computeSessionDiffData(input.messages)
+    await Session.update(input.sessionID, (draft) => {
+      draft.summary = summary
     })
     await Storage.write(["session_diff", input.sessionID], diffs)
     Bus.publish(Session.Event.Diff, {

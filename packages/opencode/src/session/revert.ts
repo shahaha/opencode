@@ -6,8 +6,8 @@ import { Session } from "."
 import { Log } from "../util/log"
 import { splitWhen } from "remeda"
 import { Storage } from "../storage/storage"
-import { Bus } from "../bus"
 import { SessionPrompt } from "./prompt"
+import { SessionSummary } from "./summary"
 
 export namespace SessionRevert {
   const log = Log.create({ service: "session.revert" })
@@ -18,6 +18,25 @@ export namespace SessionRevert {
     partID: Identifier.schema("part").optional(),
   })
   export type RevertInput = z.infer<typeof RevertInput>
+
+  function messagesForDiff(messages: MessageV2.WithParts[], revert: Session.Info["revert"]) {
+    if (!revert?.messageID) return messages
+    const result: MessageV2.WithParts[] = []
+    for (const msg of messages) {
+      if (msg.info.id < revert.messageID) {
+        result.push(msg)
+        continue
+      }
+      if (msg.info.id === revert.messageID && revert.partID) {
+        const [preserveParts] = splitWhen(msg.parts, (x) => x.id === revert.partID)
+        if (preserveParts.length > 0) {
+          result.push({ info: msg.info, parts: preserveParts })
+        }
+      }
+      break
+    }
+    return result
+  }
 
   export async function revert(input: RevertInput) {
     SessionPrompt.assertNotBusy(input.sessionID)
@@ -57,9 +76,18 @@ export namespace SessionRevert {
       revert.snapshot = session.revert?.snapshot ?? (await Snapshot.track())
       await Snapshot.revert(patches)
       if (revert.snapshot) revert.diff = await Snapshot.diff(revert.snapshot)
-      return Session.update(input.sessionID, (draft) => {
-        draft.revert = revert
+      let result: Session.Info | undefined
+      await SessionSummary.refreshDiff({
+        sessionID: input.sessionID,
+        messages: messagesForDiff(all, revert),
+        setSummary: async (summary) => {
+          result = await Session.update(input.sessionID, (draft) => {
+            draft.revert = revert
+            draft.summary = summary
+          })
+        },
       })
+      return result ?? session
     }
     return session
   }
@@ -70,10 +98,17 @@ export namespace SessionRevert {
     const session = await Session.get(input.sessionID)
     if (!session.revert) return session
     if (session.revert.snapshot) await Snapshot.restore(session.revert.snapshot)
-    const next = await Session.update(input.sessionID, (draft) => {
-      draft.revert = undefined
+    let next: Session.Info | undefined
+    await SessionSummary.refreshDiff({
+      sessionID: input.sessionID,
+      setSummary: async (summary) => {
+        next = await Session.update(input.sessionID, (draft) => {
+          draft.revert = undefined
+          draft.summary = summary
+        })
+      },
     })
-    return next
+    return next ?? session
   }
 
   export async function cleanup(session: Session.Info) {
