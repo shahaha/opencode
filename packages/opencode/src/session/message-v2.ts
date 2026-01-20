@@ -527,7 +527,7 @@ export namespace MessageV2 {
                 toolCallId: part.callID,
                 input: part.state.input,
                 output: part.state.time.compacted ? "[Old tool result content cleared]" : part.state.output,
-                callProviderMetadata: part.metadata,
+                callProviderMetadata: part.metadata ?? {},
               })
             }
             if (part.state.status === "error")
