@@ -12,6 +12,57 @@ import z from "zod"
 export namespace PermissionNext {
   const log = Log.create({ service: "permission" })
 
+  type StateWithSubscriptions = Awaited<ReturnType<typeof state>> & {
+    subscriptions?: Array<() => void>
+  }
+
+  async function withSubscriptions(fn: (subscriptions: Array<() => void>) => void | Promise<void>): Promise<void> {
+    const s = (await state()) as StateWithSubscriptions
+    if (!s.subscriptions) {
+      s.subscriptions = []
+    }
+    await fn(s.subscriptions)
+  }
+
+  export async function dispose() {
+    await withSubscriptions((subscriptions) => {
+      for (const unsubscribe of subscriptions) {
+        unsubscribe()
+      }
+      subscriptions.length = 0
+    })
+  }
+
+  export async function init() {
+    await dispose()
+    await withSubscriptions((subscriptions) => {
+      subscriptions.push(
+        Bus.subscribeAll(async (evt) => {
+          if (evt.type === "session.deleted") {
+            await clearSession(evt.properties.info.id)
+          }
+        }),
+      )
+    })
+  }
+
+  export async function clearSession(sessionID: string) {
+    const s = await state()
+    for (const [id, pending] of Object.entries(s.pending)) {
+      if (pending.info.sessionID === sessionID) {
+        // Order: reject promise, publish event, then delete from map
+        // This ensures handlers can safely access pending state
+        pending.reject(new RejectedError())
+        Bus.publish(Event.Replied, {
+          sessionID: pending.info.sessionID,
+          requestID: pending.info.id,
+          reply: "reject",
+        })
+        delete s.pending[id]
+      }
+    }
+  }
+
   export const Action = z.enum(["allow", "deny", "ask"]).meta({
     ref: "PermissionAction",
   })
@@ -155,31 +206,39 @@ export namespace PermissionNext {
       const s = await state()
       const existing = s.pending[input.requestID]
       if (!existing) return
-      delete s.pending[input.requestID]
-      Bus.publish(Event.Replied, {
-        sessionID: existing.info.sessionID,
-        requestID: existing.info.id,
-        reply: input.reply,
-      })
+      // Order: reject/resolve promise, publish event, then delete from map
+      // This ensures handlers can safely access pending state
       if (input.reply === "reject") {
         existing.reject(input.message ? new CorrectedError(input.message) : new RejectedError())
+        Bus.publish(Event.Replied, {
+          sessionID: existing.info.sessionID,
+          requestID: existing.info.id,
+          reply: input.reply,
+        })
+        delete s.pending[input.requestID]
         // Reject all other pending permissions for this session
         const sessionID = existing.info.sessionID
         for (const [id, pending] of Object.entries(s.pending)) {
           if (pending.info.sessionID === sessionID) {
-            delete s.pending[id]
+            pending.reject(new RejectedError())
             Bus.publish(Event.Replied, {
               sessionID: pending.info.sessionID,
               requestID: pending.info.id,
               reply: "reject",
             })
-            pending.reject(new RejectedError())
+            delete s.pending[id]
           }
         }
         return
       }
       if (input.reply === "once") {
         existing.resolve()
+        Bus.publish(Event.Replied, {
+          sessionID: existing.info.sessionID,
+          requestID: existing.info.id,
+          reply: input.reply,
+        })
+        delete s.pending[input.requestID]
         return
       }
       if (input.reply === "always") {
@@ -192,6 +251,12 @@ export namespace PermissionNext {
         }
 
         existing.resolve()
+        Bus.publish(Event.Replied, {
+          sessionID: existing.info.sessionID,
+          requestID: existing.info.id,
+          reply: input.reply,
+        })
+        delete s.pending[input.requestID]
 
         const sessionID = existing.info.sessionID
         for (const [id, pending] of Object.entries(s.pending)) {
@@ -200,13 +265,13 @@ export namespace PermissionNext {
             (pattern) => evaluate(pending.info.permission, pattern, s.approved).action === "allow",
           )
           if (!ok) continue
-          delete s.pending[id]
+          pending.resolve()
           Bus.publish(Event.Replied, {
             sessionID: pending.info.sessionID,
             requestID: pending.info.id,
             reply: "always",
           })
-          pending.resolve()
+          delete s.pending[id]
         }
 
         // TODO: we don't save the permission ruleset to disk yet until there's
