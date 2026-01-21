@@ -45,7 +45,8 @@ export namespace ProviderTransform {
   ): ModelMessage[] {
     // Anthropic rejects messages with empty content - filter out empty string messages
     // and remove empty text/reasoning parts from array content
-    if (model.api.npm === "@ai-sdk/anthropic") {
+    const isAzureClaude = model.providerID === "azure-cognitive-services" && model.api.id.includes("claude")
+    if (model.api.npm === "@ai-sdk/anthropic" || isAzureClaude) {
       msgs = msgs
         .map((msg) => {
           if (typeof msg.content === "string") {
@@ -323,6 +324,15 @@ export namespace ProviderTransform {
 
     const id = model.id.toLowerCase()
     if (id.includes("deepseek") || id.includes("minimax") || id.includes("glm") || id.includes("mistral")) return {}
+
+    // Azure Cognitive Services with Claude models uses Anthropic thinking config
+    const isAzureClaude = model.providerID === "azure-cognitive-services" && model.api.id.includes("claude")
+    if (isAzureClaude) {
+      return {
+        high: { thinking: { type: "enabled", budgetTokens: 16000 } },
+        max: { thinking: { type: "enabled", budgetTokens: 31999 } },
+      }
+    }
 
     // see: https://docs.x.ai/docs/guides/reasoning#control-how-hard-the-model-thinks
     if (id.includes("grok") && id.includes("grok-3-mini")) {
@@ -625,6 +635,12 @@ export namespace ProviderTransform {
   }
 
   export function providerOptions(model: Provider.Model, options: { [x: string]: any }) {
+    // Azure Cognitive Services with Claude models uses Anthropic provider options
+    const isAzureClaude = model.providerID === "azure-cognitive-services" && model.api.id.includes("claude")
+    if (isAzureClaude) {
+      return { anthropic: options }
+    }
+
     const key = sdkKey(model.api.npm) ?? model.providerID
     return { [key]: options }
   }
