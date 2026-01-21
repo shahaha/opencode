@@ -216,6 +216,22 @@ test("evaluate - protocol specific wins when ordered last", () => {
   expect(result.action).toBe("deny")
 })
 
+test("evaluate - webfetch deny all except specific host", () => {
+  const ruleset: PermissionNext.Ruleset = [
+    { permission: "webfetch", pattern: "*", action: "deny" },
+    { permission: "webfetch", pattern: "github.com", action: "allow" },
+    { permission: "webfetch", pattern: "github.com/*", action: "allow" },
+  ]
+  // github.com should be allowed
+  expect(PermissionNext.evaluate("webfetch", "github.com", ruleset).action).toBe("allow")
+  expect(PermissionNext.evaluate("webfetch", "github.com/", ruleset).action).toBe("allow")
+  expect(PermissionNext.evaluate("webfetch", "github.com/user/repo", ruleset).action).toBe("allow")
+  // other hosts should be denied
+  expect(PermissionNext.evaluate("webfetch", "example.com", ruleset).action).toBe("deny")
+  expect(PermissionNext.evaluate("webfetch", "example.com/path", ruleset).action).toBe("deny")
+  expect(PermissionNext.evaluate("webfetch", "https://evil.com/", ruleset).action).toBe("deny")
+})
+
 test("evaluate - last matching glob wins", () => {
   const result = PermissionNext.evaluate("edit", "src/components/Button.tsx", [
     { permission: "edit", pattern: "src/*", action: "deny" },

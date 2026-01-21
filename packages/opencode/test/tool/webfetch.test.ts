@@ -134,4 +134,22 @@ describe("formatWebfetchRules", () => {
       ),
     )
   })
+
+  test("formats deny all except specific host", () => {
+    const ruleset: PermissionNext.Ruleset = [
+      { permission: "webfetch", pattern: "*", action: "deny" },
+      { permission: "webfetch", pattern: "github.com", action: "allow" },
+      { permission: "webfetch", pattern: "github.com/*", action: "allow" },
+    ]
+    const result = formatWebfetchRules(ruleset)
+    expect(result).toBe(
+      [
+        "<webfetch-url-permissions>",
+        "  deny: *",
+        "  allow: github.com",
+        "  allow: github.com/*",
+        "</webfetch-url-permissions>",
+      ].join("\n"),
+    )
+  })
 })
