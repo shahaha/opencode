@@ -8,7 +8,7 @@ import { Instance } from "../project/instance"
 import { Patch } from "../patch"
 import { createTwoFilesPatch, diffLines } from "diff"
 import { assertExternalDirectory } from "./external-directory"
-import { trimDiff } from "./edit"
+import { fullDiff, trimDiff } from "./edit"
 import { LSP } from "../lsp"
 import { Filesystem } from "../util/filesystem"
 import DESCRIPTION from "./apply_patch.txt"
@@ -55,6 +55,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     }> = []
 
     let totalDiff = ""
+    const totalDiffFull: string[] = []
 
     for (const hunk of hunks) {
       const filePath = path.resolve(Instance.directory, hunk.path)
@@ -66,6 +67,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           const newContent =
             hunk.contents.length === 0 || hunk.contents.endsWith("\n") ? hunk.contents : `${hunk.contents}\n`
           const diff = trimDiff(createTwoFilesPatch(filePath, filePath, oldContent, newContent))
+          const diffFull = fullDiff(filePath, oldContent, newContent)
 
           let additions = 0
           let deletions = 0
@@ -85,6 +87,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           })
 
           totalDiff += diff + "\n"
+          totalDiffFull.push(diffFull)
           break
         }
 
@@ -107,6 +110,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           }
 
           const diff = trimDiff(createTwoFilesPatch(filePath, filePath, oldContent, newContent))
+          const diffFull = fullDiff(filePath, oldContent, newContent)
 
           let additions = 0
           let deletions = 0
@@ -130,6 +134,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           })
 
           totalDiff += diff + "\n"
+          totalDiffFull.push(diffFull)
           break
         }
 
@@ -138,6 +143,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             throw new Error(`apply_patch verification failed: ${error}`)
           })
           const deleteDiff = trimDiff(createTwoFilesPatch(filePath, filePath, contentToDelete, ""))
+          const deleteDiffFull = fullDiff(filePath, contentToDelete, "")
 
           const deletions = contentToDelete.split("\n").length
 
@@ -152,18 +158,21 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           })
 
           totalDiff += deleteDiff + "\n"
+          totalDiffFull.push(deleteDiffFull)
           break
         }
       }
     }
 
     // Check permissions if needed
+    const diffFull = totalDiffFull.join("\n")
     await ctx.ask({
       permission: "edit",
       patterns: fileChanges.map((c) => path.relative(Instance.worktree, c.filePath)),
       always: ["*"],
       metadata: {
         diff: totalDiff,
+        diffFull,
       },
     })
 
@@ -260,6 +269,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       title: output,
       metadata: {
         diff: totalDiff,
+        diffFull,
         files,
         diagnostics,
       },
