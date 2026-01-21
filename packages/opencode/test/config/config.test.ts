@@ -1412,3 +1412,39 @@ describe("deduplicatePlugins", () => {
     })
   })
 })
+
+describe("MCP OAuth callbackHost validation", () => {
+  test("accepts valid callbackHost", () => {
+    const result = Config.McpOAuth.safeParse({ callbackHost: "0.0.0.0" })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.callbackHost).toBe("0.0.0.0")
+  })
+
+  test("accepts 127.0.0.1", () => {
+    const result = Config.McpOAuth.safeParse({ callbackHost: "127.0.0.1" })
+    expect(result.success).toBe(true)
+  })
+
+  test("rejects empty string", () => {
+    const result = Config.McpOAuth.safeParse({ callbackHost: "" })
+    expect(result.success).toBe(false)
+  })
+
+  test("allows omitting callbackHost", () => {
+    const result = Config.McpOAuth.safeParse({})
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.callbackHost).toBeUndefined()
+  })
+
+  test("works with other oauth fields", () => {
+    const result = Config.McpOAuth.safeParse({
+      clientId: "my-client",
+      callbackHost: "0.0.0.0",
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.clientId).toBe("my-client")
+      expect(result.data.callbackHost).toBe("0.0.0.0")
+    }
+  })
+})

@@ -23,6 +23,10 @@ const HTML_SUCCESS = `<!DOCTYPE html>
 </body>
 </html>`
 
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+}
+
 const HTML_ERROR = (error: string) => `<!DOCTYPE html>
 <html>
 <head>
@@ -39,7 +43,7 @@ const HTML_ERROR = (error: string) => `<!DOCTYPE html>
   <div class="container">
     <h1>Authorization Failed</h1>
     <p>An error occurred during authorization.</p>
-    <div class="error">${error}</div>
+    <div class="error">${escapeHtml(error)}</div>
   </div>
 </body>
 </html>`
@@ -52,21 +56,34 @@ interface PendingAuth {
 
 export namespace McpOAuthCallback {
   let server: ReturnType<typeof Bun.serve> | undefined
+  let currentHost: string | undefined
   const pendingAuths = new Map<string, PendingAuth>()
 
   const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
-  export async function ensureRunning(): Promise<void> {
-    if (server) return
+  export async function ensureRunning(opts?: { callbackHost?: string }): Promise<void> {
+    const callbackHost = opts?.callbackHost
 
-    const running = await isPortInUse()
+    if (server && callbackHost === currentHost) return
+    if (server && callbackHost !== currentHost) {
+      log.info("restarting oauth callback server with new host", { oldHost: currentHost, newHost: callbackHost })
+      server.stop()
+      server = undefined
+    }
+
+    const checkHost = !callbackHost || callbackHost === "0.0.0.0" ? "127.0.0.1" : callbackHost
+    const running = await isPortInUse(checkHost)
     if (running) {
-      log.info("oauth callback server already running on another instance", { port: OAUTH_CALLBACK_PORT })
+      log.info("oauth callback server already running on another instance", {
+        port: OAUTH_CALLBACK_PORT,
+        host: checkHost,
+      })
       return
     }
 
     server = Bun.serve({
       port: OAUTH_CALLBACK_PORT,
+      ...(callbackHost ? { hostname: callbackHost } : {}),
       fetch(req) {
         const url = new URL(req.url)
 
@@ -133,7 +150,8 @@ export namespace McpOAuthCallback {
       },
     })
 
-    log.info("oauth callback server started", { port: OAUTH_CALLBACK_PORT })
+    currentHost = callbackHost
+    log.info("oauth callback server started", { port: OAUTH_CALLBACK_PORT, host: callbackHost ?? "default" })
   }
 
   export function waitForCallback(oauthState: string): Promise<string> {
@@ -158,10 +176,10 @@ export namespace McpOAuthCallback {
     }
   }
 
-  export async function isPortInUse(): Promise<boolean> {
+  export async function isPortInUse(host: string = "127.0.0.1"): Promise<boolean> {
     return new Promise((resolve) => {
       Bun.connect({
-        hostname: "127.0.0.1",
+        hostname: host,
         port: OAUTH_CALLBACK_PORT,
         socket: {
           open(socket) {
