@@ -26,6 +26,7 @@ import { Log } from "@/util/log"
 import { LspTool } from "./lsp"
 import { Truncate } from "./truncation"
 import { PlanExitTool, PlanEnterTool } from "./plan"
+import type { Provider } from "../provider/provider"
 import { ApplyPatchTool } from "./apply_patch"
 
 export namespace ToolRegistry {
@@ -68,7 +69,7 @@ export namespace ToolRegistry {
         description: def.description,
         execute: async (args, ctx) => {
           const result = await def.execute(args as any, ctx)
-          const out = await Truncate.output(result, {}, initCtx?.agent)
+          const out = await Truncate.output(result, { model: initCtx?.model }, initCtx?.agent)
           return {
             title: "",
             output: out.truncated ? out.content : result,
@@ -127,6 +128,7 @@ export namespace ToolRegistry {
       modelID: string
     },
     agent?: Agent.Info,
+    fullModel?: Provider.Model,
   ) {
     const tools = await all()
     const result = await Promise.all(
@@ -149,7 +151,7 @@ export namespace ToolRegistry {
           using _ = log.time(t.id)
           return {
             id: t.id,
-            ...(await t.init({ agent })),
+            ...(await t.init({ agent, model: fullModel })),
           }
         }),
     )

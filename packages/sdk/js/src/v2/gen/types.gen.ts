@@ -1757,6 +1757,14 @@ export type Config = {
      * Enable pruning of old tool outputs (default: true)
      */
     prune?: boolean
+    /**
+     * Percentage of context window to trigger compaction (default: 0.9). Value between 0.5 and 0.99.
+     */
+    threshold?: number
+    /**
+     * Override the model's context limit. Useful for limiting context usage on models with large context windows.
+     */
+    maxContext?: number
   }
   experimental?: {
     hook?: {
