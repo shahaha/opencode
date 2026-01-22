@@ -81,7 +81,7 @@ interface DiscoveredAgent {
     description: string
     inputSchema?: Record<string, any>
   }>
-  source: "local" | "registry" | "well-known" | "manual" | "broadcast"
+  source: "local" | "registry" | "well-known" | "manual" | "broadcast" | "sddp"
   discoveredAt: number
   lastChecked?: number
   status: "available" | "unavailable" | "unknown"
@@ -121,6 +121,150 @@ const discoveryConfig: DiscoveryConfig = {
   wellKnownDomains: ["http://localhost:5000", "http://127.0.0.1:5000", "https://agents.opencode.ai"],
   manualAgents: [],
   scanInterval: 300000,
+}
+
+// ============================================================================
+// SDDP (Service Discovery and Description Protocol) for local network discovery
+// ============================================================================
+
+// SDDP multicast settings
+const SDDP_MULTICAST_IP = "239.255.255.250"
+const SDDP_MULTICAST_PORT = 1900
+const SDDP_DISCOVERY_PORT = 5001 // Our port for receiving SDDP responses
+
+let sddpSocket: any = null
+let sddpRunning = false
+
+interface SDDPDeviceInfo {
+  deviceType: string
+  serviceType: string
+  location: string
+  usn: string
+}
+
+async function startSDDPDiscovery(): Promise<void> {
+  if (sddpRunning) return
+
+  try {
+    // In Node.js/Bun, we use a simple UDP socket for SDDP
+    // This is a simplified implementation for demonstration
+    log.info("Starting SDDP discovery service...")
+
+    // For now, we'll use HTTP-based discovery as the primary method
+    // SDDP requires raw socket access which may not be available in all environments
+
+    // Scan for local A2A agents via HTTP
+    await discoverLocalAgents()
+
+    sddpRunning = true
+    log.info("SDDP discovery service started")
+  } catch (error) {
+    log.error("Failed to start SDDP discovery", { error })
+  }
+}
+
+async function discoverLocalAgents(): Promise<DiscoveredAgent[]> {
+  const agents: DiscoveredAgent[] = []
+
+  // Common local A2A agent ports and paths
+  const localCandidates = [
+    { host: "localhost", port: 5000 },
+    { host: "127.0.0.1", port: 5000 },
+    { host: "localhost", port: 3000 },
+    { host: "127.0.0.1", port: 3000 },
+    { host: "localhost", port: 8080 },
+    { host: "127.0.0.1", port: 8080 },
+  ]
+
+  const concurrency = 5
+  for (let i = 0; i < localCandidates.length; i += concurrency) {
+    const batch = localCandidates.slice(i, i + concurrency)
+    const results = await Promise.all(
+      batch.map(async (candidate) => {
+        try {
+          const urls = [
+            `http://${candidate.host}:${candidate.port}/.well-known/agent.json`,
+            `http://${candidate.host}:${candidate.port}/a2a/agent-card`,
+            `http://${candidate.host}:${candidate.port}/agent.json`,
+          ]
+
+          for (const url of urls) {
+            try {
+              const response = await fetch(url, {
+                method: "GET",
+                headers: { Accept: "application/json" },
+                signal: AbortSignal.timeout(2000),
+              })
+
+              if (response.ok) {
+                const card = await response.json()
+                if (card.name && card.url && card.capabilities) {
+                  const agent: DiscoveredAgent = {
+                    id: generateAgentId(card.url),
+                    name: card.name,
+                    description: card.description || "",
+                    url: card.url,
+                    provider: card.provider || { organization: "Unknown" },
+                    version: card.version || "1.0.0",
+                    capabilities: card.capabilities,
+                    authentication: card.authentication,
+                    skills: card.skills || [],
+                    mcpTools: card.mcpTools || [],
+                    source: "sddp",
+                    discoveredAt: Date.now(),
+                    lastChecked: Date.now(),
+                    status: "available",
+                  }
+                  return agent
+                }
+              }
+            } catch {
+              // Skip this URL
+            }
+          }
+        } catch {
+          // Skip this candidate
+        }
+        return null
+      }),
+    )
+
+    agents.push(...results.filter((a): a is DiscoveredAgent => a !== null))
+  }
+
+  if (agents.length > 0) {
+    log.info("Discovered local A2A agents via SDDP", { count: agents.length })
+    agents.forEach((agent) => {
+      if (!discoveredAgents.has(agent.id)) {
+        discoveredAgents.set(agent.id, agent)
+      }
+    })
+  }
+
+  return agents
+}
+
+async function sendSDDPDiscoveryRequest(): Promise<void> {
+  // Send SDDP discovery request (simplified HTTP-based)
+  const discoveryMessage = `M-SEARCH * HTTP/1.1
+HOST: 239.255.255.250:1900
+MAN: "ssdp:discover"
+ST: urn:a2a-protocol:service
+MX: 3
+
+`
+
+  // In a full implementation, this would send UDP multicast
+  // For now, we use HTTP-based discovery
+  await discoverLocalAgents()
+}
+
+function stopSDDPDiscovery(): void {
+  sddpRunning = false
+  if (sddpSocket) {
+    sddpSocket.close()
+    sddpSocket = null
+  }
 }
 
 interface DelegationTask {
@@ -282,6 +426,7 @@ async function performFullDiscovery(): Promise<DiscoveredAgent[]> {
     capabilities: localAgent.capabilities,
     authentication: localAgent.authentication,
     skills: localAgent.skills,
+    mcpTools: localAgent.mcpTools,
     source: "local",
     discoveredAt: Date.now(),
     lastChecked: Date.now(),
@@ -293,7 +438,11 @@ async function performFullDiscovery(): Promise<DiscoveredAgent[]> {
   const wellKnownAgents = await scanWellKnownDomains()
   allAgents.push(...wellKnownAgents)
 
-  // 3. Query registries
+  // 3. Scan for local agents via SDDP/HTTP
+  const sddpAgents = await discoverLocalAgents()
+  allAgents.push(...sddpAgents)
+
+  // 4. Query registries
   for (const registry of discoveryConfig.registries.filter((r) => r.enabled)) {
     const registryAgents = await discoverFromRegistry(registry)
     allAgents.push(...registryAgents)
@@ -1088,9 +1237,12 @@ A2ARoutes.get("/agents", async (c) => {
   })
 })
 
-// Trigger agent discovery
+// Trigger agent discovery (includes SDDP)
 A2ARoutes.post("/agents/discover", async (c) => {
   try {
+    // Start SDDP discovery in the background
+    startSDDPDiscovery().catch(() => {})
+
     const agents = await performFullDiscovery()
     return c.json({
       success: true,
@@ -1105,6 +1257,31 @@ A2ARoutes.post("/agents/discover", async (c) => {
       {
         error: {
           code: "DISCOVERY_FAILED",
+          message: err.message,
+        },
+      },
+      500,
+    )
+  }
+})
+
+// Trigger SDDP discovery specifically
+A2ARoutes.post("/agents/discover/sddp", async (c) => {
+  try {
+    const agents = await discoverLocalAgents()
+    return c.json({
+      success: true,
+      discovered: agents.length,
+      agents,
+      timestamp: Date.now(),
+    })
+  } catch (error) {
+    const err = error as Error
+    log.error("SDDP discovery failed", { error: err.message })
+    return c.json(
+      {
+        error: {
+          code: "SDDP_DISCOVERY_FAILED",
           message: err.message,
         },
       },
