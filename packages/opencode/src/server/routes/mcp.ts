@@ -221,5 +221,68 @@ export const McpRoutes = lazy(() =>
         await MCP.disconnect(name)
         return c.json(true)
       },
+    )
+    .post(
+      "/:name/call",
+      describeRoute({
+        summary: "Call MCP tool",
+        description: "Invoke a tool on an MCP server",
+        operationId: "mcp.call",
+        responses: {
+          200: {
+            description: "Tool invocation result",
+            content: {
+              "application/json": {
+                schema: resolver(z.any()),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          toolName: z.string(),
+          arguments: z.record(z.string(), z.any()),
+        }),
+      ),
+      async (c) => {
+        const name = c.req.param("name")
+        const { toolName, arguments: args } = c.req.valid("json")
+        const result = await MCP.callTool(name, toolName, args)
+        return c.json(result)
+      },
+    )
+    .get(
+      "/:name/tools",
+      describeRoute({
+        summary: "List MCP tools",
+        description: "List all tools available on an MCP server",
+        operationId: "mcp.tools",
+        responses: {
+          200: {
+            description: "List of tools",
+            content: {
+              "application/json": {
+                schema: resolver(z.record(z.string(), z.string())),
+              },
+            },
+          },
+        },
+      }),
+      validator("param", z.object({ name: z.string() })),
+      async (c) => {
+        const { name } = c.req.valid("param")
+        const tools = await MCP.tools()
+        const prefix = name + "_"
+        const clientTools: Record<string, string> = {}
+        for (const [key, tool] of Object.entries(tools)) {
+          if (key.startsWith(prefix)) {
+            clientTools[key] = (tool as any).description || key
+          }
+        }
+        return c.json(clientTools)
+      },
     ),
 )

@@ -918,9 +918,37 @@ export namespace MCP {
    * Get the authentication status for an MCP server.
    */
   export async function getAuthStatus(mcpName: string): Promise<AuthStatus> {
-    const hasTokens = await hasStoredTokens(mcpName)
-    if (!hasTokens) return "not_authenticated"
-    const expired = await McpAuth.isTokenExpired(mcpName)
-    return expired ? "expired" : "authenticated"
+    const s = await state()
+    const client = s.clients[mcpName]
+    if (!client) {
+      return "not_authenticated"
+    }
+    try {
+      await client.listTools()
+      return "authenticated"
+    } catch (error) {
+      return "not_authenticated"
+    }
+  }
+
+  export async function callTool(clientName: string, toolName: string, args: Record<string, unknown>) {
+    const s = await state()
+    const client = s.clients[clientName]
+    if (!client) {
+      throw new Error(`MCP client not found: ${clientName}`)
+    }
+
+    const cfg = await Config.get()
+    const config = cfg.mcp ?? {}
+    const mcpConfig = config[clientName]
+    const entry = isMcpConfigured(mcpConfig) ? mcpConfig : undefined
+    const timeout = entry?.timeout ?? DEFAULT_TIMEOUT
+
+    const result = await client.callTool({ name: toolName, arguments: args }, CallToolResultSchema, {
+      resetTimeoutOnProgress: true,
+      timeout,
+    })
+
+    return result
   }
 }

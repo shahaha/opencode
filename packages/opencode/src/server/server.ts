@@ -41,6 +41,9 @@ import { PermissionRoutes } from "./routes/permission"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
 
+import { AGUIRoutes as aguiRoutes } from "./routes/ag-ui"
+import { a2aRoutes } from "./routes/a2a"
+
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
 
@@ -164,9 +167,33 @@ export namespace Server {
         .route("/permission", PermissionRoutes())
         .route("/question", QuestionRoutes())
         .route("/provider", ProviderRoutes())
+        .route("/a2a", a2aRoutes)
+        .get("/.well-known/agent.json", async (c) => {
+          const { getAgentCard } = await import("./routes/a2a")
+          const agentCard = getAgentCard()
+          c.header("Access-Control-Allow-Origin", "*")
+          return c.json(agentCard)
+        })
         .route("/", FileRoutes())
         .route("/mcp", McpRoutes())
         .route("/tui", TuiRoutes())
+        .use(async (c, next) => {
+          let directory = c.req.query("directory") || c.req.header("x-opencode-directory") || process.cwd()
+          try {
+            directory = decodeURIComponent(directory)
+          } catch {
+            // fallback to original value
+          }
+          return Instance.provide({
+            directory,
+            init: InstanceBootstrap,
+            async fn() {
+              return next()
+            },
+          })
+        })
+        .route("/ag-ui", aguiRoutes)
+        .route("/a2a", a2aRoutes)
         .post(
           "/instance/dispose",
           describeRoute({

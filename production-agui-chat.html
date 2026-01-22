@@ -1,0 +1,2236 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AG-UI Chat - Production</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f5f5f5;
+        --text-primary: #333333;
+        --text-secondary: #666666;
+        --border-color: #e0e0e0;
+        --accent-color: #2196f3;
+        --accent-hover: #1976d2;
+        --user-bubble: #2196f3;
+        --agent-bubble: #f5f5f5;
+        --error-color: #f44336;
+        --success-color: #4caf50;
+        --warning-color: #ff9800;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .app-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+
+      /* Header */
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 20px;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        gap: 16px;
+      }
+      .header-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+      .header-controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      /* Model Selector */
+      .model-selector {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .model-selector label {
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+      .model-selector select {
+        padding: 6px 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 13px;
+        min-width: 180px;
+        cursor: pointer;
+      }
+
+      /* Connection Status */
+      .connection-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 12px;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+      }
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+      .status-dot.connected {
+        background: var(--success-color);
+      }
+      .status-dot.disconnected {
+        background: var(--error-color);
+      }
+      .status-dot.connecting {
+        background: var(--warning-color);
+        animation: pulse 1s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      /* Settings Toggle */
+      .settings-toggle {
+        background: none;
+        border: none;
+        font-size: 20px;
+        cursor: pointer;
+        padding: 6px;
+        border-radius: 6px;
+        transition: background 0.2s;
+      }
+      .settings-toggle:hover {
+        background: var(--bg-primary);
+      }
+
+      /* Chat Container */
+      .chat-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        scroll-behavior: smooth;
+      }
+      .message {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 16px;
+        max-width: 85%;
+      }
+      .message.user {
+        flex-direction: row-reverse;
+        margin-left: auto;
+        max-width: 75%;
+      }
+      .message-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        flex-shrink: 0;
+      }
+      .message.agent .message-avatar {
+        background: var(--accent-color);
+        color: white;
+      }
+      .message.user .message-avatar {
+        background: var(--text-secondary);
+        color: white;
+      }
+      .message-content {
+        padding: 12px 16px;
+        border-radius: 16px;
+        line-height: 1.5;
+        word-wrap: break-word;
+      }
+      .message.agent .message-content {
+        background: var(--agent-bubble);
+        border: 1px solid var(--border-color);
+        border-top-left-radius: 4px;
+      }
+      .message.user .message-content {
+        background: var(--user-bubble);
+        color: white;
+        border-top-right-radius: 4px;
+      }
+      .message-meta {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-top: 4px;
+        padding: 0 4px;
+      }
+      .message.user .message-meta {
+        text-align: right;
+      }
+
+      /* Typing Indicator */
+      .typing-indicator {
+        display: none;
+        padding: 12px 16px;
+        background: var(--agent-bubble);
+        border-radius: 16px;
+        border: 1px solid var(--border-color);
+        border-top-left-radius: 4px;
+        max-width: 60px;
+      }
+      .typing-indicator.visible {
+        display: flex;
+        gap: 4px;
+      }
+      .typing-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text-secondary);
+        animation: typing 1.4s infinite;
+      }
+      .typing-dot:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      .typing-dot:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+
+      @keyframes typing {
+        0%,
+        60%,
+        100% {
+          transform: translateY(0);
+        }
+        30% {
+          transform: translateY(-4px);
+        }
+      }
+
+      /* Input Area */
+      .input-area {
+        padding: 16px 20px;
+        background: var(--bg-primary);
+        border-top: 1px solid var(--border-color);
+      }
+      .input-container {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+      }
+      .input-wrapper {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .input-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      #messageInput {
+        flex: 1;
+        padding: 12px 16px;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        font-size: 14px;
+        resize: none;
+        min-height: 48px;
+        max-height: 120px;
+        font-family: inherit;
+      }
+      #messageInput:focus {
+        outline: none;
+        border-color: var(--accent-color);
+      }
+
+      .input-actions {
+        display: flex;
+        gap: 4px;
+      }
+      .input-btn {
+        background: none;
+        border: none;
+        padding: 8px;
+        cursor: pointer;
+        border-radius: 8px;
+        transition: background 0.2s;
+        font-size: 18px;
+      }
+      .input-btn:hover {
+        background: var(--bg-secondary);
+      }
+      .input-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      #sendButton {
+        padding: 12px 24px;
+        background: var(--accent-color);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 14px;
+        transition: background 0.2s;
+      }
+      #sendButton:hover:not(:disabled) {
+        background: var(--accent-hover);
+      }
+      #sendButton:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      /* Image Preview */
+      .image-preview {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .image-preview-item {
+        position: relative;
+        width: 60px;
+        height: 60px;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+      }
+      .image-preview-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .image-preview-item button {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        width: 18px;
+        height: 18px;
+        border: none;
+        background: rgba(0, 0, 0, 0.6);
+        color: white;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* Settings Panel */
+      .settings-panel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 360px;
+        background: var(--bg-primary);
+        border-left: 1px solid var(--border-color);
+        padding: 24px;
+        z-index: 1000;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+      }
+      .settings-panel.visible {
+        transform: translateX(0);
+      }
+      .settings-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+      }
+      .settings-header h2 {
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .settings-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        padding: 4px;
+        color: var(--text-secondary);
+      }
+      .settings-section {
+        margin-bottom: 24px;
+      }
+      .settings-section h3 {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .setting-row {
+        margin-bottom: 16px;
+      }
+      .setting-row label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 6px;
+        color: var(--text-primary);
+      }
+      .setting-row input,
+      .setting-row select {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 14px;
+      }
+      .setting-row input:focus,
+      .setting-row select:focus {
+        outline: none;
+        border-color: var(--accent-color);
+      }
+
+      /* Workspace Dropdown */
+      .workspace-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .workspace-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .workspace-item:hover {
+        background: var(--bg-secondary);
+        border-color: var(--accent-color);
+      }
+      .workspace-item.active {
+        background: var(--accent-color);
+        color: white;
+        border-color: var(--accent-color);
+      }
+      .workspace-item .name {
+        flex: 1;
+        font-size: 14px;
+      }
+      .workspace-item .path {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .workspace-item.active .path {
+        color: rgba(255, 255, 255, 0.8);
+      }
+      .workspace-item .delete {
+        background: none;
+        border: none;
+        padding: 4px;
+        cursor: pointer;
+        opacity: 0.5;
+        font-size: 16px;
+      }
+      .workspace-item .delete:hover {
+        opacity: 1;
+      }
+      .workspace-item.active .delete {
+        color: white;
+      }
+
+      .add-workspace {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .add-workspace input {
+        flex: 1;
+      }
+      .add-workspace button {
+        padding: 10px 16px;
+        background: var(--accent-color);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+      }
+
+      /* Metrics Display */
+      .metrics {
+        display: flex;
+        gap: 16px;
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .metric {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      /* Header Workspace Display */
+      .header-workspace {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .header-workspace:hover {
+        border-color: var(--accent-color);
+        background: var(--bg-secondary);
+      }
+      .header-workspace-icon {
+        font-size: 14px;
+      }
+      .header-workspace-path {
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--text-primary);
+      }
+      .header-workspace-arrow {
+        font-size: 10px;
+        color: var(--text-secondary);
+      }
+
+      /* MCP Hover Menu */
+      .header-mcp {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .header-mcp:hover {
+        border-color: var(--accent-color);
+        background: var(--bg-secondary);
+      }
+      .header-mcp-icon {
+        font-size: 14px;
+      }
+      .header-mcp-count {
+        background: var(--accent-color);
+        color: white;
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 10px;
+        font-weight: 600;
+      }
+      .header-mcp-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        margin-top: 4px;
+        min-width: 220px;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-10px);
+        transition: all 0.2s ease;
+        z-index: 1001;
+        overflow: hidden;
+      }
+      .header-mcp:hover .header-mcp-menu,
+      .header-mcp-menu.visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+      }
+      .header-mcp-menu-title {
+        padding: 10px 14px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-secondary);
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+      }
+      .header-mcp-menu-list {
+        max-height: 300px;
+        overflow-y: auto;
+      }
+      .header-mcp-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .header-mcp-menu-item:hover {
+        background: var(--bg-secondary);
+      }
+      .header-mcp-menu-item:first-child {
+        border-radius: 8px 8px 0 0;
+      }
+      .header-mcp-menu-item:last-child {
+        border-radius: 0 0 8px 8px;
+      }
+      .header-mcp-menu-item:only-child {
+        border-radius: 8px;
+      }
+      .header-mcp-status {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .header-mcp-status.connected {
+        background: var(--success-color);
+        box-shadow: 0 0 6px var(--success-color);
+      }
+      .header-mcp-status.disconnected {
+        background: var(--error-color);
+      }
+      .header-mcp-status.connecting {
+        background: var(--warning-color);
+        animation: pulse 1s infinite;
+      }
+      .header-mcp-name {
+        flex: 1;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-primary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .header-mcp-tools {
+        font-size: 11px;
+        color: var(--text-secondary);
+        background: var(--bg-secondary);
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      .header-mcp-empty {
+        padding: 20px 14px;
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 13px;
+      }
+      .header-mcp-loading {
+        padding: 14px;
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 12px;
+      }
+      .header-mcp-loading-icon {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--border-color);
+        border-top-color: var(--accent-color);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-right: 8px;
+        vertical-align: middle;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* A2A Agent Section */
+      .header-a2a {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .header-a2a:hover {
+        border-color: var(--accent-color);
+        background: var(--bg-secondary);
+      }
+      .header-a2a-icon {
+        font-size: 14px;
+      }
+      .header-a2a-count {
+        background: var(--success-color);
+        color: white;
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 10px;
+        font-weight: 600;
+      }
+      .header-a2a-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        margin-top: 4px;
+        min-width: 280px;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-10px);
+        transition: all 0.2s ease;
+        z-index: 1002;
+        overflow: hidden;
+      }
+      .header-a2a:hover .header-a2a-menu,
+      .header-a2a-menu.visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+      }
+      .header-a2a-menu-title {
+        padding: 10px 14px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-secondary);
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .header-a2a-menu-title button {
+        background: none;
+        border: none;
+        padding: 4px 8px;
+        font-size: 11px;
+        color: var(--accent-color);
+        cursor: pointer;
+        border-radius: 4px;
+      }
+      .header-a2a-menu-title button:hover {
+        background: var(--bg-primary);
+      }
+      .header-a2a-menu-list {
+        max-height: 320px;
+        overflow-y: auto;
+      }
+      .header-a2a-menu-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 14px;
+        cursor: pointer;
+        transition: background 0.15s;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .header-a2a-menu-item:hover {
+        background: var(--bg-secondary);
+      }
+      .header-a2a-menu-item:last-child {
+        border-bottom: none;
+      }
+      .header-a2a-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: var(--accent-color);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+      .header-a2a-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .header-a2a-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-primary);
+        margin-bottom: 2px;
+      }
+      .header-a2a-desc {
+        font-size: 11px;
+        color: var(--text-secondary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .header-a2a-skills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 6px;
+      }
+      .header-a2a-skill {
+        font-size: 10px;
+        color: var(--accent-color);
+        background: rgba(33, 150, 243, 0.1);
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      .header-a2a-url {
+        font-size: 10px;
+        color: var(--text-secondary);
+        margin-top: 4px;
+      }
+      .header-a2a-empty {
+        padding: 24px 14px;
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 13px;
+      }
+      .header-a2a-loading {
+        padding: 20px;
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 12px;
+      }
+      .header-a2a-refresh {
+        background: none;
+        border: none;
+        padding: 4px 8px;
+        font-size: 12px;
+        color: var(--accent-color);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .header-a2a-refresh:hover {
+        text-decoration: underline;
+      }
+
+      /* MCP Tools Section */
+      .header-a2a-mcp {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border-color);
+      }
+      .header-a2a-mcp-label {
+        font-size: 10px;
+        color: var(--text-secondary);
+        width: 100%;
+        margin-bottom: 2px;
+      }
+      .header-a2a-mcp-tool {
+        font-size: 10px;
+        color: var(--success-color);
+        background: rgba(76, 175, 80, 0.1);
+        padding: 2px 6px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .header-a2a-mcp-tool::before {
+        content: "🔧";
+        font-size: 9px;
+      }
+      .header-a2a-mcp-more {
+        font-size: 10px;
+        color: var(--text-secondary);
+        padding: 2px 6px;
+        background: var(--bg-secondary);
+        border-radius: 4px;
+      }
+
+      /* Header Skills Display */
+      .header-skills {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 12px;
+        max-width: 400px;
+        overflow: hidden;
+      }
+      .header-skills-label {
+        color: var(--text-secondary);
+        font-weight: 500;
+        flex-shrink: 0;
+      }
+      .header-skills-list {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        overflow: hidden;
+        flex-wrap: nowrap;
+      }
+      .header-skills-loading {
+        color: var(--text-secondary);
+        font-style: italic;
+      }
+      .header-skill-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        background: rgba(33, 150, 243, 0.1);
+        color: var(--accent-color);
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: default;
+        transition: all 0.2s;
+      }
+      .header-skill-tag:hover {
+        background: rgba(33, 150, 243, 0.2);
+      }
+      .header-skill-tag-icon {
+        font-size: 10px;
+      }
+      .header-skills-more {
+        padding: 3px 8px;
+        background: var(--bg-secondary);
+        color: var(--text-secondary);
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: default;
+      }
+      .header-skills-empty {
+        color: var(--text-secondary);
+        font-style: italic;
+      }
+
+      /* Error Toast */
+      .toast {
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%) translateY(100px);
+        background: var(--error-color);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        opacity: 0;
+        transition: all 0.3s;
+        z-index: 2000;
+      }
+      .toast.visible {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+      }
+
+      /* Empty State */
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: var(--text-secondary);
+        text-align: center;
+        padding: 40px;
+      }
+      .empty-state-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+        opacity: 0.5;
+      }
+      .empty-state h3 {
+        font-size: 18px;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+      }
+      .empty-state p {
+        font-size: 14px;
+        max-width: 300px;
+      }
+
+      /* Delegation Panel */
+      .delegation-panel {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.2);
+        width: 400px;
+        max-width: 90vw;
+        max-height: 80vh;
+        overflow: hidden;
+        z-index: 2000;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+      }
+      .delegation-panel.visible {
+        opacity: 1;
+        visibility: visible;
+      }
+      .delegation-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 1999;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+      }
+      .delegation-overlay.visible {
+        opacity: 1;
+        visibility: visible;
+      }
+      .delegation-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+      }
+      .delegation-header h3 {
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .delegation-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: var(--text-secondary);
+        padding: 0;
+        line-height: 1;
+      }
+      .delegation-content {
+        padding: 20px;
+        max-height: 400px;
+        overflow-y: auto;
+      }
+      .delegation-agent-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .delegation-agent-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .delegation-agent-item:hover {
+        border-color: var(--accent-color);
+        background: var(--bg-secondary);
+      }
+      .delegation-agent-item.selected {
+        border-color: var(--accent-color);
+        background: rgba(33, 150, 243, 0.1);
+      }
+      .delegation-agent-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        background: var(--accent-color);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+      .delegation-agent-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .delegation-agent-name {
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 2px;
+      }
+      .delegation-agent-source {
+        font-size: 11px;
+        color: var(--text-secondary);
+      }
+      .delegation-agent-skills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 6px;
+      }
+      .delegation-agent-skill {
+        font-size: 10px;
+        padding: 2px 6px;
+        background: rgba(33, 150, 243, 0.1);
+        color: var(--accent-color);
+        border-radius: 4px;
+      }
+      .delegation-message {
+        margin-bottom: 16px;
+      }
+      .delegation-message label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 6px;
+      }
+      .delegation-message textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: inherit;
+        resize: vertical;
+        min-height: 80px;
+      }
+      .delegation-message textarea:focus {
+        outline: none;
+        border-color: var(--accent-color);
+      }
+      .delegation-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+      .delegation-btn {
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .delegation-btn.cancel {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+      }
+      .delegation-btn.submit {
+        background: var(--accent-color);
+        border: none;
+        color: white;
+      }
+      .delegation-btn.submit:hover {
+        background: var(--accent-hover);
+      }
+      .delegation-btn.submit:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .delegation-result {
+        margin-top: 16px;
+        padding: 12px;
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        font-size: 13px;
+      }
+      .delegation-status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .delegation-status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+      .delegation-status-dot.pending {
+        background: var(--warning-color);
+      }
+      .delegation-status-dot.delegated {
+        background: var(--accent-color);
+      }
+      .delegation-status-dot.completed {
+        background: var(--success-color);
+      }
+      .delegation-status-dot.failed {
+        background: var(--error-color);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-container">
+      <!-- Header -->
+      <div class="header">
+        <div class="header-title">🤖 AG-UI Chat</div>
+        <div class="header-workspace" id="headerWorkspace" title="Click to change workspace">
+          <span class="header-workspace-icon">📁</span>
+          <span class="header-workspace-path" id="headerWorkspacePath">Loading...</span>
+          <span class="header-workspace-arrow">▼</span>
+        </div>
+        <div class="header-mcp" id="headerMcp" title="View connected MCP servers">
+          <span class="header-mcp-icon">🔗</span>
+          <span class="header-mcp-count" id="headerMcpCount">0</span>
+          <span class="header-workspace-arrow">▼</span>
+          <div class="header-mcp-menu" id="headerMcpMenu">
+            <div class="header-mcp-menu-title">MCP Servers</div>
+            <div class="header-mcp-menu-list" id="headerMcpList">
+              <div class="header-mcp-loading">
+                <span class="header-mcp-loading-icon"></span>
+                Loading...
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="header-a2a" id="headerA2a" title="View A2A-compatible agents">
+          <span class="header-a2a-icon">🤖</span>
+          <span class="header-a2a-count" id="headerA2aCount">0</span>
+          <span class="header-workspace-arrow">▼</span>
+          <div class="header-a2a-menu" id="headerA2aMenu">
+            <div class="header-a2a-menu-title">
+              <span>A2A Agents</span>
+              <button class="header-a2a-refresh" id="refreshA2aBtn" title="Refresh agents">🔄 Refresh</button>
+            </div>
+            <div class="header-a2a-menu-list" id="headerA2aList">
+              <div class="header-a2a-loading">
+                <span class="header-mcp-loading-icon"></span>
+                Discovering agents...
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="header-skills" id="headerSkills" title="Available skills">
+          <span class="header-skills-label">Skills:</span>
+          <div class="header-skills-list" id="headerSkillsList">
+            <span class="header-skills-loading">Loading...</span>
+          </div>
+        </div>
+        <div class="header-controls">
+          <div class="model-selector">
+            <label for="modelSelect">Model:</label>
+            <select id="modelSelect">
+              <option value="ollama/llava:latest">llava:latest (Vision)</option>
+              <option value="ollama/llama3.2-vision:11b">llama3.2-vision:11b (Vision)</option>
+              <option value="ollama/bakllava:latest">bakllava:latest (Vision)</option>
+              <option value="ollama/llama3.2:1b">llama3.2:1b</option>
+              <option value="ollama/llama3.2:3b">llama3.2:3b</option>
+              <option value="ollama/llama3.1:8b">llama3.1:8b</option>
+              <option value="ollama/llama3.1:70b">llama3.1:70b</option>
+              <option value="ollama/qwen2.5:0.5b">qwen2.5:0.5b</option>
+              <option value="ollama/qwen2.5:1.5b">qwen2.5:1.5b</option>
+              <option value="ollama/qwen2.5:3b">qwen2.5:3b</option>
+              <option value="ollama/codellama:7b">codellama:7b</option>
+              <option value="ollama/deepseek-coder:6.7b">deepseek-coder:6.7b</option>
+            </select>
+          </div>
+          <div class="connection-status" id="connectionStatus">
+            <span class="status-dot disconnected"></span>
+            <span class="status-text">Disconnected</span>
+          </div>
+          <button class="settings-toggle" id="settingsToggleBtn" title="Settings">⚙️</button>
+        </div>
+      </div>
+
+      <!-- Chat Container -->
+      <div class="chat-container" id="chatContainer">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-state-icon">💬</div>
+          <h3>Start a Conversation</h3>
+          <p>
+            Send a message to begin chatting with the AI agent. You can also upload images for vision-capable models.
+          </p>
+        </div>
+        <div class="message agent">
+          <div class="message-avatar">AI</div>
+          <div class="message-content">
+            <div>Welcome to AG-UI Chat! I'm ready to help you with coding, analysis, or any questions you have.</div>
+            <div class="message-meta">AG-UI Bot • Just now</div>
+          </div>
+        </div>
+        <div class="typing-indicator" id="typingIndicator">
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+        </div>
+      </div>
+
+      <!-- Input Area -->
+      <div class="input-area">
+        <div class="input-container">
+          <div class="input-wrapper">
+            <div class="input-row">
+              <input type="text" id="messageInput" placeholder="Type your message..." rows="1" />
+              <div class="input-actions">
+                <button class="input-btn" id="uploadBtn" title="Upload Image">📷</button>
+                <button class="input-btn" id="fileBtn" title="Upload File">📎</button>
+              </div>
+            </div>
+            <div class="image-preview" id="imagePreview"></div>
+          </div>
+          <button id="sendButton">Send</button>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" multiple style="display: none" />
+      </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div class="settings-panel" id="settingsPanel">
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <button class="settings-close" id="settingsCloseBtn">&times;</button>
+      </div>
+
+      <div class="settings-section">
+        <h3>Workspace</h3>
+        <div class="workspace-list" id="workspaceList"></div>
+        <div class="add-workspace">
+          <input type="text" id="newWorkspacePath" placeholder="Enter workspace path..." />
+          <button id="addWorkspaceBtn">Add</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Configuration</h3>
+        <div class="setting-row">
+          <label for="serverUrl">Server URL</label>
+          <input type="text" id="serverUrl" value="ws://localhost:5000/ag-ui/ws" />
+        </div>
+        <div class="setting-row">
+          <label for="timeoutSetting">Request Timeout (ms)</label>
+          <input type="number" id="timeoutSetting" value="60000" />
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Metrics</h3>
+        <div class="metrics">
+          <div class="metric">
+            <span>Messages:</span>
+            <span id="messageCount">0</span>
+          </div>
+          <div class="metric">
+            <span>Latency:</span>
+            <span id="latency">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- Hidden file input -->
+    <input type="file" id="imageInput" accept="image/*" multiple style="display: none" />
+
+    <!-- Delegation Overlay -->
+    <div class="delegation-overlay" id="delegationOverlay"></div>
+
+    <!-- Delegation Panel -->
+    <div class="delegation-panel" id="delegationPanel">
+      <div class="delegation-header">
+        <h3>Delegate Task to A2A Agent</h3>
+        <button class="delegation-close" id="delegationCloseBtn">&times;</button>
+      </div>
+      <div class="delegation-content">
+        <div class="delegation-agent-list" id="delegationAgentList"></div>
+        <div class="delegation-message">
+          <label for="delegationMessage">Message</label>
+          <textarea id="delegationMessage" placeholder="Enter your message for the agent..."></textarea>
+        </div>
+        <div class="delegation-actions">
+          <button class="delegation-btn cancel" id="delegationCancelBtn">Cancel</button>
+          <button class="delegation-btn submit" id="delegationSubmitBtn" disabled>Delegate</button>
+        </div>
+        <div class="delegation-result" id="delegationResult" style="display: none"></div>
+      </div>
+    </div>
+
+    <script>
+      // Configuration
+      const DEFAULT_CONFIG = {
+        serverUrl: `ws://${window.location.hostname || "localhost"}:5000/ag-ui/ws`,
+        timeout: 60000,
+        workspacePath: "/home/rick/prj/opencode",
+        selectedModel: "ollama/llava:latest",
+      }
+
+      const DEFAULT_WORKSPACES = [
+        { name: "OpenCode", path: "/home/rick/prj/opencode" },
+        { name: "Home", path: "/home/rick" },
+        { name: "Projects", path: "/home/rick/projects" },
+        { name: "Downloads", path: "/home/rick/Downloads" },
+        { name: "Root", path: "/" },
+      ]
+
+      // State
+      let state = {
+        connected: false,
+        connecting: false,
+        messages: [],
+        images: [],
+        config: { ...DEFAULT_CONFIG },
+        messageCount: 0,
+        latency: null,
+        ws: null,
+        reconnectAttempts: 0,
+        maxReconnectAttempts: 5,
+        reconnectDelay: 1000,
+      }
+
+      // DOM Elements
+      const elements = {
+        chatContainer: null,
+        messageInput: null,
+        sendButton: null,
+        settingsToggleBtn: null,
+        settingsPanel: null,
+        settingsCloseBtn: null,
+        modelSelect: null,
+        connectionStatus: null,
+        typingIndicator: null,
+        imagePreview: null,
+        uploadBtn: null,
+        fileInput: null,
+        imageInput: null,
+        workspaceList: null,
+        newWorkspacePath: null,
+        addWorkspaceBtn: null,
+        serverUrl: null,
+        timeoutSetting: null,
+        messageCount: null,
+        latency: null,
+        toast: null,
+        emptyState: null,
+      }
+
+      // Initialize DOM references
+      function initElements() {
+        elements.chatContainer = document.getElementById("chatContainer")
+        elements.messageInput = document.getElementById("messageInput")
+        elements.sendButton = document.getElementById("sendButton")
+        elements.settingsToggleBtn = document.getElementById("settingsToggleBtn")
+        elements.settingsPanel = document.getElementById("settingsPanel")
+        elements.settingsCloseBtn = document.getElementById("settingsCloseBtn")
+        elements.modelSelect = document.getElementById("modelSelect")
+        elements.connectionStatus = document.getElementById("connectionStatus")
+        elements.typingIndicator = document.getElementById("typingIndicator")
+        elements.imagePreview = document.getElementById("imagePreview")
+        elements.uploadBtn = document.getElementById("uploadBtn")
+        elements.fileInput = document.getElementById("fileInput")
+        elements.imageInput = document.getElementById("imageInput")
+        elements.workspaceList = document.getElementById("workspaceList")
+        elements.newWorkspacePath = document.getElementById("newWorkspacePath")
+        elements.addWorkspaceBtn = document.getElementById("addWorkspaceBtn")
+        elements.serverUrl = document.getElementById("serverUrl")
+        elements.timeoutSetting = document.getElementById("timeoutSetting")
+        elements.messageCount = document.getElementById("messageCount")
+        elements.latency = document.getElementById("latency")
+        elements.toast = document.getElementById("toast")
+        elements.emptyState = document.getElementById("emptyState")
+        elements.headerWorkspace = document.getElementById("headerWorkspace")
+        elements.headerWorkspacePath = document.getElementById("headerWorkspacePath")
+        elements.headerMcp = document.getElementById("headerMcp")
+        elements.headerMcpCount = document.getElementById("headerMcpCount")
+        elements.headerMcpMenu = document.getElementById("headerMcpMenu")
+        elements.headerMcpList = document.getElementById("headerMcpList")
+        elements.headerA2a = document.getElementById("headerA2a")
+        elements.headerA2aCount = document.getElementById("headerA2aCount")
+        elements.headerA2aMenu = document.getElementById("headerA2aMenu")
+        elements.headerA2aList = document.getElementById("headerA2aList")
+        elements.refreshA2aBtn = document.getElementById("refreshA2aBtn")
+        elements.headerSkills = document.getElementById("headerSkills")
+        elements.headerSkillsList = document.getElementById("headerSkillsList")
+        elements.delegationOverlay = document.getElementById("delegationOverlay")
+        elements.delegationPanel = document.getElementById("delegationPanel")
+        elements.delegationCloseBtn = document.getElementById("delegationCloseBtn")
+        elements.delegationCancelBtn = document.getElementById("delegationCancelBtn")
+        elements.delegationSubmitBtn = document.getElementById("delegationSubmitBtn")
+        elements.delegationAgentList = document.getElementById("delegationAgentList")
+        elements.delegationMessage = document.getElementById("delegationMessage")
+        elements.delegationResult = document.getElementById("delegationResult")
+      }
+
+      // Utility Functions
+      function getWorkspaces() {
+        const stored = localStorage.getItem("customWorkspaces")
+        const customWorkspaces = stored ? JSON.parse(stored) : []
+        return [...DEFAULT_WORKSPACES, ...customWorkspaces]
+      }
+
+      function saveCustomWorkspaces(workspaces) {
+        localStorage.setItem("customWorkspaces", JSON.stringify(workspaces))
+      }
+
+      function showToast(message, duration = 3000) {
+        elements.toast.textContent = message
+        elements.toast.classList.add("visible")
+        setTimeout(() => elements.toast.classList.remove("visible"), duration)
+      }
+
+      function updateConnectionStatus(status) {
+        state.connected = status === "connected"
+        state.connecting = status === "connecting"
+
+        const dot = elements.connectionStatus.querySelector(".status-dot")
+        const text = elements.connectionStatus.querySelector(".status-text")
+
+        dot.className = "status-dot " + status
+        text.textContent = status.charAt(0).toUpperCase() + status.slice(1)
+      }
+
+      function formatTimestamp() {
+        const now = new Date()
+        return now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+      }
+
+      // Message Functions
+      function addMessage(content, role = "agent", meta = "") {
+        const isEmpty = state.messages.length === 0
+        state.messages.push({ content, role, meta, timestamp: Date.now() })
+
+        if (isEmpty) {
+          elements.emptyState.style.display = "none"
+        }
+
+        const msgDiv = document.createElement("div")
+        msgDiv.className = "message " + role
+        msgDiv.innerHTML = `
+        <div class="message-avatar">${role === "agent" ? "AI" : "U"}</div>
+        <div class="message-content">
+          <div>${content}</div>
+          ${meta ? `<div class="message-meta">${meta} • ${formatTimestamp()}</div>` : ""}
+        </div>
+      `
+
+        elements.typingIndicator.before(msgDiv)
+        elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight
+
+        state.messageCount++
+        elements.messageCount.textContent = state.messageCount
+      }
+
+      function showTyping(show) {
+        elements.typingIndicator.classList.toggle("visible", show)
+        elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight
+      }
+
+      // Workspace Functions
+      function renderWorkspaceList() {
+        const workspaces = getWorkspaces()
+        elements.workspaceList.innerHTML = ""
+
+        workspaces.forEach((ws) => {
+          const item = document.createElement("div")
+          item.className = "workspace-item" + (state.config.workspacePath === ws.path ? " active" : "")
+          item.innerHTML = `
+          <span class="name">${ws.name}</span>
+          <span class="path">${ws.path}</span>
+          ${!DEFAULT_WORKSPACES.find((d) => d.path === ws.path) ? '<button class="delete" data-path="' + ws.path + '">&times;</button>' : ""}
+        `
+
+          item.addEventListener("click", (e) => {
+            if (e.target.classList.contains("delete")) return
+            state.config.workspacePath = ws.path
+            localStorage.setItem("agui-chat-settings", JSON.stringify(state.config))
+            renderWorkspaceList()
+            updateHeaderWorkspace()
+            showToast("Workspace: " + ws.name)
+          })
+
+          elements.workspaceList.appendChild(item)
+        })
+
+        // Delete buttons
+        elements.workspaceList.querySelectorAll(".delete").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const path = btn.dataset.path
+            const workspaces = getWorkspaces().filter((w) => w.path !== path)
+            saveCustomWorkspaces(workspaces)
+            renderWorkspaceList()
+            showToast("Workspace removed")
+          })
+        })
+      }
+
+      function updateHeaderWorkspace() {
+        const workspaces = getWorkspaces()
+        const current = workspaces.find((ws) => ws.path === state.config.workspacePath)
+        if (current) {
+          elements.headerWorkspacePath.textContent = current.name
+          elements.headerWorkspacePath.title = current.path
+        } else {
+          const name = state.config.workspacePath.split("/").pop() || "Workspace"
+          elements.headerWorkspacePath.textContent = name
+          elements.headerWorkspacePath.title = state.config.workspacePath
+        }
+      }
+
+      // MCP Functions
+      let mcpFetchInterval = null
+
+      async function fetchMcpStatus() {
+        try {
+          const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:"
+          const host = window.location.hostname || "localhost"
+          const baseUrl = `http://${host}:5000`
+
+          const response = await fetch(`${baseUrl}/ag-ui/mcp/status`)
+          if (!response.ok) throw new Error("Failed to fetch MCP status")
+
+          const mcpServers = await response.json()
+          renderMcpMenu(mcpServers)
+        } catch (error) {
+          console.error("Failed to fetch MCP status:", error)
+          elements.headerMcpList.innerHTML = '<div class="header-mcp-empty">Unable to load MCP servers</div>'
+        }
+      }
+
+      function renderMcpMenu(mcpServers) {
+        const entries = Object.entries(mcpServers)
+
+        if (entries.length === 0) {
+          elements.headerMcpCount.textContent = "0"
+          elements.headerMcpList.innerHTML = '<div class="header-mcp-empty">No MCP servers connected</div>'
+          return
+        }
+
+        elements.headerMcpCount.textContent = entries.length.toString()
+
+        let html = ""
+        entries.forEach(([name, status]) => {
+          const s = status
+          const statusClass =
+            s.status === "connected" ? "connected" : s.status === "connecting" ? "connecting" : "disconnected"
+          const toolCount = s.tools ? Object.keys(s.tools).length : 0
+
+          html += `
+            <div class="header-mcp-menu-item" title="${name}">
+              <span class="header-mcp-status ${statusClass}"></span>
+              <span class="header-mcp-name">${name}</span>
+              ${toolCount > 0 ? `<span class="header-mcp-tools">${toolCount} tools</span>` : ""}
+            </div>
+          `
+        })
+
+        elements.headerMcpList.innerHTML = html
+      }
+
+      function startMcpPolling() {
+        fetchMcpStatus()
+        mcpFetchInterval = setInterval(fetchMcpStatus, 10000)
+      }
+
+      function stopMcpPolling() {
+        if (mcpFetchInterval) {
+          clearInterval(mcpFetchInterval)
+          mcpFetchInterval = null
+        }
+      }
+
+      // A2A Agent Functions
+      let a2aAgents = []
+
+      async function fetchA2aAgents() {
+        try {
+          const host = window.location.hostname || "localhost"
+          const baseUrl = `http://${host}:5000`
+
+          // Trigger discovery and fetch all agents
+          await fetch(`${baseUrl}/a2a/agents/discover`, { method: "POST" })
+
+          // Fetch all discovered agents
+          const response = await fetch(`${baseUrl}/a2a/agents`)
+          if (!response.ok) throw new Error("Failed to fetch A2A agents")
+
+          const data = await response.json()
+          a2aAgents = data.agents || []
+          renderA2aMenu()
+        } catch (error) {
+          console.error("Failed to fetch A2A agents:", error)
+          elements.headerA2aList.innerHTML = '<div class="header-a2a-empty">Unable to discover A2A agents</div>'
+        }
+      }
+
+      function renderA2aMenu() {
+        if (a2aAgents.length === 0) {
+          elements.headerA2aCount.textContent = "0"
+          elements.headerA2aList.innerHTML = '<div class="header-a2a-empty">No A2A agents discovered</div>'
+          elements.headerSkillsList.innerHTML = '<span class="header-skills-empty">No skills</span>'
+          return
+        }
+
+        elements.headerA2aCount.textContent = a2aAgents.length.toString()
+
+        let html = ""
+        let allSkills = []
+
+        a2aAgents.forEach((agent) => {
+          const initials = agent.name
+            .split(" ")
+            .map((w) => w[0])
+            .join("")
+            .toUpperCase()
+            .slice(0, 2)
+
+          const skillsHtml = agent.skills
+            ? agent.skills
+                .slice(0, 3)
+                .map((s) => `<span class="header-a2a-skill">${s.name}</span>`)
+                .join("")
+            : ""
+
+          // Generate MCP tools HTML
+          let mcpToolsHtml = ""
+          if (agent.mcpTools && agent.mcpTools.length > 0) {
+            const displayTools = agent.mcpTools.slice(0, 3)
+            const moreCount = agent.mcpTools.length - 3
+
+            mcpToolsHtml = `
+              <div class="header-a2a-mcp">
+                <span class="header-a2a-mcp-label">MCP Tools:</span>
+                ${displayTools.map((t) => `<span class="header-a2a-mcp-tool" title="${t.description}">${t.name}</span>`).join("")}
+                ${moreCount > 0 ? `<span class="header-a2a-mcp-more">+${moreCount} more</span>` : ""}
+              </div>
+            `
+          }
+
+          if (agent.skills) {
+            allSkills = allSkills.concat(agent.skills)
+          }
+
+          html += `
+            <div class="header-a2a-menu-item" title="${agent.description}">
+              <div class="header-a2a-avatar">${initials}</div>
+              <div class="header-a2a-info">
+                <div class="header-a2a-name">${agent.name}</div>
+                <div class="header-a2a-desc">${agent.description || "A2A-compatible agent"}</div>
+                ${skillsHtml ? `<div class="header-a2a-skills">${skillsHtml}</div>` : ""}
+                ${mcpToolsHtml}
+                <div class="header-a2a-url">${agent.url}</div>
+              </div>
+            </div>
+          `
+        })
+
+        elements.headerA2aList.innerHTML = html
+
+        // Render skills in header
+        renderHeaderSkills(allSkills)
+      }
+
+      function renderHeaderSkills(skills) {
+        if (!skills || skills.length === 0) {
+          elements.headerSkillsList.innerHTML = '<span class="header-skills-empty">No skills</span>'
+          return
+        }
+
+        // Get unique skills
+        const uniqueSkills = []
+        const seen = new Set()
+        skills.forEach((s) => {
+          const key = s.name.toLowerCase()
+          if (!seen.has(key)) {
+            seen.add(key)
+            uniqueSkills.push(s)
+          }
+        })
+
+        // Show first 5 skills
+        const displaySkills = uniqueSkills.slice(0, 5)
+        const moreCount = uniqueSkills.length - 5
+
+        let skillsHtml = displaySkills
+          .map((s) => {
+            // Get an icon based on skill name
+            let icon = "⚡"
+            const nameLower = s.name.toLowerCase()
+            if (nameLower.includes("code")) icon = "💻"
+            else if (nameLower.includes("file")) icon = "📄"
+            else if (nameLower.includes("explore")) icon = "🔍"
+            else if (nameLower.includes("generation") || nameLower.includes("write")) icon = "✏️"
+            else if (nameLower.includes("refactor") || nameLower.includes("fix")) icon = "🔧"
+            else if (nameLower.includes("test")) icon = "🧪"
+            else if (nameLower.includes("debug")) icon = "🐛"
+
+            return `<span class="header-skill-tag" title="${s.description || s.name}">${icon} ${s.name}</span>`
+          })
+          .join("")
+
+        if (moreCount > 0) {
+          skillsHtml += `<span class="header-skills-more">+${moreCount} more</span>`
+        }
+
+        elements.headerSkillsList.innerHTML = skillsHtml
+      }
+
+      function startA2aDiscovery() {
+        fetchA2aAgents()
+      }
+
+      // Delegation Functions
+      let selectedDelegationAgent = null
+
+      function openDelegationPanel() {
+        if (a2aAgents.length === 0) {
+          showToast("No A2A agents available")
+          return
+        }
+
+        // Populate agent list
+        let html = ""
+        a2aAgents.forEach((agent, index) => {
+          const initials = agent.name
+            .split(" ")
+            .map((w) => w[0])
+            .join("")
+            .toUpperCase()
+            .slice(0, 2)
+          const skillsHtml =
+            agent.skills
+              ?.slice(0, 3)
+              .map((s) => `<span class="delegation-agent-skill">${s.name}</span>`)
+              .join("") || ""
+
+          html += `
+            <div class="delegation-agent-item" data-agent-id="${agent.id}" data-index="${index}">
+              <div class="delegation-agent-avatar">${initials}</div>
+              <div class="delegation-agent-info">
+                <div class="delegation-agent-name">${agent.name}</div>
+                <div class="delegation-agent-source">${agent.source}</div>
+                ${skillsHtml ? `<div class="delegation-agent-skills">${skillsHtml}</div>` : ""}
+              </div>
+            </div>
+          `
+        })
+
+        elements.delegationAgentList.innerHTML = html
+
+        // Add click handlers
+        elements.delegationAgentList.querySelectorAll(".delegation-agent-item").forEach((item) => {
+          item.addEventListener("click", () => {
+            elements.delegationAgentList
+              .querySelectorAll(".delegation-agent-item")
+              .forEach((i) => i.classList.remove("selected"))
+            item.classList.add("selected")
+            selectedDelegationAgent = a2aAgents[parseInt(item.dataset.index)]
+            elements.delegationSubmitBtn.disabled = false
+          })
+        })
+
+        // Reset state
+        selectedDelegationAgent = null
+        elements.delegationMessage.value = ""
+        elements.delegationSubmitBtn.disabled = true
+        elements.delegationResult.style.display = "none"
+
+        // Show panel
+        elements.delegationOverlay.classList.add("visible")
+        elements.delegationPanel.classList.add("visible")
+      }
+
+      function closeDelegationPanel() {
+        elements.delegationOverlay.classList.remove("visible")
+        elements.delegationPanel.classList.remove("visible")
+      }
+
+      async function submitDelegation() {
+        if (!selectedDelegationAgent || !elements.delegationMessage.value.trim()) {
+          return
+        }
+
+        const message = elements.delegationMessage.value.trim()
+        elements.delegationSubmitBtn.disabled = true
+        elements.delegationSubmitBtn.textContent = "Delegating..."
+
+        try {
+          const host = window.location.hostname || "localhost"
+          const baseUrl = `http://${host}:5000`
+
+          const response = await fetch(`${baseUrl}/a2a/delegations`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              agentId: selectedDelegationAgent.id,
+              message: {
+                role: "user",
+                parts: [{ type: "text", text: message }],
+              },
+            }),
+          })
+
+          const data = await response.json()
+
+          if (data.success) {
+            elements.delegationResult.style.display = "block"
+            elements.delegationResult.innerHTML = `
+              <div class="delegation-status">
+                <span class="delegation-status-dot ${data.delegation.status}"></span>
+                <span>Delegated to ${selectedDelegationAgent.name}</span>
+              </div>
+              <div>Task ID: ${data.delegation.taskId}</div>
+            `
+            showToast(`Task delegated to ${selectedDelegationAgent.name}`)
+            closeDelegationPanel()
+          } else {
+            throw new Error(data.error?.message || "Delegation failed")
+          }
+        } catch (error) {
+          elements.delegationResult.style.display = "block"
+          elements.delegationResult.innerHTML = `
+            <div class="delegation-status">
+              <span class="delegation-status-dot failed"></span>
+              <span>Delegation failed</span>
+            </div>
+            <div>${error.message}</div>
+          `
+        } finally {
+          elements.delegationSubmitBtn.disabled = false
+          elements.delegationSubmitBtn.textContent = "Delegate"
+        }
+      }
+
+      function addWorkspace() {
+        const path = elements.newWorkspacePath.value.trim()
+        if (!path) return
+
+        const name = path.split("/").pop() || "Workspace"
+        const workspaces = getWorkspaces()
+
+        if (workspaces.find((w) => w.path === path)) {
+          showToast("Workspace already exists")
+          return
+        }
+
+        workspaces.push({ name, path })
+        saveCustomWorkspaces(workspaces)
+        elements.newWorkspacePath.value = ""
+        renderWorkspaceList()
+        showToast("Workspace added: " + name)
+      }
+
+      // Image Functions
+      function handleImageUpload(files) {
+        Array.from(files).forEach((file) => {
+          if (!file.type.startsWith("image/")) return
+          if (file.size > 5 * 1024 * 1024) {
+            showToast("Image too large (max 5MB)")
+            return
+          }
+
+          const reader = new FileReader()
+          reader.onload = (e) => {
+            const id = Date.now() + Math.random()
+            state.images.push({ id, name: file.name, data: e.target.result })
+            renderImagePreview()
+          }
+          reader.readAsDataURL(file)
+        })
+      }
+
+      function renderImagePreview() {
+        elements.imagePreview.innerHTML = ""
+        state.images.forEach((img) => {
+          const item = document.createElement("div")
+          item.className = "image-preview-item"
+          item.innerHTML = `
+          <img src="${img.data}" alt="${img.name}" />
+          <button data-id="${img.id}">&times;</button>
+        `
+
+          item.querySelector("button").addEventListener("click", () => {
+            state.images = state.images.filter((i) => i.id !== img.id)
+            renderImagePreview()
+          })
+
+          elements.imagePreview.appendChild(item)
+        })
+      }
+
+      // WebSocket Functions
+      function connectWebSocket() {
+        if (state.ws && (state.ws.readyState === WebSocket.OPEN || state.ws.readyState === WebSocket.CONNECTING)) {
+          return
+        }
+
+        updateConnectionStatus("connecting")
+
+        try {
+          state.ws = new WebSocket(state.config.serverUrl)
+
+          state.ws.onopen = () => {
+            updateConnectionStatus("connected")
+            state.reconnectAttempts = 0
+            showToast("Connected")
+          }
+
+          state.ws.onclose = () => {
+            updateConnectionStatus("disconnected")
+            state.ws = null
+
+            if (state.reconnectAttempts < state.maxReconnectAttempts) {
+              setTimeout(
+                () => {
+                  state.reconnectAttempts++
+                  connectWebSocket()
+                },
+                state.reconnectDelay * Math.pow(2, state.reconnectAttempts - 1),
+              )
+            }
+          }
+
+          state.ws.onerror = () => {
+            updateConnectionStatus("disconnected")
+            showToast("Connection error")
+          }
+
+          state.ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data)
+              handleWebSocketMessage(data)
+            } catch (e) {
+              console.error("Parse error:", e)
+            }
+          }
+        } catch (e) {
+          updateConnectionStatus("disconnected")
+          showToast("Failed to connect")
+        }
+      }
+
+      function handleWebSocketMessage(data) {
+        if (data.type === "content" || data.type === "text") {
+          showTyping(false)
+
+          let content = data.content || data.text || ""
+          const lastMsg = elements.chatContainer.querySelector(
+            ".message.agent:last-child .message-content > div:first-child",
+          )
+
+          if (lastMsg && content) {
+            lastMsg.textContent += content
+            elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight
+          } else if (content) {
+            addMessage(content, "agent", "AG-UI Bot")
+          }
+
+          state.latency = Date.now() - state.messageStartTime
+          elements.latency.textContent = state.latency + "ms"
+        } else if (data.type === "step") {
+          showTyping(false)
+          addMessage(data.content || JSON.stringify(data), "agent", "AG-UI Bot")
+        } else if (data.type === "error") {
+          showTyping(false)
+          addMessage("Error: " + (data.error || "Unknown error"), "agent", "Error")
+          showToast(data.error || "Error from server")
+        } else if (data.type === "message") {
+          showTyping(false)
+          addMessage(data.content || JSON.stringify(data), "agent", "AG-UI Bot")
+        }
+      }
+
+      function sendMessage() {
+        const content = elements.messageInput.value.trim()
+        if (!content && state.images.length === 0) return
+
+        const userContent = content || (state.images.length > 0 ? "[Image attached]" : "")
+        addMessage(userContent, "user")
+
+        if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+          showTyping(true)
+          state.messageStartTime = Date.now()
+
+          const message = {
+            type: "message",
+            content: content,
+            images: state.images.map((img) => img.data.split(",")[1]),
+            workspace: state.config.workspacePath,
+          }
+
+          state.ws.send(JSON.stringify(message))
+        } else {
+          // Simulate response for demo
+          showTyping(true)
+          setTimeout(() => {
+            showTyping(false)
+            addMessage("Demo mode: WebSocket not connected. Configure server URL in settings.", "agent", "Demo")
+          }, 1000)
+        }
+
+        elements.messageInput.value = ""
+        state.images = []
+        renderImagePreview()
+      }
+
+      // Settings Functions
+      function toggleSettings() {
+        elements.settingsPanel.classList.toggle("visible")
+      }
+
+      function saveSettings() {
+        state.config.serverUrl = elements.serverUrl.value
+        state.config.timeout = parseInt(elements.timeoutSetting.value) || 60000
+        state.config.selectedModel = elements.modelSelect.value
+        localStorage.setItem("agui-chat-settings", JSON.stringify(state.config))
+        showToast("Settings saved")
+      }
+
+      // Initialize
+      function init() {
+        initElements()
+
+        // Load settings
+        const stored = localStorage.getItem("agui-chat-settings")
+        if (stored) {
+          try {
+            state.config = { ...state.config, ...JSON.parse(stored) }
+          } catch (e) {
+            console.error("Settings parse error:", e)
+          }
+        }
+
+        // Apply settings to UI
+        elements.serverUrl.value = state.config.serverUrl
+        elements.timeoutSetting.value = state.config.timeout
+        elements.modelSelect.value = state.config.selectedModel
+
+        // Update header workspace display
+        updateHeaderWorkspace()
+
+        // Start MCP status polling
+        startMcpPolling()
+
+        // Start A2A agent discovery
+        startA2aDiscovery()
+
+        // Setup event listeners
+        elements.settingsToggleBtn.addEventListener("click", toggleSettings)
+        elements.settingsCloseBtn.addEventListener("click", toggleSettings)
+        elements.headerWorkspace.addEventListener("click", toggleSettings)
+        elements.refreshA2aBtn.addEventListener("click", async (e) => {
+          e.stopPropagation()
+          const btn = e.target
+          const originalText = btn.textContent
+          btn.textContent = "⏳ Discovering..."
+          btn.disabled = true
+          await fetchA2aAgents()
+          btn.textContent = originalText
+          btn.disabled = false
+          showToast(`Found ${a2aAgents.length} A2A agents`)
+        })
+
+        // Delegation panel listeners
+        elements.headerA2a.addEventListener("dblclick", (e) => {
+          e.stopPropagation()
+          openDelegationPanel()
+        })
+        elements.delegationOverlay.addEventListener("click", closeDelegationPanel)
+        elements.delegationCloseBtn.addEventListener("click", closeDelegationPanel)
+        elements.delegationCancelBtn.addEventListener("click", closeDelegationPanel)
+        elements.delegationSubmitBtn.addEventListener("click", submitDelegation)
+
+        elements.sendButton.addEventListener("click", sendMessage)
+        elements.uploadBtn.addEventListener("click", () => elements.imageInput.click())
+        elements.imageInput.addEventListener("change", (e) => handleImageUpload(e.target.files))
+        elements.addWorkspaceBtn.addEventListener("click", addWorkspace)
+        elements.newWorkspacePath.addEventListener("keypress", (e) => e.key === "Enter" && addWorkspace())
+
+        elements.messageInput.addEventListener("keypress", (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault()
+            sendMessage()
+          }
+        })
+
+        // Auto-resize textarea
+        elements.messageInput.addEventListener("input", function () {
+          this.style.height = "auto"
+          this.style.height = Math.min(this.scrollHeight, 120) + "px"
+        })
+
+        // Save settings on change
+        elements.serverUrl.addEventListener("change", saveSettings)
+        elements.timeoutSetting.addEventListener("change", saveSettings)
+        elements.modelSelect.addEventListener("change", saveSettings)
+
+        // Drag and drop
+        document.body.addEventListener("dragover", (e) => {
+          e.preventDefault()
+          e.dataTransfer.dropEffect = "copy"
+        })
+
+        document.body.addEventListener("drop", (e) => {
+          e.preventDefault()
+          handleImageUpload(e.dataTransfer.files)
+        })
+
+        // Render UI
+        renderWorkspaceList()
+        connectWebSocket()
+
+        // Cleanup on page unload
+        window.addEventListener("beforeunload", () => {
+          stopMcpPolling()
+        })
+
+        console.log("AG-UI Chat initialized")
+      }
+
+      // Start when DOM is ready
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init)
+      } else {
+        init()
+      }
+    </script>
+  </body>
+</html>
