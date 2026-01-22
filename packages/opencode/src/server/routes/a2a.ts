@@ -620,7 +620,7 @@ function getAgentCard(): AgentCard {
     },
     version: "1.0.0",
     capabilities: {
-      streaming: false,
+      streaming: true,
       pushNotifications: false,
       stateTransitionHistory: true,
     },
@@ -862,6 +862,108 @@ A2ARoutes.post("/tasks/:taskId/cancel", async (c) => {
     status: task.status,
     result: null,
   })
+})
+
+// --------------------------------------------------------------------------
+// Task Streaming (Server-Sent Events)
+// --------------------------------------------------------------------------
+
+// Stream task updates via Server-Sent Events
+// GET /a2a/tasks/:taskId/stream
+A2ARoutes.get("/tasks/:taskId/stream", async (c) => {
+  const taskId = c.req.param("taskId")
+
+  const task = getTask(taskId)
+  if (!task) {
+    return c.text("Task not found", 404)
+  }
+
+  // Set up SSE headers
+  c.header("Content-Type", "text/event-stream")
+  c.header("Cache-Control", "no-cache")
+  c.header("Connection", "keep-alive")
+  c.header("X-Accel-Buffering", "no")
+
+  // Get the writable stream
+  const stream = c.req.raw.body
+
+  // Create a readable stream for SSE
+  const { readable, writable } = new TransformStream()
+  const writer = writable.getWriter()
+  const encoder = new TextEncoder()
+
+  // Function to send SSE event
+  const sendEvent = async (event: string, data: any) => {
+    await writer.write(encoder.encode(`event: ${event}\n`))
+    await writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+  }
+
+  // Send initial task state
+  await sendEvent("task", {
+    taskId: task.taskId,
+    agentId: task.agentId,
+    status: task.status,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+  })
+
+  // Send current messages as they are available
+  if (task.messages.length > 0) {
+    for (const message of task.messages) {
+      await sendEvent("message", message)
+    }
+  }
+
+  // Check if task is already completed
+  if (task.status === "completed" || task.status === "failed" || task.status === "canceled") {
+    await sendEvent("done", {
+      taskId: task.taskId,
+      status: task.status,
+      result: task.status === "completed" ? { messages: task.messages } : null,
+    })
+    await writer.close()
+    return c.body(readable)
+  }
+
+  // For ongoing tasks, we'll simulate streaming by sending periodic updates
+  // In a real implementation, this would wait for actual task updates
+  const checkInterval = setInterval(async () => {
+    const updatedTask = getTask(taskId)
+    if (!updatedTask) {
+      clearInterval(checkInterval)
+      await sendEvent("error", { message: "Task not found" })
+      await writer.close()
+      return
+    }
+
+    // Send any new messages
+    if (updatedTask.messages.length > task.messages.length) {
+      const newMessages = updatedTask.messages.slice(task.messages.length)
+      for (const message of newMessages) {
+        await sendEvent("message", message)
+      }
+      task.messages = [...updatedTask.messages]
+    }
+
+    // Check if task is completed
+    if (updatedTask.status === "completed" || updatedTask.status === "failed" || updatedTask.status === "canceled") {
+      clearInterval(checkInterval)
+      await sendEvent("done", {
+        taskId: updatedTask.taskId,
+        status: updatedTask.status,
+        result: updatedTask.status === "completed" ? { messages: updatedTask.messages } : null,
+      })
+      await writer.close()
+    }
+  }, 1000)
+
+  // Clean up on client disconnect
+  c.req.raw.signal.addEventListener("abort", () => {
+    clearInterval(checkInterval)
+    writer.close()
+  })
+
+  return c.body(readable)
 })
 
 // List all tasks
