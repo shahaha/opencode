@@ -308,6 +308,32 @@
         cursor: not-allowed;
       }
 
+      #delegateButton {
+        padding: 12px 20px;
+        background: var(--secondary-bg);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 14px;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      #delegateButton:hover:not(:disabled) {
+        background: var(--border-color);
+      }
+      #delegateButton:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      #delegateButton::before {
+        content: "🤖";
+        font-size: 14px;
+      }
+
       /* Image Preview */
       .image-preview {
         display: flex;
@@ -1317,6 +1343,7 @@
             </div>
             <div class="image-preview" id="imagePreview"></div>
           </div>
+          <button id="delegateButton" title="Delegate task to A2A agent">Delegate</button>
           <button id="sendButton">Send</button>
         </div>
         <input type="file" id="fileInput" accept="image/*" multiple style="display: none" />
@@ -1432,6 +1459,7 @@
         chatContainer: null,
         messageInput: null,
         sendButton: null,
+        delegateButton: null,
         settingsToggleBtn: null,
         settingsPanel: null,
         settingsCloseBtn: null,
@@ -1458,6 +1486,7 @@
         elements.chatContainer = document.getElementById("chatContainer")
         elements.messageInput = document.getElementById("messageInput")
         elements.sendButton = document.getElementById("sendButton")
+        elements.delegateButton = document.getElementById("delegateButton")
         elements.settingsToggleBtn = document.getElementById("settingsToggleBtn")
         elements.settingsPanel = document.getElementById("settingsPanel")
         elements.settingsCloseBtn = document.getElementById("settingsCloseBtn")
@@ -1837,9 +1866,22 @@
             .slice(0, 2)
           const skillsHtml =
             agent.skills
-              ?.slice(0, 3)
+              ?.slice(0, 2)
               .map((s) => `<span class="delegation-agent-skill">${s.name}</span>`)
               .join("") || ""
+
+          // Generate MCP tools HTML
+          let mcpToolsHtml = ""
+          if (agent.mcpTools && agent.mcpTools.length > 0) {
+            const displayTools = agent.mcpTools.slice(0, 3)
+            const moreCount = agent.mcpTools.length - 3
+            mcpToolsHtml = `
+              <div class="delegation-agent-skills" style="margin-top: 4px;">
+                ${displayTools.map((t) => `<span class="delegation-agent-skill" style="background: rgba(76, 175, 80, 0.1); color: var(--success-color);">🔧 ${t.name}</span>`).join("")}
+                ${moreCount > 0 ? `<span class="delegation-agent-skill" style="background: var(--bg-secondary);">+${moreCount} more</span>` : ""}
+              </div>
+            `
+          }
 
           html += `
             <div class="delegation-agent-item" data-agent-id="${agent.id}" data-index="${index}">
@@ -1848,6 +1890,7 @@
                 <div class="delegation-agent-name">${agent.name}</div>
                 <div class="delegation-agent-source">${agent.source}</div>
                 ${skillsHtml ? `<div class="delegation-agent-skills">${skillsHtml}</div>` : ""}
+                ${mcpToolsHtml}
               </div>
             </div>
           `
@@ -2179,6 +2222,7 @@
         elements.delegationSubmitBtn.addEventListener("click", submitDelegation)
 
         elements.sendButton.addEventListener("click", sendMessage)
+        elements.delegateButton.addEventListener("click", openDelegationPanel)
         elements.uploadBtn.addEventListener("click", () => elements.imageInput.click())
         elements.imageInput.addEventListener("change", (e) => handleImageUpload(e.target.files))
         elements.addWorkspaceBtn.addEventListener("click", addWorkspace)

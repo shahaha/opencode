@@ -1439,6 +1439,24 @@ async function delegateTaskToAgent(
 
     delegatedTasks.set(delegationId, delegationTask)
 
+    // Check if this is a local agent
+    const isLocalAgent =
+      agent.url.includes("localhost:5000") ||
+      agent.url.includes("127.0.0.1:5000") ||
+      agent.url === "http://localhost:5000/a2a" ||
+      agent.url === "http://127.0.0.1:5000/a2a"
+
+    if (isLocalAgent) {
+      // For local agents, submit task directly
+      createTask("opencode-local", {
+        message,
+        sessionId: delegationId,
+      })
+      delegationTask.status = "completed"
+      delegationTask.updatedAt = Date.now()
+      return delegationTask
+    }
+
     const response = await fetch(`${agent.url}/a2a/tasks`, {
       method: "POST",
       headers: {
