@@ -54,6 +54,18 @@ export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
   export const OUTPUT_TOKEN_MAX = Flag.OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
 
+  // Track active loop promises so we can wait for them to complete
+  const pending = new Map<string, Promise<void>>()
+
+  /**
+   * Wait for all active prompt loops to finish processing.
+   * Call this before disposing to ensure message.updated events are published.
+   */
+  export async function flush() {
+    log.info("flush", { count: pending.size })
+    await Promise.allSettled([...pending.values()])
+  }
+
   const state = Instance.state(
     () => {
       const data: Record<
@@ -69,8 +81,27 @@ export namespace SessionPrompt {
       return data
     },
     async (current) => {
+      // Complete any incomplete assistant messages before aborting
+      // This prevents the "QUEUED" bug where messages appear queued after reload
+      await Promise.all(
+        Object.keys(current).map(async (sessionID) => {
+          for await (const msg of MessageV2.stream(sessionID)) {
+            if (msg.info.role !== "assistant") continue
+            if (msg.info.time.completed) continue
+            // Found an incomplete assistant message - complete it
+            const info = msg.info as MessageV2.Assistant
+            info.time.completed = Date.now()
+            info.error = new MessageV2.AbortedError({
+              message: "The operation was aborted",
+              reason: MessageV2.ABORT_REASON.CONFIG_RELOAD,
+            }).toObject()
+            await Session.updateMessage(info)
+          }
+        }),
+      )
+
       for (const item of Object.values(current)) {
-        item.abort.abort()
+        item.abort.abort(MessageV2.ABORT_REASON.CONFIG_RELOAD)
         for (const callback of item.callbacks) {
           callback.reject()
         }
@@ -247,12 +278,12 @@ export namespace SessionPrompt {
     return controller.signal
   }
 
-  export function cancel(sessionID: string) {
-    log.info("cancel", { sessionID })
+  export function cancel(sessionID: string, reason?: MessageV2.AbortReason) {
+    log.info("cancel", { sessionID, reason })
     const s = state()
     const match = s[sessionID]
     if (!match) return
-    match.abort.abort()
+    match.abort.abort(reason)
     for (const item of match.callbacks) {
       item.reject()
     }
@@ -270,15 +301,23 @@ export namespace SessionPrompt {
       })
     }
 
-    using _ = defer(() => cancel(sessionID))
+    // Track this loop so flush() can wait for it
+    let resolve: () => void
+    const done = new Promise<void>((r) => {
+      resolve = r
+    })
+    pending.set(sessionID, done)
 
-    let step = 0
-    const session = await Session.get(sessionID)
-    while (true) {
-      SessionStatus.set(sessionID, { type: "busy" })
-      log.info("loop", { step, sessionID })
-      if (abort.aborted) break
-      let msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID))
+    try {
+      using _ = defer(() => cancel(sessionID))
+
+      let step = 0
+      const session = await Session.get(sessionID)
+      while (true) {
+        SessionStatus.set(sessionID, { type: "busy" })
+        log.info("loop", { step, sessionID })
+        if (abort.aborted) break
+        let msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID))
 
       let lastUser: MessageV2.User | undefined
       let lastAssistant: MessageV2.Assistant | undefined
@@ -649,6 +688,10 @@ export namespace SessionPrompt {
       return item
     }
     throw new Error("Impossible")
+    } finally {
+      resolve!()
+      pending.delete(sessionID)
+    }
   })
 
   async function lastModel(sessionID: string) {
