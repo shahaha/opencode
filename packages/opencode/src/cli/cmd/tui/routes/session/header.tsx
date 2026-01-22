@@ -134,7 +134,7 @@ export function Header() {
   const narrow = createMemo(() => dimensions().width < 80)
 =======
   const dimensions = useTerminalDimensions()
-  const [hover, setHover] = createSignal<"parent" | "prev" | "next" | "down" | "breadcrumb" | null>(null)
+  const [hover, setHover] = createSignal<"parent" | "root" | "prev" | "next" | "down" | "breadcrumb" | null>(null)
   const [hoverBreadcrumbIdx, setHoverBreadcrumbIdx] = createSignal<number | null>(null)
 
   // Calculate breadcrumb text for a set of segments
@@ -297,6 +297,18 @@ export function Header() {
                   >
                     <text fg={theme.text}>
                       {upLabel()} <span style={{ fg: theme.textMuted }}>{keybind.print("session_parent")}</span>
+                    </text>
+                  </box>
+                </Show>
+                <Show when={depth() >= 2}>
+                  <box
+                    onMouseOver={() => setHover("root")}
+                    onMouseOut={() => setHover(null)}
+                    onMouseUp={() => command.trigger("session.root")}
+                    backgroundColor={hover() === "root" ? theme.backgroundElement : theme.backgroundPanel}
+                  >
+                    <text fg={theme.text}>
+                      Root <span style={{ fg: theme.textMuted }}>{keybind.print("session_root")}</span>
                     </text>
                   </box>
                 </Show>
