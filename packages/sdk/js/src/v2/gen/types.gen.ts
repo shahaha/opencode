@@ -1298,6 +1298,14 @@ export type KeybindsConfig = {
    */
   session_parent?: string
   /**
+   * Go to first child session
+   */
+  session_child_down?: string
+  /**
+   * Go to root session
+   */
+  session_root?: string
+  /**
    * Suspend terminal
    */
   terminal_suspend?: string
