@@ -28,6 +28,7 @@ mock.module("@aws-sdk/credential-providers", () => ({
 const mockPlugin = () => ({})
 mock.module("opencode-copilot-auth", () => ({ default: mockPlugin }))
 mock.module("opencode-anthropic-auth", () => ({ default: mockPlugin }))
+mock.module("@gitlab/opencode-gitlab-auth", () => ({ default: mockPlugin }))
 
 // Import after mocks are set up
 const { tmpdir } = await import("../fixture/fixture")
@@ -76,7 +77,7 @@ test("Databricks: does not load when only DATABRICKS_HOST is set (no auth)", asy
     directory: tmp.path,
     init: async () => {
       Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
-      // No token set
+      Env.remove("DATABRICKS_TOKEN") // Explicitly clear token
     },
     fn: async () => {
       const providers = await Provider.list()
@@ -471,6 +472,354 @@ test("Databricks: model capabilities are set correctly", async () => {
       expect(llamaModel).toBeDefined()
       expect(llamaModel.capabilities.toolcall).toBe(true)
       expect(llamaModel.capabilities.attachment).toBe(false) // Llama doesn't support images
+    },
+  })
+})
+
+// Model family tests - verify all model types are present with correct capabilities
+
+test("Databricks: GPT-5 models have correct capabilities", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
+      Env.set("DATABRICKS_TOKEN", "test-token")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const models = providers["databricks"].models
+
+      // GPT-5.2
+      const gpt52 = models["databricks-gpt-5-2"]
+      expect(gpt52).toBeDefined()
+      expect(gpt52.family).toBe("gpt-5")
+      expect(gpt52.capabilities.reasoning).toBe(true)
+      expect(gpt52.capabilities.toolcall).toBe(true)
+      expect(gpt52.capabilities.attachment).toBe(true)
+      expect(gpt52.capabilities.input.image).toBe(true)
+
+      // GPT-5.1
+      const gpt51 = models["databricks-gpt-5-1"]
+      expect(gpt51).toBeDefined()
+      expect(gpt51.family).toBe("gpt-5")
+      expect(gpt51.capabilities.reasoning).toBe(true)
+
+      // GPT-5.1 Codex Max
+      const codexMax = models["databricks-gpt-5-1-codex-max"]
+      expect(codexMax).toBeDefined()
+      expect(codexMax.family).toBe("gpt-5-codex")
+      expect(codexMax.capabilities.reasoning).toBe(true)
+
+      // GPT-5.1 Codex Mini
+      const codexMini = models["databricks-gpt-5-1-codex-mini"]
+      expect(codexMini).toBeDefined()
+      expect(codexMini.family).toBe("gpt-5-codex")
+
+      // GPT-5
+      const gpt5 = models["databricks-gpt-5"]
+      expect(gpt5).toBeDefined()
+      expect(gpt5.family).toBe("gpt-5")
+      expect(gpt5.capabilities.reasoning).toBe(true)
+
+      // GPT-5 mini
+      const gpt5Mini = models["databricks-gpt-5-mini"]
+      expect(gpt5Mini).toBeDefined()
+      expect(gpt5Mini.family).toBe("gpt-5-mini")
+      expect(gpt5Mini.capabilities.reasoning).toBe(true)
+
+      // GPT-5 nano - no reasoning
+      const gpt5Nano = models["databricks-gpt-5-nano"]
+      expect(gpt5Nano).toBeDefined()
+      expect(gpt5Nano.family).toBe("gpt-5-nano")
+      expect(gpt5Nano.capabilities.reasoning).toBe(false)
+
+      // GPT OSS models
+      const gptOss120b = models["databricks-gpt-oss-120b"]
+      expect(gptOss120b).toBeDefined()
+      expect(gptOss120b.family).toBe("gpt-oss")
+      expect(gptOss120b.capabilities.attachment).toBe(false) // text only
+
+      const gptOss20b = models["databricks-gpt-oss-20b"]
+      expect(gptOss20b).toBeDefined()
+      expect(gptOss20b.family).toBe("gpt-oss")
+    },
+  })
+})
+
+test("Databricks: Gemini models have correct capabilities", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
+      Env.set("DATABRICKS_TOKEN", "test-token")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const models = providers["databricks"].models
+
+      // Gemini 3 Pro
+      const gemini3Pro = models["databricks-gemini-3-pro"]
+      expect(gemini3Pro).toBeDefined()
+      expect(gemini3Pro.family).toBe("gemini-3")
+      expect(gemini3Pro.capabilities.reasoning).toBe(true)
+      expect(gemini3Pro.capabilities.input.image).toBe(true)
+      expect(gemini3Pro.capabilities.input.audio).toBe(true)
+      expect(gemini3Pro.capabilities.input.video).toBe(true)
+      expect(gemini3Pro.limit.context).toBe(1000000) // 1M context
+
+      // Gemini 3 Flash - no reasoning
+      const gemini3Flash = models["databricks-gemini-3-flash"]
+      expect(gemini3Flash).toBeDefined()
+      expect(gemini3Flash.family).toBe("gemini-3")
+      expect(gemini3Flash.capabilities.reasoning).toBe(false)
+
+      // Gemini 2.5 Pro
+      const gemini25Pro = models["databricks-gemini-2-5-pro"]
+      expect(gemini25Pro).toBeDefined()
+      expect(gemini25Pro.family).toBe("gemini-2.5")
+      expect(gemini25Pro.capabilities.reasoning).toBe(true)
+
+      // Gemini 2.5 Flash
+      const gemini25Flash = models["databricks-gemini-2-5-flash"]
+      expect(gemini25Flash).toBeDefined()
+      expect(gemini25Flash.family).toBe("gemini-2.5")
+      expect(gemini25Flash.capabilities.reasoning).toBe(true)
+
+      // Gemma 3 12B
+      const gemma3 = models["databricks-gemma-3-12b"]
+      expect(gemma3).toBeDefined()
+      expect(gemma3.family).toBe("gemma-3")
+      expect(gemma3.capabilities.reasoning).toBe(false)
+      expect(gemma3.capabilities.input.image).toBe(true)
+    },
+  })
+})
+
+test("Databricks: Claude models have correct capabilities", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
+      Env.set("DATABRICKS_TOKEN", "test-token")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const models = providers["databricks"].models
+
+      // Claude Sonnet 4 - no reasoning
+      const claudeSonnet4 = models["databricks-claude-sonnet-4"]
+      expect(claudeSonnet4).toBeDefined()
+      expect(claudeSonnet4.family).toBe("claude-sonnet")
+      expect(claudeSonnet4.capabilities.reasoning).toBe(false)
+      expect(claudeSonnet4.capabilities.attachment).toBe(true)
+      expect(claudeSonnet4.capabilities.input.image).toBe(true)
+
+      // Claude Sonnet 4.5 - with reasoning
+      const claudeSonnet45 = models["databricks-claude-sonnet-4-5"]
+      expect(claudeSonnet45).toBeDefined()
+      expect(claudeSonnet45.family).toBe("claude-sonnet")
+      expect(claudeSonnet45.capabilities.reasoning).toBe(true)
+
+      // Claude Haiku 4.5
+      const claudeHaiku = models["databricks-claude-haiku-4-5"]
+      expect(claudeHaiku).toBeDefined()
+      expect(claudeHaiku.family).toBe("claude-haiku")
+      expect(claudeHaiku.capabilities.reasoning).toBe(false)
+
+      // Claude Opus 4.5
+      const claudeOpus45 = models["databricks-claude-opus-4-5"]
+      expect(claudeOpus45).toBeDefined()
+      expect(claudeOpus45.family).toBe("claude-opus")
+      expect(claudeOpus45.capabilities.reasoning).toBe(true)
+
+      // Claude 3.7 Sonnet
+      const claude37 = models["databricks-claude-3-7-sonnet"]
+      expect(claude37).toBeDefined()
+      expect(claude37.family).toBe("claude-sonnet")
+      expect(claude37.capabilities.reasoning).toBe(true)
+
+      // Claude Opus 4.1
+      const claudeOpus41 = models["databricks-claude-opus-4-1"]
+      expect(claudeOpus41).toBeDefined()
+      expect(claudeOpus41.family).toBe("claude-opus")
+      expect(claudeOpus41.capabilities.reasoning).toBe(true)
+    },
+  })
+})
+
+test("Databricks: Llama models have correct capabilities", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
+      Env.set("DATABRICKS_TOKEN", "test-token")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const models = providers["databricks"].models
+
+      // Llama 4 Maverick
+      const llama4 = models["databricks-llama-4-maverick"]
+      expect(llama4).toBeDefined()
+      expect(llama4.family).toBe("llama-4")
+      expect(llama4.capabilities.toolcall).toBe(true)
+      expect(llama4.capabilities.attachment).toBe(false) // text only
+      expect(llama4.capabilities.input.image).toBe(false)
+      expect(llama4.limit.context).toBe(1048576) // ~1M context
+
+      // Meta Llama 3.3 70B
+      const llama33 = models["databricks-meta-llama-3-3-70b-instruct"]
+      expect(llama33).toBeDefined()
+      expect(llama33.family).toBe("llama-3.3")
+      expect(llama33.capabilities.attachment).toBe(false)
+
+      // Meta Llama 3.1 405B
+      const llama31_405b = models["databricks-meta-llama-3-1-405b-instruct"]
+      expect(llama31_405b).toBeDefined()
+      expect(llama31_405b.family).toBe("llama-3.1")
+
+      // Meta Llama 3.1 8B
+      const llama31_8b = models["databricks-meta-llama-3-1-8b-instruct"]
+      expect(llama31_8b).toBeDefined()
+      expect(llama31_8b.family).toBe("llama-3.1")
+    },
+  })
+})
+
+test("Databricks: Qwen models have correct capabilities", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
+      Env.set("DATABRICKS_TOKEN", "test-token")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const models = providers["databricks"].models
+
+      // Qwen3 Next 80B
+      const qwen3 = models["databricks-qwen3-next-80b-a3b-instruct"]
+      expect(qwen3).toBeDefined()
+      expect(qwen3.family).toBe("qwen3")
+      expect(qwen3.capabilities.toolcall).toBe(true)
+      expect(qwen3.capabilities.attachment).toBe(false) // text only
+      expect(qwen3.limit.context).toBe(512000) // 512K context
+    },
+  })
+})
+
+test("Databricks: all models have required API configuration", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
+      Env.set("DATABRICKS_TOKEN", "test-token")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const models = providers["databricks"].models
+
+      // All models should use openai-compatible SDK
+      for (const [modelId, model] of Object.entries(models)) {
+        expect(model.api.npm).toBe("@ai-sdk/openai-compatible")
+        expect(model.providerID).toBe("databricks")
+        expect(model.api.url).toContain("serving-endpoints")
+        expect(model.status).toBe("active")
+      }
+    },
+  })
+})
+
+test("Databricks: model costs are set correctly", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
+      Env.set("DATABRICKS_TOKEN", "test-token")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const models = providers["databricks"].models
+
+      // GPT-5 models should have cache pricing
+      const gpt5 = models["databricks-gpt-5"]
+      expect(gpt5.cost.input).toBeGreaterThan(0)
+      expect(gpt5.cost.output).toBeGreaterThan(0)
+      expect(gpt5.cost.cache.read).toBeGreaterThan(0)
+
+      // Gemini models should have cache pricing
+      const gemini = models["databricks-gemini-3-pro"]
+      expect(gemini.cost.input).toBeGreaterThan(0)
+      expect(gemini.cost.output).toBeGreaterThan(0)
+      expect(gemini.cost.cache.read).toBeGreaterThan(0)
+
+      // Claude models should have cache pricing
+      const claude = models["databricks-claude-sonnet-4"]
+      expect(claude.cost.input).toBeGreaterThan(0)
+      expect(claude.cost.output).toBeGreaterThan(0)
+      expect(claude.cost.cache.read).toBeGreaterThan(0)
+
+      // Llama models - no cache pricing
+      const llama = models["databricks-llama-4-maverick"]
+      expect(llama.cost.input).toBeGreaterThan(0)
+      expect(llama.cost.output).toBeGreaterThan(0)
+      expect(llama.cost.cache.read).toBe(0)
     },
   })
 })
