@@ -23,12 +23,11 @@ export const WebFetchTool = Tool.define("webfetch", {
       throw new Error("URL must start with http:// or https://")
     }
 
-    const patterns = buildPermissionPatterns(params.url)
-
+    const host = new URL(params.url).host
     await ctx.ask({
       permission: "webfetch",
-      patterns,
-      always: ["*"],
+      patterns: [params.url],
+      always: [`*://${host}*`],
       metadata: {
         url: params.url,
         format: params.format,
@@ -181,24 +180,4 @@ function convertHTMLToMarkdown(html: string): string {
   })
   turndownService.remove(["script", "style", "meta", "link"])
   return turndownService.turndown(html)
-}
-
-function buildPermissionPatterns(url: string) {
-  const parsed = new URL(url)
-  const host = parsed.host
-  const name = parsed.hostname
-  const protocol = parsed.protocol
-  const origin = `${protocol}//${host}`
-  const path = `${parsed.pathname}${parsed.search}${parsed.hash}`
-  const full = path === "" ? "/" : path
-  const patterns = new Set<string>()
-
-  patterns.add(`${origin}${full}`)
-  patterns.add(`${host}${full}`)
-  patterns.add(host)
-  patterns.add(`${protocol}//${name}${full}`)
-  patterns.add(`${name}${full}`)
-  patterns.add(name)
-
-  return Array.from(patterns)
 }
