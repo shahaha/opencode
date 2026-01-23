@@ -952,7 +952,7 @@ export namespace Provider {
           family: "gpt-oss",
           attachment: false,
           reasoning: true,
-          tool_call: true,
+          tool_call: false, // OSS models have unreliable tool support via OpenAI-compatible API
           temperature: true,
           release_date: "2025-11-01",
           modalities: { input: ["text"], output: ["text"] },
@@ -966,7 +966,7 @@ export namespace Provider {
           family: "gpt-oss",
           attachment: false,
           reasoning: true,
-          tool_call: true,
+          tool_call: false, // OSS models have unreliable tool support via OpenAI-compatible API
           temperature: true,
           release_date: "2025-11-01",
           modalities: { input: ["text"], output: ["text"] },
@@ -1037,7 +1037,7 @@ export namespace Provider {
           family: "gemma-3",
           attachment: true,
           reasoning: false,
-          tool_call: true,
+          tool_call: false, // Smaller model with limited tool support
           temperature: true,
           release_date: "2025-11-01",
           modalities: { input: ["text", "image"], output: ["text"] },
@@ -1108,7 +1108,7 @@ export namespace Provider {
           family: "llama-3.3",
           attachment: false,
           reasoning: false,
-          tool_call: true,
+          tool_call: false, // Llama models have unreliable tool support via OpenAI-compatible API
           temperature: true,
           release_date: "2024-12-06",
           modalities: { input: ["text"], output: ["text"] },
@@ -1150,7 +1150,7 @@ export namespace Provider {
           family: "llama-4",
           attachment: false,
           reasoning: false,
-          tool_call: true,
+          tool_call: false, // Llama models have unreliable tool support via OpenAI-compatible API
           temperature: true,
           release_date: "2025-04-05",
           modalities: { input: ["text"], output: ["text"] },
@@ -1164,7 +1164,7 @@ export namespace Provider {
           family: "llama-3.1",
           attachment: false,
           reasoning: false,
-          tool_call: true,
+          tool_call: false, // Llama models have unreliable tool support via OpenAI-compatible API
           temperature: true,
           release_date: "2024-07-23",
           modalities: { input: ["text"], output: ["text"] },
@@ -1178,7 +1178,7 @@ export namespace Provider {
           family: "llama-3.1",
           attachment: false,
           reasoning: false,
-          tool_call: true,
+          tool_call: false, // Llama models have unreliable tool support via OpenAI-compatible API
           temperature: true,
           release_date: "2024-07-23",
           modalities: { input: ["text"], output: ["text"] },
@@ -1193,7 +1193,7 @@ export namespace Provider {
           family: "qwen3",
           attachment: false,
           reasoning: false,
-          tool_call: true,
+          tool_call: false, // Qwen models have unreliable tool support via OpenAI-compatible API
           temperature: true,
           release_date: "2025-11-01",
           modalities: { input: ["text"], output: ["text"] },
@@ -1257,8 +1257,9 @@ export namespace Provider {
       }
 
       // Add default models to the input provider if not already defined
+      // Only include models that support tool calling since opencode requires it
       for (const [modelID, model] of Object.entries(defaultModels)) {
-        if (!input.models[modelID]) {
+        if (!input.models[modelID] && model.tool_call) {
           input.models[modelID] = toProviderModel(model)
         }
       }

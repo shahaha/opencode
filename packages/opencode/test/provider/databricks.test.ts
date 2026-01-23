@@ -172,10 +172,12 @@ test("Databricks: includes default models", async () => {
       const providers = await Provider.list()
       expect(providers["databricks"]).toBeDefined()
       const models = Object.keys(providers["databricks"].models)
-      // Should include Claude models
+      // Should include Claude models (tool-calling capable)
       expect(models.some((m) => m.includes("claude"))).toBe(true)
-      // Should include Llama models
-      expect(models.some((m) => m.includes("llama"))).toBe(true)
+      // Should include GPT models (tool-calling capable)
+      expect(models.some((m) => m.includes("gpt-5"))).toBe(true)
+      // Should include Gemini models (tool-calling capable)
+      expect(models.some((m) => m.includes("gemini"))).toBe(true)
     },
   })
 })
@@ -467,11 +469,11 @@ test("Databricks: model capabilities are set correctly", async () => {
       expect(claudeModel.capabilities.toolcall).toBe(true)
       expect(claudeModel.capabilities.attachment).toBe(true)
 
-      // Check Llama model capabilities
-      const llamaModel = providers["databricks"].models["databricks-llama-4-maverick"]
-      expect(llamaModel).toBeDefined()
-      expect(llamaModel.capabilities.toolcall).toBe(true)
-      expect(llamaModel.capabilities.attachment).toBe(false) // Llama doesn't support images
+      // Check GPT model capabilities
+      const gptModel = providers["databricks"].models["databricks-gpt-5"]
+      expect(gptModel).toBeDefined()
+      expect(gptModel.capabilities.toolcall).toBe(true)
+      expect(gptModel.capabilities.attachment).toBe(true)
     },
   })
 })
@@ -541,15 +543,9 @@ test("Databricks: GPT-5 models have correct capabilities", async () => {
       expect(gpt5Nano.family).toBe("gpt-5-nano")
       expect(gpt5Nano.capabilities.reasoning).toBe(false)
 
-      // GPT OSS models
-      const gptOss120b = models["databricks-gpt-oss-120b"]
-      expect(gptOss120b).toBeDefined()
-      expect(gptOss120b.family).toBe("gpt-oss")
-      expect(gptOss120b.capabilities.attachment).toBe(false) // text only
-
-      const gptOss20b = models["databricks-gpt-oss-20b"]
-      expect(gptOss20b).toBeDefined()
-      expect(gptOss20b.family).toBe("gpt-oss")
+      // GPT OSS models are excluded - they don't support tool calling reliably
+      expect(models["databricks-gpt-oss-120b"]).toBeUndefined()
+      expect(models["databricks-gpt-oss-20b"]).toBeUndefined()
     },
   })
 })
@@ -601,12 +597,8 @@ test("Databricks: Gemini models have correct capabilities", async () => {
       expect(gemini25Flash.family).toBe("gemini-2.5")
       expect(gemini25Flash.capabilities.reasoning).toBe(true)
 
-      // Gemma 3 12B
-      const gemma3 = models["databricks-gemma-3-12b"]
-      expect(gemma3).toBeDefined()
-      expect(gemma3.family).toBe("gemma-3")
-      expect(gemma3.capabilities.reasoning).toBe(false)
-      expect(gemma3.capabilities.input.image).toBe(true)
+      // Gemma 3 12B is excluded - limited tool support
+      expect(models["databricks-gemma-3-12b"]).toBeUndefined()
     },
   })
 })
@@ -671,7 +663,7 @@ test("Databricks: Claude models have correct capabilities", async () => {
   })
 })
 
-test("Databricks: Llama models have correct capabilities", async () => {
+test("Databricks: non-tool-calling models are excluded", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
@@ -690,35 +682,19 @@ test("Databricks: Llama models have correct capabilities", async () => {
       const providers = await Provider.list()
       const models = providers["databricks"].models
 
-      // Llama 4 Maverick
-      const llama4 = models["databricks-llama-4-maverick"]
-      expect(llama4).toBeDefined()
-      expect(llama4.family).toBe("llama-4")
-      expect(llama4.capabilities.toolcall).toBe(true)
-      expect(llama4.capabilities.attachment).toBe(false) // text only
-      expect(llama4.capabilities.input.image).toBe(false)
-      expect(llama4.limit.context).toBe(1048576) // ~1M context
+      // Llama models are excluded - unreliable tool support via OpenAI-compatible API
+      expect(models["databricks-llama-4-maverick"]).toBeUndefined()
+      expect(models["databricks-meta-llama-3-3-70b-instruct"]).toBeUndefined()
+      expect(models["databricks-meta-llama-3-1-405b-instruct"]).toBeUndefined()
+      expect(models["databricks-meta-llama-3-1-8b-instruct"]).toBeUndefined()
 
-      // Meta Llama 3.3 70B
-      const llama33 = models["databricks-meta-llama-3-3-70b-instruct"]
-      expect(llama33).toBeDefined()
-      expect(llama33.family).toBe("llama-3.3")
-      expect(llama33.capabilities.attachment).toBe(false)
-
-      // Meta Llama 3.1 405B
-      const llama31_405b = models["databricks-meta-llama-3-1-405b-instruct"]
-      expect(llama31_405b).toBeDefined()
-      expect(llama31_405b.family).toBe("llama-3.1")
-
-      // Meta Llama 3.1 8B
-      const llama31_8b = models["databricks-meta-llama-3-1-8b-instruct"]
-      expect(llama31_8b).toBeDefined()
-      expect(llama31_8b.family).toBe("llama-3.1")
+      // Qwen models are excluded - unreliable tool support via OpenAI-compatible API
+      expect(models["databricks-qwen3-next-80b-a3b-instruct"]).toBeUndefined()
     },
   })
 })
 
-test("Databricks: Qwen models have correct capabilities", async () => {
+test("Databricks: all models have required API configuration and tool support", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
@@ -737,42 +713,14 @@ test("Databricks: Qwen models have correct capabilities", async () => {
       const providers = await Provider.list()
       const models = providers["databricks"].models
 
-      // Qwen3 Next 80B
-      const qwen3 = models["databricks-qwen3-next-80b-a3b-instruct"]
-      expect(qwen3).toBeDefined()
-      expect(qwen3.family).toBe("qwen3")
-      expect(qwen3.capabilities.toolcall).toBe(true)
-      expect(qwen3.capabilities.attachment).toBe(false) // text only
-      expect(qwen3.limit.context).toBe(512000) // 512K context
-    },
-  })
-})
-
-test("Databricks: all models have required API configuration", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Bun.write(
-        path.join(dir, "opencode.json"),
-        JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    init: async () => {
-      Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
-      Env.set("DATABRICKS_TOKEN", "test-token")
-    },
-    fn: async () => {
-      const providers = await Provider.list()
-      const models = providers["databricks"].models
-
-      // All models should use openai-compatible SDK
+      // All models should use openai-compatible SDK and support tool calling
       for (const [modelId, model] of Object.entries(models)) {
         expect(model.api.npm).toBe("@ai-sdk/openai-compatible")
         expect(model.providerID).toBe("databricks")
         expect(model.api.url).toContain("serving-endpoints")
         expect(model.status).toBe("active")
+        // All included models must support tool calling
+        expect(model.capabilities.toolcall).toBe(true)
       }
     },
   })
@@ -814,12 +762,6 @@ test("Databricks: model costs are set correctly", async () => {
       expect(claude.cost.input).toBeGreaterThan(0)
       expect(claude.cost.output).toBeGreaterThan(0)
       expect(claude.cost.cache.read).toBeGreaterThan(0)
-
-      // Llama models - no cache pricing
-      const llama = models["databricks-llama-4-maverick"]
-      expect(llama.cost.input).toBeGreaterThan(0)
-      expect(llama.cost.output).toBeGreaterThan(0)
-      expect(llama.cost.cache.read).toBe(0)
     },
   })
 })
