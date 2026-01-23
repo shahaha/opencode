@@ -441,7 +441,8 @@ export namespace MessageV2 {
 
     const toModelOutput = (output: unknown) => {
       if (typeof output === "string") {
-        return { type: "text", value: output }
+        // Ensure non-empty text for APIs that reject empty content (Databricks, Anthropic)
+        return { type: "text", value: output || "[No output]" }
       }
 
       if (typeof output === "object") {
@@ -456,7 +457,8 @@ export namespace MessageV2 {
         return {
           type: "content",
           value: [
-            { type: "text", text: outputObject.text },
+            // Ensure non-empty text for APIs that reject empty content
+            { type: "text", text: outputObject.text || "[No output]" },
             ...attachments.map((attachment) => ({
               type: "media",
               mediaType: attachment.mime,
