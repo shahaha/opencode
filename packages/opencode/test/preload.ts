@@ -5,6 +5,7 @@ import path from "path"
 import fs from "fs/promises"
 import fsSync from "fs"
 import { afterAll } from "bun:test"
+const { Global } = await import("../src/global")
 
 // Set OPENCODE_LIBC for file watcher compatibility
 // This is needed for @parcel/watcher-linux-{arch}-glibc
@@ -31,7 +32,8 @@ process.env["XDG_STATE_HOME"] = path.join(dir, "state")
 const cacheDir = path.join(dir, "cache", "opencode")
 await fs.mkdir(cacheDir, { recursive: true })
 await fs.writeFile(path.join(cacheDir, "version"), "14")
-const response = await fetch("https://models.dev/api.json")
+const url = Global.Path.modelsDevUrl
+const response = await fetch(`${url}/api.json`)
 if (response.ok) {
   await fs.writeFile(path.join(cacheDir, "models.json"), await response.text())
 }
