@@ -73,6 +73,7 @@ import { Global } from "@/global"
 import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
+import { DialogSelect } from "@tui/ui/dialog-select"
 import { formatTranscript } from "../../util/transcript"
 
 addDefaultParsers(parsers.parsers)
@@ -1083,6 +1084,74 @@ export function Session() {
               </Show>
               <Show when={permissions().length === 0 && questions().length > 0}>
                 <QuestionPrompt request={questions()[0]} />
+              </Show>
+              <Show when={permissions().length === 0 && questions().length === 0 && sync.data.pendingDialog}>
+                {(pendingDialog) => {
+                  const pending = pendingDialog()
+                  if (pending?.mode === "modal") return null
+                  return (
+                    <DialogSelect
+                      title={pending.title}
+                      message={pending.message}
+                      options={
+                        pending.options?.map((opt: any) => ({
+                          title: opt.title,
+                          value: opt.value,
+                          description: opt.description,
+                          category: opt.category,
+                          disabled: opt.disabled,
+                        })) ?? []
+                      }
+                      keybind={[
+                        {
+                          keybind: {
+                            name: "escape",
+                            ctrl: false,
+                            meta: false,
+                            shift: false,
+                            super: false,
+                            leader: false,
+                          },
+                          title: "esc",
+                          onTrigger: () => {
+                            sdk.client.dialog.reply({
+                              dialogID: pending.id,
+                              dismissed: true,
+                            })
+                            prompt?.focus()
+                          },
+                        },
+                        ...(pending.keybind?.map((kb: any) => ({
+                          keybind: {
+                            name: kb.key,
+                            ctrl: kb.ctrl ?? false,
+                            meta: kb.meta ?? false,
+                            shift: kb.shift ?? false,
+                            super: false,
+                            leader: false,
+                          },
+                          title: kb.label ?? kb.key,
+                          onTrigger: () => {
+                            sdk.client.dialog.reply({
+                              dialogID: pending.id,
+                              value: kb.value,
+                              dismissed: false,
+                            })
+                            prompt?.focus()
+                          },
+                        })) ?? []),
+                      ]}
+                      onSelect={(option) => {
+                        sdk.client.dialog.reply({
+                          dialogID: pending.id,
+                          value: option.value,
+                          dismissed: false,
+                        })
+                        prompt?.focus()
+                      }}
+                    />
+                  )
+                }}
               </Show>
               <Prompt
                 visible={!session()?.parentID && permissions().length === 0 && questions().length === 0}
