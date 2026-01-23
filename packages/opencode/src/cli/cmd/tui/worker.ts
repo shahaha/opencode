@@ -20,6 +20,8 @@ await Log.init({
   })(),
 })
 
+console.log("[WORKER] Starting TUI worker")
+
 process.on("unhandledRejection", (e) => {
   Log.Default.error("rejection", {
     e: e instanceof Error ? e.message : e,
@@ -43,11 +45,21 @@ const eventStream = {
   abort: undefined as AbortController | undefined,
 }
 
-const startEventStream = (directory: string) => {
+// Initialize the project instance when starting event stream
+async function startEventStream(directory: string) {
   if (eventStream.abort) eventStream.abort.abort()
   const abort = new AbortController()
   eventStream.abort = abort
   const signal = abort.signal
+
+  // Initialize project instance and bootstrap
+  await Instance.provide({
+    directory,
+    init: InstanceBootstrap,
+    fn: async () => {
+      // Instance is now initialized with AutoRepairVerification
+    },
+  })
 
   const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = new Request(input, init)

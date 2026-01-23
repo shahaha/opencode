@@ -1,0 +1,16 @@
+$ vite dev --host 0.0.0.0
+ℹ Using index.html as renderer template.
+Port 3000 is in use, trying another one...
+Port 3001 is in use, trying another one...
+
+  VITE v7.1.4  ready in 770 ms
+
+  ➜  Local:   http://localhost:3002/
+  ➜  Network: http://192.168.0.221:3002/
+  ➜  Network: http://172.17.0.1:3002/
+  ➜  Network: http://100.94.136.15:3002/
+  ➜  Network: http://172.21.0.1:3002/
+  ➜  Network: http://172.20.0.1:3002/
+  ➜  Network: http://172.25.0.1:3002/
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+error: script "dev" was terminated by signal SIGKILL (Forced quit)

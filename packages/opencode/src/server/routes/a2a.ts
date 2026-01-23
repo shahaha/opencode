@@ -4,6 +4,8 @@
 import { Hono } from "hono"
 import { z } from "zod"
 import { Log } from "../../util/log"
+import { verifyAgent, isAgentAllowed } from "../util/agent-verify"
+import { broadcastDelegationUpdate } from "./a2a-ws"
 
 const log = Log.create({ service: "a2a" })
 
@@ -101,6 +103,36 @@ interface DiscoveryConfig {
   scanInterval: number // milliseconds
   lastScanTime?: number
 }
+
+// ============================================================================
+// Agent Heartbeat & Monitoring Types
+// ============================================================================
+
+interface AgentHeartbeat {
+  agentId: string
+  status: "online" | "busy" | "offline"
+  load?: number // CPU load 0-100
+  activeTasks?: number
+  timestamp: number
+}
+
+interface AgentHealth {
+  agentId: string
+  url: string
+  lastHeartbeat: number
+  lastChecked: number
+  status: "online" | "busy" | "offline" | "unknown"
+  responseTime?: number // milliseconds
+  error?: string
+}
+
+// Heartbeat monitoring state
+let heartbeatMonitorRunning = false
+let heartbeatCheckInterval: ReturnType<typeof setInterval> | null = null
+const HEARTBEAT_TIMEOUT = 30000 // 30 seconds
+const CHECK_INTERVAL = 10000 // 10 seconds
+
+const agentHealth = new Map<string, AgentHealth>()
 
 // ============================================================================
 // Agent Discovery Storage
@@ -272,7 +304,7 @@ interface DelegationTask {
   originalTaskId?: string
   sourceAgent: string
   targetAgent: DiscoveredAgent
-  status: "pending" | "processing" | "completed" | "failed" | "delegated"
+  status: "pending" | "processing" | "completed" | "failed" | "delegated" | "unknown"
   message: Message
   result?: Message
   createdAt: number
@@ -281,6 +313,9 @@ interface DelegationTask {
     delegatedAt?: number
     completedAt?: number
     originalTaskId?: string
+    remoteTaskId?: string
+    remoteAgentUrl?: string
+    pollingTimedOut?: boolean
   }
 }
 
@@ -1328,6 +1363,37 @@ A2ARoutes.post("/agents", async (c) => {
 
     const agentData = agentSchema.parse(body)
 
+    // Security: Check if agent URL is allowed
+    if (!isAgentAllowed(agentData.url)) {
+      return c.json(
+        {
+          error: {
+            code: "AGENT_NOT_ALLOWED",
+            message: "Agent URL is not in the allowed list. Only localhost agents are permitted.",
+          },
+        },
+        403,
+      )
+    }
+
+    // Security: Verify agent before registration
+    const verification = await verifyAgent(agentData.url)
+    if (!verification.success) {
+      log.warn("Agent verification failed", {
+        url: agentData.url,
+        error: verification.error,
+      })
+      return c.json(
+        {
+          error: {
+            code: "AGENT_VERIFICATION_FAILED",
+            message: `Could not verify agent at ${agentData.url}: ${verification.error}`,
+          },
+        },
+        400,
+      )
+    }
+
     const agent = addManualAgent({
       name: agentData.name,
       description: agentData.description || "",
@@ -1353,6 +1419,9 @@ A2ARoutes.post("/agents", async (c) => {
     return c.json({
       success: true,
       agent,
+      verification: {
+        responseTime: verification.responseTime,
+      },
     })
   } catch (error) {
     const err = error as Error
@@ -1391,20 +1460,131 @@ A2ARoutes.delete("/agents/:agentId", async (c) => {
   })
 })
 
-A2ARoutes.get("/agents/status", async (c) => {
-  const status = getDiscoveryStatus()
+// ============================================================================
+// Agent Heartbeat & Monitoring Endpoints (must be before parameterized routes)
+// ============================================================================
+
+// Agent heartbeat endpoint - agents can report their status
+A2ARoutes.post("/agents/heartbeat", async (c) => {
+  try {
+    const body = await c.req.json()
+
+    const heartbeatSchema = z.object({
+      agentId: z.string(),
+      status: z.enum(["online", "busy", "offline"]),
+      load: z.number().min(0).max(100).optional(),
+      activeTasks: z.number().optional(),
+      timestamp: z.number().optional(),
+    })
+
+    const heartbeat = heartbeatSchema.parse(body)
+
+    const agent = discoveredAgents.get(heartbeat.agentId)
+    if (!agent) {
+      return c.json(
+        {
+          error: {
+            code: "AGENT_NOT_FOUND",
+            message: `Agent not found: ${heartbeat.agentId}`,
+          },
+        },
+        404,
+      )
+    }
+
+    const now = Date.now()
+    const health: AgentHealth = {
+      agentId: heartbeat.agentId,
+      url: agent.url,
+      lastHeartbeat: heartbeat.timestamp || now,
+      lastChecked: now,
+      status: heartbeat.status,
+    }
+
+    agentHealth.set(heartbeat.agentId, health)
+
+    agent.status = heartbeat.status === "offline" ? "unavailable" : "available"
+    agent.lastChecked = now
+
+    log.debug("Heartbeat received", { agentId: heartbeat.agentId, status: heartbeat.status })
+
+    return c.json({
+      success: true,
+      monitorStatus: {
+        running: heartbeatMonitorRunning,
+        checkInterval: CHECK_INTERVAL,
+        timeout: HEARTBEAT_TIMEOUT,
+      },
+    })
+  } catch (error) {
+    const err = error as Error
+    return c.json(
+      {
+        error: {
+          code: "HEARTBEAT_ERROR",
+          message: err.message,
+        },
+      },
+      400,
+    )
+  }
+})
+
+// Get health status of all agents
+A2ARoutes.get("/agents/health", async (c) => {
+  const healthStatus = getAgentsHealthStatus()
+
   return c.json({
-    ...status,
-    config: {
-      registries: discoveryConfig.registries.length,
-      wellKnownDomains: discoveryConfig.wellKnownDomains.length,
-      manualAgents: discoveryConfig.manualAgents.length,
-      scanInterval: discoveryConfig.scanInterval,
+    ...healthStatus,
+    monitor: {
+      running: heartbeatMonitorRunning,
+      checkInterval: CHECK_INTERVAL,
+      timeout: HEARTBEAT_TIMEOUT,
     },
   })
 })
 
+// Get health status for a specific agent
+A2ARoutes.get("/agents/:agentId/health", async (c) => {
+  const agentId = c.req.param("agentId")
+
+  const health = agentHealth.get(agentId)
+  if (!health) {
+    return c.json(
+      {
+        error: {
+          code: "HEALTH_NOT_FOUND",
+          message: `No health data for agent: ${agentId}`,
+        },
+      },
+      404,
+    )
+  }
+
+  return c.json(health)
+})
+
+// Start/stop heartbeat monitor
+A2ARoutes.post("/monitor/start", async (c) => {
+  startHeartbeatMonitor()
+  return c.json({
+    success: true,
+    running: heartbeatMonitorRunning,
+  })
+})
+
+A2ARoutes.post("/monitor/stop", async (c) => {
+  stopHeartbeatMonitor()
+  return c.json({
+    success: true,
+    running: heartbeatMonitorRunning,
+  })
+})
+
+// ============================================================================
 // Get single agent
+// ============================================================================
+
 A2ARoutes.get("/agents/:agentId", async (c) => {
   const agentId = c.req.param("agentId")
   const agent = getAgentById(agentId)
@@ -1586,6 +1766,146 @@ A2ARoutes.post("/agents/:agentId/mcp/invoke", async (c) => {
   }
 })
 
+// ============================================================================
+// Agent Heartbeat & Monitoring
+// ============================================================================
+
+// Start the heartbeat monitor
+function startHeartbeatMonitor(): void {
+  if (heartbeatMonitorRunning) {
+    log.info("Heartbeat monitor already running")
+    return
+  }
+
+  heartbeatMonitorRunning = true
+  log.info("Starting heartbeat monitor", { checkInterval: CHECK_INTERVAL })
+
+  heartbeatCheckInterval = setInterval(async () => {
+    await checkAllAgentsHealth()
+  }, CHECK_INTERVAL)
+}
+
+// Stop the heartbeat monitor
+function stopHeartbeatMonitor(): void {
+  if (heartbeatCheckInterval) {
+    clearInterval(heartbeatCheckInterval)
+    heartbeatCheckInterval = null
+  }
+  heartbeatMonitorRunning = false
+  log.info("Heartbeat monitor stopped")
+}
+
+// Check health of all discovered agents
+async function checkAllAgentsHealth(): Promise<void> {
+  const now = Date.now()
+  const agents = Array.from(discoveredAgents.entries())
+
+  if (agents.length === 0) {
+    log.debug("No agents to check")
+    return
+  }
+
+  // Parallel health checks with concurrency limit
+  const concurrency = 10
+  const results: Array<{ agentId: string; agent: DiscoveredAgent; health: AgentHealth }> = []
+
+  for (let i = 0; i < agents.length; i += concurrency) {
+    const batch = agents.slice(i, i + concurrency)
+
+    const batchResults = await Promise.all(
+      batch.map(async ([agentId, agent]) => {
+        try {
+          const startTime = Date.now()
+          const healthUrl = `${agent.url.replace(/\/$/, "")}/a2a/health`
+
+          const response = await fetch(healthUrl, {
+            method: "GET",
+            signal: AbortSignal.timeout(5000),
+          })
+
+          const responseTime = Date.now() - startTime
+
+          const health: AgentHealth = {
+            agentId,
+            url: agent.url,
+            lastHeartbeat: now,
+            lastChecked: now,
+            status: response.ok ? "online" : "offline",
+            responseTime,
+          }
+
+          return { agentId, agent, health }
+        } catch (error) {
+          const health: AgentHealth = {
+            agentId,
+            url: agent.url,
+            lastHeartbeat: agent.lastChecked || 0,
+            lastChecked: now,
+            status: "offline",
+            error: error instanceof Error ? error.message : "Unknown error",
+          }
+          return { agentId, agent, health }
+        }
+      }),
+    )
+
+    results.push(...batchResults)
+  }
+
+  // Apply all results
+  let onlineCount = 0
+  for (const { agentId, agent, health } of results) {
+    agentHealth.set(agentId, health)
+
+    if (health.status === "online") {
+      agent.status = "available"
+      agent.lastChecked = now
+      onlineCount++
+    } else {
+      agent.status = "unavailable"
+    }
+  }
+
+  // Remove agents that have been offline for too long
+  removeStaleAgents(now)
+
+  log.debug("Agent health check complete", { total: agents.length, online: onlineCount })
+}
+
+// Remove agents that haven't responded in the timeout period
+function removeStaleAgents(now: number): void {
+  const staleThreshold = HEARTBEAT_TIMEOUT * 3 // 90 seconds
+
+  for (const [agentId, health] of agentHealth) {
+    if (now - health.lastChecked > staleThreshold) {
+      const agent = discoveredAgents.get(agentId)
+      if (agent && agent.source === "manual") {
+        // Only remove manually added agents that are stale
+        discoveredAgents.delete(agentId)
+        agentHealth.delete(agentId)
+        log.info("Removed stale agent", { agentId, name: agent.name, lastChecked: health.lastChecked })
+      }
+    }
+  }
+}
+
+// Get health status for all agents
+function getAgentsHealthStatus(): { agents: Record<string, AgentHealth>; total: number } {
+  const agents: Record<string, AgentHealth> = {}
+  let total = 0
+
+  for (const [agentId, health] of agentHealth) {
+    agents[agentId] = health
+    total++
+  }
+
+  return { agents, total }
+}
+
+// ============================================================================
+// Delegation Functions
+// ============================================================================
+
 function generateDelegationId(): string {
   return `delegation_${Date.now()}_${++delegationCounter}`
 }
@@ -1631,10 +1951,15 @@ async function delegateTaskToAgent(
       })
       delegationTask.status = "completed"
       delegationTask.updatedAt = Date.now()
+      delegationTask.metadata!.completedAt = Date.now()
       return delegationTask
     }
 
-    const response = await fetch(`${agent.url}/a2a/tasks`, {
+    // Build A2A URL - remove trailing /a2a if present, then add /a2a/tasks
+    const baseUrl = agent.url.replace(/\/a2a\/?$/, "")
+    const tasksUrl = `${baseUrl}/a2a/tasks`
+
+    const response = await fetch(tasksUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1659,36 +1984,16 @@ async function delegateTaskToAgent(
     delegationTask.status = "delegated"
     delegationTask.updatedAt = Date.now()
 
-    if (result.taskId && agent.capabilities.streaming) {
-      delegationTask.status = "processing"
-      delegationTask.updatedAt = Date.now()
+    // Store remote task ID for polling
+    if (result.taskId) {
+      delegationTask.metadata!.remoteTaskId = result.taskId
+      delegationTask.metadata!.remoteAgentUrl = baseUrl
 
-      for (let i = 0; i < 30; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-
-        const statusResponse = await fetch(`${agent.url}/a2a/tasks/${result.taskId}`, {
-          headers: { Accept: "application/json" },
-          signal: AbortSignal.timeout(5000),
-        })
-
-        if (statusResponse.ok) {
-          const status = await statusResponse.json()
-          if (status.status === "completed" || status.status === "failed") {
-            delegationTask.status = status.status
-            delegationTask.updatedAt = Date.now()
-            if (status.result?.messages?.[0]) {
-              delegationTask.result = status.result.messages[0]
-            }
-            delegationTask.metadata!.completedAt = Date.now()
-            break
-          }
-        }
-      }
-    } else if (result.result?.messages?.[0]) {
-      delegationTask.result = result.result.messages[0]
-      delegationTask.status = "completed"
-      delegationTask.updatedAt = Date.now()
-      delegationTask.metadata!.completedAt = Date.now()
+      // Start background polling (non-blocking)
+      // Client should poll /a2a/delegations/:taskId for updates
+      pollDelegationStatus(delegationId, baseUrl, result.taskId).catch((error) => {
+        log.error("Background polling failed", { delegationId, error: error.message })
+      })
     }
 
     log.info("Task delegated", {
@@ -1702,6 +2007,76 @@ async function delegateTaskToAgent(
     const err = error as Error
     log.error("Delegation error", { agent: agent.name, error: err.message })
     return null
+  }
+}
+
+// Background task to poll delegation status
+async function pollDelegationStatus(delegationId: string, agentBaseUrl: string, remoteTaskId: string): Promise<void> {
+  const maxAttempts = 30 // 30 * 2s = 60s max
+  const pollInterval = 2000
+
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((resolve) => setTimeout(resolve, pollInterval))
+
+    const delegation = delegatedTasks.get(delegationId)
+    if (!delegation || delegation.status === "completed" || delegation.status === "failed") {
+      // Already completed or cancelled
+      return
+    }
+
+    try {
+      const statusResponse = await fetch(`${agentBaseUrl}/a2a/tasks/${remoteTaskId}`, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(5000),
+      })
+
+      if (statusResponse.ok) {
+        const status = await statusResponse.json()
+        if (status.status === "completed" || status.status === "failed") {
+          delegation.status = status.status
+          delegation.updatedAt = Date.now()
+          if (status.result?.messages?.[0]) {
+            delegation.result = status.result.messages[0]
+          }
+          delegation.metadata!.completedAt = Date.now()
+
+          // Broadcast status update via WebSocket
+          broadcastDelegationUpdate(delegationId, {
+            status: delegation.status,
+            result: delegation.result,
+            updatedAt: delegation.updatedAt,
+          })
+
+          log.info("Delegation completed", {
+            delegationId,
+            remoteTaskId,
+            status: delegation.status,
+          })
+          return
+        }
+
+        // Broadcast intermediate status update
+        broadcastDelegationUpdate(delegationId, {
+          status: "processing",
+          updatedAt: Date.now(),
+        })
+      }
+    } catch (error) {
+      log.debug("Polling attempt failed", {
+        delegationId,
+        attempt: i + 1,
+        error: (error as Error).message,
+      })
+    }
+  }
+
+  // Timeout - mark as unknown
+  const delegation = delegatedTasks.get(delegationId)
+  if (delegation) {
+    delegation.status = "unknown"
+    delegation.updatedAt = Date.now()
+    delegation.metadata!.pollingTimedOut = true
+    log.warn("Delegation polling timed out", { delegationId, remoteTaskId })
   }
 }
 
@@ -1830,6 +2205,130 @@ A2ARoutes.get("/delegations", async (c) => {
     })),
     total: delegations.length,
   })
+})
+
+// ============================================================================
+// Cross-Agent MCP Tool Sharing
+// ============================================================================
+
+A2ARoutes.get("/delegations/:taskId/mcp/tools", async (c) => {
+  const taskId = c.req.param("taskId")
+  const delegation = getDelegationTask(taskId)
+
+  if (!delegation) {
+    return c.json(
+      {
+        error: {
+          code: "DELEGATION_NOT_FOUND",
+          message: `Delegation not found: ${taskId}`,
+        },
+      },
+      404,
+    )
+  }
+
+  // Get MCP tools from source agent
+  const mcpTools = getMcpToolsForAgent("http://localhost:5000/a2a")
+
+  return c.json({
+    tools: mcpTools,
+    sourceAgent: delegation.sourceAgent,
+    targetAgent: delegation.targetAgent.name,
+  })
+})
+
+A2ARoutes.post("/delegations/:taskId/mcp/invoke", async (c) => {
+  const taskId = c.req.param("taskId")
+  const delegation = getDelegationTask(taskId)
+
+  if (!delegation) {
+    return c.json(
+      {
+        error: {
+          code: "DELEGATION_NOT_FOUND",
+          message: `Delegation not found: ${taskId}`,
+        },
+      },
+      404,
+    )
+  }
+
+  const body = await c.req.json()
+
+  if (!body.toolName || typeof body.toolName !== "string") {
+    return c.json(
+      {
+        error: {
+          code: "INVALID_REQUEST",
+          message: "Missing or invalid toolName",
+        },
+      },
+      400,
+    )
+  }
+
+  const params = {
+    toolName: body.toolName,
+    arguments: body.arguments || {},
+  }
+
+  // Map tool name to MCP server
+  const toolToServer: Record<string, string> = {
+    "context7_query-docs": "context7",
+    web_search_exa: "websearch",
+    grep_app: "grep_app",
+    lsp_goto_definition: "context7",
+  }
+
+  const mcpServer = toolToServer[params.toolName] || params.toolName.split("_")[0]
+
+  try {
+    const mcpResponse = await fetch(`http://127.0.0.1:5000/mcp/${mcpServer}/call`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        toolName: params.toolName,
+        arguments: params.arguments,
+      }),
+      signal: AbortSignal.timeout(60000),
+    })
+
+    if (!mcpResponse.ok) {
+      const errorText = await mcpResponse.text()
+      return c.json(
+        {
+          error: {
+            code: "MCP_CALL_FAILED",
+            message: `Failed to call MCP tool: ${params.toolName}`,
+            details: errorText,
+          },
+        },
+        500,
+      )
+    }
+
+    const result = await mcpResponse.json()
+
+    return c.json({
+      success: true,
+      tool: params.toolName,
+      result,
+    })
+  } catch (error) {
+    const err = error as Error
+    return c.json(
+      {
+        error: {
+          code: "MCP_ERROR",
+          message: err.message,
+        },
+      },
+      500,
+    )
+  }
 })
 
 // ============================================================================

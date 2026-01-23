@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AG-UI WebSocket Test</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: #f0f0f0;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 4px;
+        font-weight: bold;
+      }
+      .connected {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+      .connecting {
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeaa7;
+      }
+      .disconnected {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+      .model-selector {
+        margin: 20px 0;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+      }
+      .chat-messages {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        height: 300px;
+        overflow-y: auto;
+        background: #f8f9fa;
+        margin: 20px 0;
+      }
+      .message {
+        margin: 10px 0;
+        padding: 8px 12px;
+        border-radius: 6px;
+      }
+      .user {
+        background: #007bff;
+        color: white;
+        margin-left: 20%;
+      }
+      .agent {
+        background: #e9ecef;
+        color: #333;
+        margin-right: 20%;
+      }
+      input,
+      button,
+      select {
+        padding: 8px 12px;
+        margin: 5px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      button {
+        background: #007bff;
+        color: white;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #0056b3;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🧪 AG-UI WebSocket Test</h1>
+      <p>Session ID: <strong>test-session</strong></p>
+
+      <div id="status" class="status connecting">🔄 正在连接...</div>
+
+      <div class="model-selector">
+        <label for="model-select">选择AI模型:</label>
+        <select id="model-select">
+          <option value="opencode/glm-4.7-free">OpenCode GLM-4.7 Free</option>
+          <option value="opencode/gpt-5-nano">OpenCode GPT-5 Nano</option>
+          <option value="opencode/big-pickle">OpenCode Big Pickle</option>
+          <option value="anthropic/claude-sonnet-4-5">Claude Sonnet 4.5</option>
+          <option value="anthropic/claude-haiku-4-5">Claude Haiku 4.5</option>
+          <option value="openai/gpt-5">GPT-5</option>
+          <option value="openai/gpt-5-nano">GPT-5 Nano</option>
+          <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
+          <option value="google/gemini-2.5-pro">Gemini 2.5 Pro</option>
+          <option value="xai/grok-4">Grok-4</option>
+          <option value="mistral/mistral-large-latest">Mistral Large</option>
+        </select>
+      </div>
+
+      <div class="chat-messages" id="messages">
+        <div class="message agent"><strong>系统:</strong> 欢迎使用AG-UI聊天系统！请选择一个AI模型并开始对话。</div>
+      </div>
+
+      <div>
+        <input type="text" id="message-input" placeholder="输入消息..." style="width: 70%" />
+        <button onclick="sendMessage()">发送</button>
+      </div>
+    </div>
+
+    <script>
+      let ws = null
+      let selectedModel = "opencode/glm-4.7-free"
+      const statusDiv = document.getElementById("status")
+      const messagesDiv = document.getElementById("messages")
+      const messageInput = document.getElementById("message-input")
+      const modelSelect = document.getElementById("model-select")
+
+      // Update selected model
+      modelSelect.addEventListener("change", function () {
+        selectedModel = this.value
+        console.log("Model changed to:", selectedModel)
+      })
+
+      function connectWebSocket() {
+        const wsUrl = "ws://127.0.0.1:5000/ag-ui/ws"
+        console.log("Connecting to:", wsUrl)
+
+        statusDiv.textContent = "🔄 正在连接..."
+        statusDiv.className = "status connecting"
+
+        ws = new WebSocket(wsUrl)
+
+        ws.onopen = function (event) {
+          console.log("✅ WebSocket connected")
+          statusDiv.textContent = "🟢 已连接"
+          statusDiv.className = "status connected"
+
+          // Send authentication
+          ws.send(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              method: "authenticate",
+              params: { sessionId: "test-session", token: "test-token" },
+              id: 1,
+            }),
+          )
+        }
+
+        ws.onmessage = function (event) {
+          const data = JSON.parse(event.data)
+          console.log("📨 Received:", data)
+
+          if (data.type === "agent.message") {
+            addMessage("agent", data.data.content, data.data.model)
+          } else if (data.type === "agent.thinking") {
+            statusDiv.textContent = "🤔 AI正在思考..."
+          }
+        }
+
+        ws.onerror = function (error) {
+          console.error("❌ WebSocket error:", error)
+          statusDiv.textContent = "🔴 连接错误"
+          statusDiv.className = "status disconnected"
+        }
+
+        ws.onclose = function (event) {
+          console.log("🔌 WebSocket closed:", event.code, event.reason)
+          statusDiv.textContent = "🔴 已断开连接"
+          statusDiv.className = "status disconnected"
+
+          // Auto reconnect after 3 seconds
+          setTimeout(connectWebSocket, 3000)
+        }
+      }
+
+      function sendMessage() {
+        const message = messageInput.value.trim()
+        if (!message) return
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          addMessage("user", message)
+
+          // Send message to backend
+          ws.send(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              method: "agent.message",
+              params: {
+                content: message,
+                sessionId: "test-session",
+                model: selectedModel,
+              },
+              id: Date.now(),
+            }),
+          )
+
+          messageInput.value = ""
+        } else {
+          alert("WebSocket未连接，请稍后再试")
+        }
+      }
+
+      function addMessage(sender, content, model) {
+        const messageDiv = document.createElement("div")
+        messageDiv.className = `message ${sender}`
+
+        let modelInfo = ""
+        if (sender === "agent" && model) {
+          modelInfo = ` <small style="opacity: 0.7;">[${model}]</small>`
+        }
+
+        messageDiv.innerHTML = `<strong>${sender === "user" ? "你" : "AI"}${modelInfo}:</strong> ${content}`
+        messagesDiv.appendChild(messageDiv)
+        messagesDiv.scrollTop = messagesDiv.scrollHeight
+      }
+
+      // Handle Enter key
+      messageInput.addEventListener("keypress", function (event) {
+        if (event.key === "Enter") {
+          sendMessage()
+        }
+      })
+
+      // Connect on page load
+      connectWebSocket()
+
+      console.log("🧪 AG-UI Test Page Loaded")
+    </script>
+  </body>
+</html>

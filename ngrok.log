@@ -1,0 +1,5 @@
+t=2026-01-19T11:54:37+0800 lvl=info msg="no configuration paths supplied"
+t=2026-01-19T11:54:37+0800 lvl=info msg="using configuration at default config path" path=/home/rick/.config/ngrok/ngrok.yml
+t=2026-01-19T11:54:37+0800 lvl=info msg="open config file" path=/home/rick/.config/ngrok/ngrok.yml err=nil
+ERROR:  Error reading configuration file '/home/rick/.config/ngrok/ngrok.yml': YAML parsing error: yaml: unmarshal errors:
+ERROR:    line 13: field host_header not found in type config.TCPv2Tunnel

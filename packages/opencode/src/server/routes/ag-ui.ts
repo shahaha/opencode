@@ -1127,7 +1127,12 @@ AGUIRoutes.get("/mcp/status", async (c) => {
   }
 
   try {
-    const response = await fetch("http://127.0.0.1:5000/mcp")
+    // Use the same host as the current request, but port 5000
+    const url = new URL(c.req.url)
+    url.port = "5000"
+    url.pathname = "/mcp"
+
+    const response = await fetch(url.toString())
     if (!response.ok) {
       throw new Error(`MCP endpoint error: ${response.status}`)
     }

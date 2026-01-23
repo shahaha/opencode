@@ -11,6 +11,8 @@ import { Instance } from "./instance"
 import { Vcs } from "./vcs"
 import { Log } from "@/util/log"
 import { ShareNext } from "@/share/share-next"
+import { AutoRepairVerification } from "@/auto-repair-verification"
+import { BrowserDiagnosticsCollector } from "@/browser-diagnostics"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
@@ -19,9 +21,13 @@ export async function InstanceBootstrap() {
   ShareNext.init()
   Format.init()
   await LSP.init()
+  // Enable experimental file watcher for auto repair verification
+  process.env.OPENCODE_EXPERIMENTAL_FILEWATCHER = "true"
   FileWatcher.init()
   File.init()
   Vcs.init()
+  await AutoRepairVerification.init()
+  await BrowserDiagnosticsCollector.init()
 
   Bus.subscribe(Command.Event.Executed, async (payload) => {
     if (payload.properties.name === Command.Default.INIT) {

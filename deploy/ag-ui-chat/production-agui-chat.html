@@ -1,0 +1,1111 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AG-UI Chat - Production</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f5f5f5;
+        --text-primary: #333333;
+        --text-secondary: #666666;
+        --border-color: #e0e0e0;
+        --accent-color: #2196f3;
+        --accent-hover: #1976d2;
+        --user-bubble: #2196f3;
+        --agent-bubble: #f5f5f5;
+        --error-color: #f44336;
+        --success-color: #4caf50;
+        --warning-color: #ff9800;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .app-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+
+      /* Header */
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 20px;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        gap: 16px;
+      }
+      .header-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+      .header-controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      /* Model Selector */
+      .model-selector {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .model-selector label {
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+      .model-selector select {
+        padding: 6px 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 13px;
+        min-width: 180px;
+        cursor: pointer;
+      }
+
+      /* Connection Status */
+      .connection-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 12px;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+      }
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+      .status-dot.connected {
+        background: var(--success-color);
+      }
+      .status-dot.disconnected {
+        background: var(--error-color);
+      }
+      .status-dot.connecting {
+        background: var(--warning-color);
+        animation: pulse 1s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      /* Settings Toggle */
+      .settings-toggle {
+        background: none;
+        border: none;
+        font-size: 20px;
+        cursor: pointer;
+        padding: 6px;
+        border-radius: 6px;
+        transition: background 0.2s;
+      }
+      .settings-toggle:hover {
+        background: var(--bg-primary);
+      }
+
+      /* Chat Container */
+      .chat-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        scroll-behavior: smooth;
+      }
+      .message {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 16px;
+        max-width: 85%;
+      }
+      .message.user {
+        flex-direction: row-reverse;
+        margin-left: auto;
+        max-width: 75%;
+      }
+      .message-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        flex-shrink: 0;
+      }
+      .message.agent .message-avatar {
+        background: var(--accent-color);
+        color: white;
+      }
+      .message.user .message-avatar {
+        background: var(--text-secondary);
+        color: white;
+      }
+      .message-content {
+        padding: 12px 16px;
+        border-radius: 16px;
+        line-height: 1.5;
+        word-wrap: break-word;
+      }
+      .message.agent .message-content {
+        background: var(--agent-bubble);
+        border: 1px solid var(--border-color);
+        border-top-left-radius: 4px;
+      }
+      .message.user .message-content {
+        background: var(--user-bubble);
+        color: white;
+        border-top-right-radius: 4px;
+      }
+      .message-meta {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-top: 4px;
+        padding: 0 4px;
+      }
+      .message.user .message-meta {
+        text-align: right;
+      }
+
+      /* Typing Indicator */
+      .typing-indicator {
+        display: none;
+        padding: 12px 16px;
+        background: var(--agent-bubble);
+        border-radius: 16px;
+        border: 1px solid var(--border-color);
+        border-top-left-radius: 4px;
+        max-width: 60px;
+      }
+      .typing-indicator.visible {
+        display: flex;
+        gap: 4px;
+      }
+      .typing-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text-secondary);
+        animation: typing 1.4s infinite;
+      }
+      .typing-dot:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      .typing-dot:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+
+      @keyframes typing {
+        0%,
+        60%,
+        100% {
+          transform: translateY(0);
+        }
+        30% {
+          transform: translateY(-4px);
+        }
+      }
+
+      /* Input Area */
+      .input-area {
+        padding: 16px 20px;
+        background: var(--bg-primary);
+        border-top: 1px solid var(--border-color);
+      }
+      .input-container {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+      }
+      .input-wrapper {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .input-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      #messageInput {
+        flex: 1;
+        padding: 12px 16px;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        font-size: 14px;
+        resize: none;
+        min-height: 48px;
+        max-height: 120px;
+        font-family: inherit;
+      }
+      #messageInput:focus {
+        outline: none;
+        border-color: var(--accent-color);
+      }
+
+      .input-actions {
+        display: flex;
+        gap: 4px;
+      }
+      .input-btn {
+        background: none;
+        border: none;
+        padding: 8px;
+        cursor: pointer;
+        border-radius: 8px;
+        transition: background 0.2s;
+        font-size: 18px;
+      }
+      .input-btn:hover {
+        background: var(--bg-secondary);
+      }
+      .input-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      #sendButton {
+        padding: 12px 24px;
+        background: var(--accent-color);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 14px;
+        transition: background 0.2s;
+      }
+      #sendButton:hover:not(:disabled) {
+        background: var(--accent-hover);
+      }
+      #sendButton:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      /* Image Preview */
+      .image-preview {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .image-preview-item {
+        position: relative;
+        width: 60px;
+        height: 60px;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+      }
+      .image-preview-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .image-preview-item button {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        width: 18px;
+        height: 18px;
+        border: none;
+        background: rgba(0, 0, 0, 0.6);
+        color: white;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* Settings Panel */
+      .settings-panel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 360px;
+        background: var(--bg-primary);
+        border-left: 1px solid var(--border-color);
+        padding: 24px;
+        z-index: 1000;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+      }
+      .settings-panel.visible {
+        transform: translateX(0);
+      }
+      .settings-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+      }
+      .settings-header h2 {
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .settings-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        padding: 4px;
+        color: var(--text-secondary);
+      }
+      .settings-section {
+        margin-bottom: 24px;
+      }
+      .settings-section h3 {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .setting-row {
+        margin-bottom: 16px;
+      }
+      .setting-row label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 6px;
+        color: var(--text-primary);
+      }
+      .setting-row input,
+      .setting-row select {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 14px;
+      }
+      .setting-row input:focus,
+      .setting-row select:focus {
+        outline: none;
+        border-color: var(--accent-color);
+      }
+
+      /* Workspace Dropdown */
+      .workspace-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .workspace-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .workspace-item:hover {
+        background: var(--bg-secondary);
+        border-color: var(--accent-color);
+      }
+      .workspace-item.active {
+        background: var(--accent-color);
+        color: white;
+        border-color: var(--accent-color);
+      }
+      .workspace-item .name {
+        flex: 1;
+        font-size: 14px;
+      }
+      .workspace-item .path {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .workspace-item.active .path {
+        color: rgba(255, 255, 255, 0.8);
+      }
+      .workspace-item .delete {
+        background: none;
+        border: none;
+        padding: 4px;
+        cursor: pointer;
+        opacity: 0.5;
+        font-size: 16px;
+      }
+      .workspace-item .delete:hover {
+        opacity: 1;
+      }
+      .workspace-item.active .delete {
+        color: white;
+      }
+
+      .add-workspace {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .add-workspace input {
+        flex: 1;
+      }
+      .add-workspace button {
+        padding: 10px 16px;
+        background: var(--accent-color);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+      }
+
+      /* Metrics Display */
+      .metrics {
+        display: flex;
+        gap: 16px;
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .metric {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      /* Error Toast */
+      .toast {
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%) translateY(100px);
+        background: var(--error-color);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        opacity: 0;
+        transition: all 0.3s;
+        z-index: 2000;
+      }
+      .toast.visible {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+      }
+
+      /* Empty State */
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: var(--text-secondary);
+        text-align: center;
+        padding: 40px;
+      }
+      .empty-state-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+        opacity: 0.5;
+      }
+      .empty-state h3 {
+        font-size: 18px;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+      }
+      .empty-state p {
+        font-size: 14px;
+        max-width: 300px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-container">
+      <!-- Header -->
+      <div class="header">
+        <div class="header-title">🤖 AG-UI Chat</div>
+        <div class="header-controls">
+          <div class="model-selector">
+            <label for="modelSelect">Model:</label>
+            <select id="modelSelect">
+              <option value="ollama/llava:latest">llava:latest (Vision)</option>
+              <option value="ollama/llama3.2-vision:11b">llama3.2-vision:11b (Vision)</option>
+              <option value="ollama/bakllava:latest">bakllava:latest (Vision)</option>
+              <option value="ollama/llama3.2:1b">llama3.2:1b</option>
+              <option value="ollama/llama3.2:3b">llama3.2:3b</option>
+              <option value="ollama/llama3.1:8b">llama3.1:8b</option>
+              <option value="ollama/llama3.1:70b">llama3.1:70b</option>
+              <option value="ollama/qwen2.5:0.5b">qwen2.5:0.5b</option>
+              <option value="ollama/qwen2.5:1.5b">qwen2.5:1.5b</option>
+              <option value="ollama/qwen2.5:3b">qwen2.5:3b</option>
+              <option value="ollama/codellama:7b">codellama:7b</option>
+              <option value="ollama/deepseek-coder:6.7b">deepseek-coder:6.7b</option>
+            </select>
+          </div>
+          <div class="connection-status" id="connectionStatus">
+            <span class="status-dot disconnected"></span>
+            <span class="status-text">Disconnected</span>
+          </div>
+          <button class="settings-toggle" id="settingsToggleBtn" title="Settings">⚙️</button>
+        </div>
+      </div>
+
+      <!-- Chat Container -->
+      <div class="chat-container" id="chatContainer">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-state-icon">💬</div>
+          <h3>Start a Conversation</h3>
+          <p>
+            Send a message to begin chatting with the AI agent. You can also upload images for vision-capable models.
+          </p>
+        </div>
+        <div class="message agent">
+          <div class="message-avatar">AI</div>
+          <div class="message-content">
+            <div>Welcome to AG-UI Chat! I'm ready to help you with coding, analysis, or any questions you have.</div>
+            <div class="message-meta">AG-UI Bot • Just now</div>
+          </div>
+        </div>
+        <div class="typing-indicator" id="typingIndicator">
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+        </div>
+      </div>
+
+      <!-- Input Area -->
+      <div class="input-area">
+        <div class="input-container">
+          <div class="input-wrapper">
+            <div class="input-row">
+              <input type="text" id="messageInput" placeholder="Type your message..." rows="1" />
+              <div class="input-actions">
+                <button class="input-btn" id="uploadBtn" title="Upload Image">📷</button>
+                <button class="input-btn" id="fileBtn" title="Upload File">📎</button>
+              </div>
+            </div>
+            <div class="image-preview" id="imagePreview"></div>
+          </div>
+          <button id="sendButton">Send</button>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" multiple style="display: none" />
+      </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div class="settings-panel" id="settingsPanel">
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <button class="settings-close" id="settingsCloseBtn">&times;</button>
+      </div>
+
+      <div class="settings-section">
+        <h3>Workspace</h3>
+        <div class="workspace-list" id="workspaceList"></div>
+        <div class="add-workspace">
+          <input type="text" id="newWorkspacePath" placeholder="Enter workspace path..." />
+          <button id="addWorkspaceBtn">Add</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Configuration</h3>
+        <div class="setting-row">
+          <label for="serverUrl">Server URL</label>
+          <input type="text" id="serverUrl" value="ws://localhost:5000/ag-ui/ws" />
+        </div>
+        <div class="setting-row">
+          <label for="timeoutSetting">Request Timeout (ms)</label>
+          <input type="number" id="timeoutSetting" value="60000" />
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Metrics</h3>
+        <div class="metrics">
+          <div class="metric">
+            <span>Messages:</span>
+            <span id="messageCount">0</span>
+          </div>
+          <div class="metric">
+            <span>Latency:</span>
+            <span id="latency">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- Hidden file input -->
+    <input type="file" id="imageInput" accept="image/*" multiple style="display: none" />
+
+    <script>
+      // Configuration
+      const DEFAULT_CONFIG = {
+        serverUrl: "ws://localhost:5000/ag-ui/ws",
+        timeout: 60000,
+        workspacePath: "/home/rick/prj/opencode",
+        selectedModel: "ollama/llava:latest",
+      }
+
+      const DEFAULT_WORKSPACES = [
+        { name: "OpenCode", path: "/home/rick/prj/opencode" },
+        { name: "Home", path: "/home/rick" },
+        { name: "Projects", path: "/home/rick/projects" },
+        { name: "Downloads", path: "/home/rick/Downloads" },
+        { name: "Root", path: "/" },
+      ]
+
+      // State
+      let state = {
+        connected: false,
+        connecting: false,
+        messages: [],
+        images: [],
+        config: { ...DEFAULT_CONFIG },
+        messageCount: 0,
+        latency: null,
+        ws: null,
+        reconnectAttempts: 0,
+        maxReconnectAttempts: 5,
+        reconnectDelay: 1000,
+      }
+
+      // DOM Elements
+      const elements = {
+        chatContainer: null,
+        messageInput: null,
+        sendButton: null,
+        settingsToggleBtn: null,
+        settingsPanel: null,
+        settingsCloseBtn: null,
+        modelSelect: null,
+        connectionStatus: null,
+        typingIndicator: null,
+        imagePreview: null,
+        uploadBtn: null,
+        fileInput: null,
+        imageInput: null,
+        workspaceList: null,
+        newWorkspacePath: null,
+        addWorkspaceBtn: null,
+        serverUrl: null,
+        timeoutSetting: null,
+        messageCount: null,
+        latency: null,
+        toast: null,
+        emptyState: null,
+      }
+
+      // Initialize DOM references
+      function initElements() {
+        elements.chatContainer = document.getElementById("chatContainer")
+        elements.messageInput = document.getElementById("messageInput")
+        elements.sendButton = document.getElementById("sendButton")
+        elements.settingsToggleBtn = document.getElementById("settingsToggleBtn")
+        elements.settingsPanel = document.getElementById("settingsPanel")
+        elements.settingsCloseBtn = document.getElementById("settingsCloseBtn")
+        elements.modelSelect = document.getElementById("modelSelect")
+        elements.connectionStatus = document.getElementById("connectionStatus")
+        elements.typingIndicator = document.getElementById("typingIndicator")
+        elements.imagePreview = document.getElementById("imagePreview")
+        elements.uploadBtn = document.getElementById("uploadBtn")
+        elements.fileInput = document.getElementById("fileInput")
+        elements.imageInput = document.getElementById("imageInput")
+        elements.workspaceList = document.getElementById("workspaceList")
+        elements.newWorkspacePath = document.getElementById("newWorkspacePath")
+        elements.addWorkspaceBtn = document.getElementById("addWorkspaceBtn")
+        elements.serverUrl = document.getElementById("serverUrl")
+        elements.timeoutSetting = document.getElementById("timeoutSetting")
+        elements.messageCount = document.getElementById("messageCount")
+        elements.latency = document.getElementById("latency")
+        elements.toast = document.getElementById("toast")
+        elements.emptyState = document.getElementById("emptyState")
+      }
+
+      // Utility Functions
+      function getWorkspaces() {
+        const stored = localStorage.getItem("customWorkspaces")
+        const customWorkspaces = stored ? JSON.parse(stored) : []
+        return [...DEFAULT_WORKSPACES, ...customWorkspaces]
+      }
+
+      function saveCustomWorkspaces(workspaces) {
+        localStorage.setItem("customWorkspaces", JSON.stringify(workspaces))
+      }
+
+      function showToast(message, duration = 3000) {
+        elements.toast.textContent = message
+        elements.toast.classList.add("visible")
+        setTimeout(() => elements.toast.classList.remove("visible"), duration)
+      }
+
+      function updateConnectionStatus(status) {
+        state.connected = status === "connected"
+        state.connecting = status === "connecting"
+
+        const dot = elements.connectionStatus.querySelector(".status-dot")
+        const text = elements.connectionStatus.querySelector(".status-text")
+
+        dot.className = "status-dot " + status
+        text.textContent = status.charAt(0).toUpperCase() + status.slice(1)
+      }
+
+      function formatTimestamp() {
+        const now = new Date()
+        return now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+      }
+
+      // Message Functions
+      function addMessage(content, role = "agent", meta = "") {
+        const isEmpty = state.messages.length === 0
+        state.messages.push({ content, role, meta, timestamp: Date.now() })
+
+        if (isEmpty) {
+          elements.emptyState.style.display = "none"
+        }
+
+        const msgDiv = document.createElement("div")
+        msgDiv.className = "message " + role
+        msgDiv.innerHTML = `
+        <div class="message-avatar">${role === "agent" ? "AI" : "U"}</div>
+        <div class="message-content">
+          <div>${content}</div>
+          ${meta ? `<div class="message-meta">${meta} • ${formatTimestamp()}</div>` : ""}
+        </div>
+      `
+
+        elements.typingIndicator.before(msgDiv)
+        elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight
+
+        state.messageCount++
+        elements.messageCount.textContent = state.messageCount
+      }
+
+      function showTyping(show) {
+        elements.typingIndicator.classList.toggle("visible", show)
+        elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight
+      }
+
+      // Workspace Functions
+      function renderWorkspaceList() {
+        const workspaces = getWorkspaces()
+        elements.workspaceList.innerHTML = ""
+
+        workspaces.forEach((ws) => {
+          const item = document.createElement("div")
+          item.className = "workspace-item" + (state.config.workspacePath === ws.path ? " active" : "")
+          item.innerHTML = `
+          <span class="name">${ws.name}</span>
+          <span class="path">${ws.path}</span>
+          ${!DEFAULT_WORKSPACES.find((d) => d.path === ws.path) ? '<button class="delete" data-path="' + ws.path + '">&times;</button>' : ""}
+        `
+
+          item.addEventListener("click", (e) => {
+            if (e.target.classList.contains("delete")) return
+            state.config.workspacePath = ws.path
+            localStorage.setItem("agui-chat-settings", JSON.stringify(state.config))
+            renderWorkspaceList()
+            showToast("Workspace: " + ws.name)
+          })
+
+          elements.workspaceList.appendChild(item)
+        })
+
+        // Delete buttons
+        elements.workspaceList.querySelectorAll(".delete").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const path = btn.dataset.path
+            const workspaces = getWorkspaces().filter((w) => w.path !== path)
+            saveCustomWorkspaces(workspaces)
+            renderWorkspaceList()
+            showToast("Workspace removed")
+          })
+        })
+      }
+
+      function addWorkspace() {
+        const path = elements.newWorkspacePath.value.trim()
+        if (!path) return
+
+        const name = path.split("/").pop() || "Workspace"
+        const workspaces = getWorkspaces()
+
+        if (workspaces.find((w) => w.path === path)) {
+          showToast("Workspace already exists")
+          return
+        }
+
+        workspaces.push({ name, path })
+        saveCustomWorkspaces(workspaces)
+        elements.newWorkspacePath.value = ""
+        renderWorkspaceList()
+        showToast("Workspace added: " + name)
+      }
+
+      // Image Functions
+      function handleImageUpload(files) {
+        Array.from(files).forEach((file) => {
+          if (!file.type.startsWith("image/")) return
+          if (file.size > 5 * 1024 * 1024) {
+            showToast("Image too large (max 5MB)")
+            return
+          }
+
+          const reader = new FileReader()
+          reader.onload = (e) => {
+            const id = Date.now() + Math.random()
+            state.images.push({ id, name: file.name, data: e.target.result })
+            renderImagePreview()
+          }
+          reader.readAsDataURL(file)
+        })
+      }
+
+      function renderImagePreview() {
+        elements.imagePreview.innerHTML = ""
+        state.images.forEach((img) => {
+          const item = document.createElement("div")
+          item.className = "image-preview-item"
+          item.innerHTML = `
+          <img src="${img.data}" alt="${img.name}" />
+          <button data-id="${img.id}">&times;</button>
+        `
+
+          item.querySelector("button").addEventListener("click", () => {
+            state.images = state.images.filter((i) => i.id !== img.id)
+            renderImagePreview()
+          })
+
+          elements.imagePreview.appendChild(item)
+        })
+      }
+
+      // WebSocket Functions
+      function connectWebSocket() {
+        if (state.ws && (state.ws.readyState === WebSocket.OPEN || state.ws.readyState === WebSocket.CONNECTING)) {
+          return
+        }
+
+        updateConnectionStatus("connecting")
+
+        try {
+          state.ws = new WebSocket(state.config.serverUrl)
+
+          state.ws.onopen = () => {
+            updateConnectionStatus("connected")
+            state.reconnectAttempts = 0
+            showToast("Connected")
+          }
+
+          state.ws.onclose = () => {
+            updateConnectionStatus("disconnected")
+            state.ws = null
+
+            if (state.reconnectAttempts < state.maxReconnectAttempts) {
+              setTimeout(
+                () => {
+                  state.reconnectAttempts++
+                  connectWebSocket()
+                },
+                state.reconnectDelay * Math.pow(2, state.reconnectAttempts - 1),
+              )
+            }
+          }
+
+          state.ws.onerror = () => {
+            updateConnectionStatus("disconnected")
+            showToast("Connection error")
+          }
+
+          state.ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data)
+              handleWebSocketMessage(data)
+            } catch (e) {
+              console.error("Parse error:", e)
+            }
+          }
+        } catch (e) {
+          updateConnectionStatus("disconnected")
+          showToast("Failed to connect")
+        }
+      }
+
+      function handleWebSocketMessage(data) {
+        if (data.type === "content" || data.type === "text") {
+          showTyping(false)
+
+          let content = data.content || data.text || ""
+          const lastMsg = elements.chatContainer.querySelector(
+            ".message.agent:last-child .message-content > div:first-child",
+          )
+
+          if (lastMsg && content) {
+            lastMsg.textContent += content
+            elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight
+          } else if (content) {
+            addMessage(content, "agent", "AG-UI Bot")
+          }
+
+          state.latency = Date.now() - state.messageStartTime
+          elements.latency.textContent = state.latency + "ms"
+        } else if (data.type === "step") {
+          showTyping(false)
+          addMessage(data.content || JSON.stringify(data), "agent", "AG-UI Bot")
+        } else if (data.type === "error") {
+          showTyping(false)
+          addMessage("Error: " + (data.error || "Unknown error"), "agent", "Error")
+          showToast(data.error || "Error from server")
+        } else if (data.type === "message") {
+          showTyping(false)
+          addMessage(data.content || JSON.stringify(data), "agent", "AG-UI Bot")
+        }
+      }
+
+      function sendMessage() {
+        const content = elements.messageInput.value.trim()
+        if (!content && state.images.length === 0) return
+
+        const userContent = content || (state.images.length > 0 ? "[Image attached]" : "")
+        addMessage(userContent, "user")
+
+        if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+          showTyping(true)
+          state.messageStartTime = Date.now()
+
+          const message = {
+            type: "message",
+            content: content,
+            images: state.images.map((img) => img.data.split(",")[1]),
+            workspace: state.config.workspacePath,
+          }
+
+          state.ws.send(JSON.stringify(message))
+        } else {
+          // Simulate response for demo
+          showTyping(true)
+          setTimeout(() => {
+            showTyping(false)
+            addMessage("Demo mode: WebSocket not connected. Configure server URL in settings.", "agent", "Demo")
+          }, 1000)
+        }
+
+        elements.messageInput.value = ""
+        state.images = []
+        renderImagePreview()
+      }
+
+      // Settings Functions
+      function toggleSettings() {
+        elements.settingsPanel.classList.toggle("visible")
+      }
+
+      function saveSettings() {
+        state.config.serverUrl = elements.serverUrl.value
+        state.config.timeout = parseInt(elements.timeoutSetting.value) || 60000
+        state.config.selectedModel = elements.modelSelect.value
+        localStorage.setItem("agui-chat-settings", JSON.stringify(state.config))
+        showToast("Settings saved")
+      }
+
+      // Initialize
+      function init() {
+        initElements()
+
+        // Load settings
+        const stored = localStorage.getItem("agui-chat-settings")
+        if (stored) {
+          try {
+            state.config = { ...state.config, ...JSON.parse(stored) }
+          } catch (e) {
+            console.error("Settings parse error:", e)
+          }
+        }
+
+        // Apply settings to UI
+        elements.serverUrl.value = state.config.serverUrl
+        elements.timeoutSetting.value = state.config.timeout
+        elements.modelSelect.value = state.config.selectedModel
+
+        // Setup event listeners
+        elements.settingsToggleBtn.addEventListener("click", toggleSettings)
+        elements.settingsCloseBtn.addEventListener("click", toggleSettings)
+        elements.sendButton.addEventListener("click", sendMessage)
+        elements.uploadBtn.addEventListener("click", () => elements.imageInput.click())
+        elements.imageInput.addEventListener("change", (e) => handleImageUpload(e.target.files))
+        elements.addWorkspaceBtn.addEventListener("click", addWorkspace)
+        elements.newWorkspacePath.addEventListener("keypress", (e) => e.key === "Enter" && addWorkspace())
+
+        elements.messageInput.addEventListener("keypress", (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault()
+            sendMessage()
+          }
+        })
+
+        // Auto-resize textarea
+        elements.messageInput.addEventListener("input", function () {
+          this.style.height = "auto"
+          this.style.height = Math.min(this.scrollHeight, 120) + "px"
+        })
+
+        // Save settings on change
+        elements.serverUrl.addEventListener("change", saveSettings)
+        elements.timeoutSetting.addEventListener("change", saveSettings)
+        elements.modelSelect.addEventListener("change", saveSettings)
+
+        // Drag and drop
+        document.body.addEventListener("dragover", (e) => {
+          e.preventDefault()
+          e.dataTransfer.dropEffect = "copy"
+        })
+
+        document.body.addEventListener("drop", (e) => {
+          e.preventDefault()
+          handleImageUpload(e.dataTransfer.files)
+        })
+
+        // Render UI
+        renderWorkspaceList()
+        connectWebSocket()
+
+        console.log("AG-UI Chat initialized")
+      }
+
+      // Start when DOM is ready
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init)
+      } else {
+        init()
+      }
+    </script>
+  </body>
+</html>

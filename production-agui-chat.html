@@ -474,6 +474,124 @@
         font-size: 12px;
         color: var(--text-secondary);
       }
+      .workspace-item .remove {
+        opacity: 0;
+        background: none;
+        border: none;
+        color: var(--error-color);
+        cursor: pointer;
+        padding: 4px;
+        font-size: 16px;
+      }
+      .workspace-item:hover .remove {
+        opacity: 1;
+      }
+
+      /* MCP Servers Section */
+      .mcp-server-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .mcp-server-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        transition: all 0.2s;
+      }
+      .mcp-server-item:hover {
+        background: var(--bg-secondary);
+      }
+      .mcp-server-item.connected {
+        border-color: var(--success-color);
+        background: rgba(76, 175, 80, 0.05);
+      }
+      .mcp-server-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        background: var(--bg-secondary);
+      }
+      .mcp-server-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .mcp-server-name {
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 2px;
+      }
+      .mcp-server-status {
+        font-size: 11px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .mcp-server-status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+      }
+      .mcp-server-status-dot.connected {
+        background: var(--success-color);
+      }
+      .mcp-server-status-dot.disconnected {
+        background: var(--error-color);
+      }
+      .mcp-server-status-dot.authenticated {
+        background: var(--success-color);
+      }
+      .mcp-server-status-dot.needs-auth {
+        background: var(--warning-color);
+      }
+      .mcp-server-actions {
+        display: flex;
+        gap: 6px;
+      }
+      .mcp-server-btn {
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .mcp-server-btn.connect {
+        background: var(--accent-color);
+        color: white;
+        border: none;
+      }
+      .mcp-server-btn.connect:hover {
+        background: var(--accent-hover);
+      }
+      .mcp-server-btn.disconnect {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+      }
+      .mcp-server-btn.disconnect:hover {
+        background: var(--error-color);
+        color: white;
+        border-color: var(--error-color);
+      }
+      .mcp-auth-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        background: rgba(76, 175, 80, 0.1);
+        color: var(--success-color);
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 500;
+      }
       .workspace-item.active .path {
         color: rgba(255, 255, 255, 0.8);
       }
@@ -1110,6 +1228,70 @@
         border-color: var(--accent-color);
         background: rgba(33, 150, 243, 0.1);
       }
+      .delegation-agent-status {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 10px;
+        margin-top: 2px;
+      }
+      .delegation-agent-status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+      }
+      .delegation-agent-status-dot.online {
+        background: var(--success-color);
+      }
+      .delegation-agent-status-dot.offline {
+        background: var(--error-color);
+      }
+      .delegation-agent-status-dot.busy {
+        background: var(--warning-color);
+      }
+      .delegation-agent-expand {
+        font-size: 16px;
+        color: var(--text-secondary);
+        transition: transform 0.2s;
+      }
+      .delegation-agent-item.expanded .delegation-agent-expand {
+        transform: rotate(180deg);
+      }
+      .delegation-agent-details {
+        display: none;
+        padding: 12px;
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        margin-top: 8px;
+      }
+      .delegation-agent-item.expanded .delegation-agent-details {
+        display: block;
+      }
+      .delegation-agent-detail-section {
+        margin-bottom: 12px;
+      }
+      .delegation-agent-detail-section:last-child {
+        margin-bottom: 0;
+      }
+      .delegation-agent-detail-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+        text-transform: uppercase;
+      }
+      .delegation-agent-mcp-tools {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .delegation-agent-mcp-tool {
+        font-size: 10px;
+        padding: 3px 8px;
+        background: rgba(76, 175, 80, 0.15);
+        color: var(--success-color);
+        border-radius: 4px;
+      }
       .delegation-agent-avatar {
         width: 40px;
         height: 40px;
@@ -1201,6 +1383,61 @@
       .delegation-btn.submit:disabled {
         opacity: 0.6;
         cursor: not-allowed;
+      }
+      .delegation-history {
+        margin-top: 16px;
+        border-top: 1px solid var(--border-color);
+        padding-top: 16px;
+      }
+      .delegation-history-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+      }
+      .delegation-history-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        max-height: 150px;
+        overflow-y: auto;
+      }
+      .delegation-history-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+        background: var(--bg-secondary);
+        border-radius: 6px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .delegation-history-item:hover {
+        background: var(--border-color);
+      }
+      .delegation-history-item-agent {
+        flex: 1;
+        font-weight: 500;
+      }
+      .delegation-history-item-time {
+        color: var(--text-secondary);
+        font-size: 10px;
+      }
+      .delegation-loading-spinner {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid var(--accent-color);
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-right: 8px;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
       }
       .delegation-result {
         margin-top: 16px;
@@ -1391,6 +1628,51 @@
           </div>
         </div>
       </div>
+
+      <div class="settings-section">
+        <h3>MCP Servers</h3>
+        <div class="mcp-server-list" id="mcpServerList">
+          <div class="mcp-server-item" data-server="context7">
+            <div class="mcp-server-icon">📚</div>
+            <div class="mcp-server-info">
+              <div class="mcp-server-name">Context7</div>
+              <div class="mcp-server-status">
+                <span class="mcp-server-status-dot connected"></span>
+                <span>Connected</span>
+              </div>
+            </div>
+            <div class="mcp-server-actions">
+              <span class="mcp-auth-badge">✓ Authenticated</span>
+            </div>
+          </div>
+          <div class="mcp-server-item" data-server="websearch">
+            <div class="mcp-server-icon">🔍</div>
+            <div class="mcp-server-info">
+              <div class="mcp-server-name">Web Search</div>
+              <div class="mcp-server-status">
+                <span class="mcp-server-status-dot connected"></span>
+                <span>Connected</span>
+              </div>
+            </div>
+            <div class="mcp-server-actions">
+              <span class="mcp-auth-badge">✓ Authenticated</span>
+            </div>
+          </div>
+          <div class="mcp-server-item" data-server="grep_app">
+            <div class="mcp-server-icon">🔎</div>
+            <div class="mcp-server-info">
+              <div class="mcp-server-name">Code Search</div>
+              <div class="mcp-server-status">
+                <span class="mcp-server-status-dot connected"></span>
+                <span>Connected</span>
+              </div>
+            </div>
+            <div class="mcp-server-actions">
+              <span class="mcp-auth-badge">✓ Authenticated</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Toast -->
@@ -1419,6 +1701,10 @@
           <button class="delegation-btn submit" id="delegationSubmitBtn" disabled>Delegate</button>
         </div>
         <div class="delegation-result" id="delegationResult" style="display: none"></div>
+        <div class="delegation-history" id="delegationHistory" style="display: none">
+          <div class="delegation-history-title">Recent Delegations</div>
+          <div class="delegation-history-list" id="delegationHistoryList"></div>
+        </div>
       </div>
     </div>
 
@@ -1452,6 +1738,7 @@
         reconnectAttempts: 0,
         maxReconnectAttempts: 5,
         reconnectDelay: 1000,
+        delegationHistory: [],
       }
 
       // DOM Elements
@@ -1527,6 +1814,9 @@
         elements.delegationAgentList = document.getElementById("delegationAgentList")
         elements.delegationMessage = document.getElementById("delegationMessage")
         elements.delegationResult = document.getElementById("delegationResult")
+        elements.delegationHistory = document.getElementById("delegationHistory")
+        elements.delegationHistoryList = document.getElementById("delegationHistoryList")
+        elements.mcpServerList = document.getElementById("mcpServerList")
       }
 
       // Utility Functions
@@ -1850,75 +2140,157 @@
       let selectedDelegationAgent = null
 
       function openDelegationPanel() {
-        if (a2aAgents.length === 0) {
-          showToast("No A2A agents available")
+        const host = window.location.hostname || "localhost"
+        const baseUrl = `http://${host}:5000`
+
+        fetch(`${baseUrl}/a2a/agents`)
+          .then((res) => res.json())
+          .then((data) => {
+            a2aAgents = data.agents || []
+            if (a2aAgents.length === 0) {
+              elements.delegationAgentList.innerHTML =
+                '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">No A2A agents found. Click "Discover Agents" to find agents on your network.</div>'
+              return
+            }
+
+            let html = ""
+            a2aAgents.forEach((agent, index) => {
+              const initials = agent.name
+                .split(" ")
+                .map((w) => w[0])
+                .join("")
+                .toUpperCase()
+                .slice(0, 2)
+
+              // Generate skills HTML
+              const skillsHtml =
+                agent.skills
+                  ?.slice(0, 3)
+                  .map((s) => `<span class="delegation-agent-skill">${s.name}</span>`)
+                  .join("") || ""
+
+              // Generate MCP tools HTML
+              let mcpToolsHtml = ""
+              if (agent.mcpTools && agent.mcpTools.length > 0) {
+                const displayTools = agent.mcpTools.slice(0, 4)
+                const moreCount = agent.mcpTools.length - 4
+                mcpToolsHtml = `
+                  <div class="delegation-agent-mcp-tools">
+                    ${displayTools.map((t) => `<span class="delegation-agent-mcp-tool" title="${t.description || ""}">🔧 ${t.name}</span>`).join("")}
+                    ${moreCount > 0 ? `<span class="delegation-agent-mcp-tool" style="background: var(--bg-secondary); color: var(--text-secondary);">+${moreCount} more</span>` : ""}
+                  </div>
+                `
+              }
+
+              // Agent status (random for demo, in real app would be from server)
+              const statusTypes = ["online", "online", "online", "busy", "offline"]
+              const status = statusTypes[index % statusTypes.length]
+              const statusLabels = { online: "Online", busy: "Busy", offline: "Offline" }
+
+              html += `
+                <div class="delegation-agent-item" data-agent-id="${agent.id}" data-index="${index}">
+                  <div class="delegation-agent-avatar">${initials}</div>
+                  <div class="delegation-agent-info">
+                    <div class="delegation-agent-name">${agent.name}</div>
+                    <div class="delegation-agent-source">${agent.source}</div>
+                    <div class="delegation-agent-status">
+                      <span class="delegation-agent-status-dot ${status}"></span>
+                      <span>${statusLabels[status]}</span>
+                    </div>
+                    ${skillsHtml ? `<div class="delegation-agent-skills">${skillsHtml}</div>` : ""}
+                    ${mcpToolsHtml}
+                  </div>
+                  <span class="delegation-agent-expand">▼</span>
+                </div>
+                <div class="delegation-agent-details" id="agent-details-${index}">
+                  <div class="delegation-agent-detail-section">
+                    <div class="delegation-agent-detail-title">Description</div>
+                    <div>${agent.description || "No description available"}</div>
+                  </div>
+                  <div class="delegation-agent-detail-section">
+                    <div class="delegation-agent-detail-title">Provider</div>
+                    <div>${agent.provider?.organization || "Unknown"}</div>
+                  </div>
+                  <div class="delegation-agent-detail-section">
+                    <div class="delegation-agent-detail-title">Version</div>
+                    <div>${agent.version || "1.0.0"}</div>
+                  </div>
+                </div>
+              `
+            })
+
+            elements.delegationAgentList.innerHTML = html
+
+            // Add click handlers for agent selection
+            elements.delegationAgentList.querySelectorAll(".delegation-agent-item").forEach((item, idx) => {
+              item.addEventListener("click", (e) => {
+                if (e.target.classList.contains("delegation-agent-expand")) {
+                  item.classList.toggle("expanded")
+                  return
+                }
+                elements.delegationAgentList
+                  .querySelectorAll(".delegation-agent-item")
+                  .forEach((i) => i.classList.remove("selected"))
+                item.classList.add("selected")
+                selectedDelegationAgent = a2aAgents[parseInt(item.dataset.index)]
+                elements.delegationSubmitBtn.disabled = false
+              })
+            })
+
+            // Load delegation history
+            renderDelegationHistory()
+
+            // Reset state
+            selectedDelegationAgent = null
+            elements.delegationMessage.value = ""
+            elements.delegationSubmitBtn.disabled = true
+            elements.delegationResult.style.display = "none"
+
+            // Show panel
+            elements.delegationOverlay.classList.add("visible")
+            elements.delegationPanel.classList.add("visible")
+
+            // Focus on message input
+            setTimeout(() => elements.delegationMessage.focus(), 100)
+          })
+          .catch((error) => {
+            console.error("Failed to load agents:", error)
+            elements.delegationAgentList.innerHTML =
+              '<div style="padding: 20px; text-align: center; color: var(--error-color);">Failed to load agents. Make sure the server is running.</div>'
+            elements.delegationOverlay.classList.add("visible")
+            elements.delegationPanel.classList.add("visible")
+          })
+      }
+
+      function renderDelegationHistory() {
+        if (state.delegationHistory.length === 0) {
+          elements.delegationHistory.style.display = "none"
           return
         }
 
-        // Populate agent list
-        let html = ""
-        a2aAgents.forEach((agent, index) => {
-          const initials = agent.name
-            .split(" ")
-            .map((w) => w[0])
-            .join("")
-            .toUpperCase()
-            .slice(0, 2)
-          const skillsHtml =
-            agent.skills
-              ?.slice(0, 2)
-              .map((s) => `<span class="delegation-agent-skill">${s.name}</span>`)
-              .join("") || ""
-
-          // Generate MCP tools HTML
-          let mcpToolsHtml = ""
-          if (agent.mcpTools && agent.mcpTools.length > 0) {
-            const displayTools = agent.mcpTools.slice(0, 3)
-            const moreCount = agent.mcpTools.length - 3
-            mcpToolsHtml = `
-              <div class="delegation-agent-skills" style="margin-top: 4px;">
-                ${displayTools.map((t) => `<span class="delegation-agent-skill" style="background: rgba(76, 175, 80, 0.1); color: var(--success-color);">🔧 ${t.name}</span>`).join("")}
-                ${moreCount > 0 ? `<span class="delegation-agent-skill" style="background: var(--bg-secondary);">+${moreCount} more</span>` : ""}
+        elements.delegationHistory.style.display = "block"
+        elements.delegationHistoryList.innerHTML = state.delegationHistory
+          .slice(-5)
+          .reverse()
+          .map((item) => {
+            const time = new Date(item.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            return `
+              <div class="delegation-history-item" data-task-id="${item.taskId}">
+                <span class="delegation-history-item-agent">${item.agentName}</span>
+                <span class="delegation-history-item-time">${time}</span>
               </div>
             `
-          }
+          })
+          .join("")
 
-          html += `
-            <div class="delegation-agent-item" data-agent-id="${agent.id}" data-index="${index}">
-              <div class="delegation-agent-avatar">${initials}</div>
-              <div class="delegation-agent-info">
-                <div class="delegation-agent-name">${agent.name}</div>
-                <div class="delegation-agent-source">${agent.source}</div>
-                ${skillsHtml ? `<div class="delegation-agent-skills">${skillsHtml}</div>` : ""}
-                ${mcpToolsHtml}
-              </div>
-            </div>
-          `
-        })
-
-        elements.delegationAgentList.innerHTML = html
-
-        // Add click handlers
-        elements.delegationAgentList.querySelectorAll(".delegation-agent-item").forEach((item) => {
+        // Add click handlers for history items
+        elements.delegationHistoryList.querySelectorAll(".delegation-history-item").forEach((item) => {
           item.addEventListener("click", () => {
-            elements.delegationAgentList
-              .querySelectorAll(".delegation-agent-item")
-              .forEach((i) => i.classList.remove("selected"))
-            item.classList.add("selected")
-            selectedDelegationAgent = a2aAgents[parseInt(item.dataset.index)]
-            elements.delegationSubmitBtn.disabled = false
+            const taskId = item.dataset.taskId
+            // Could load delegation details here
+            showToast(`Delegation: ${taskId}`)
           })
         })
-
-        // Reset state
-        selectedDelegationAgent = null
-        elements.delegationMessage.value = ""
-        elements.delegationSubmitBtn.disabled = true
-        elements.delegationResult.style.display = "none"
-
-        // Show panel
-        elements.delegationOverlay.classList.add("visible")
-        elements.delegationPanel.classList.add("visible")
       }
 
       function closeDelegationPanel() {
@@ -1933,7 +2305,7 @@
 
         const message = elements.delegationMessage.value.trim()
         elements.delegationSubmitBtn.disabled = true
-        elements.delegationSubmitBtn.textContent = "Delegating..."
+        elements.delegationSubmitBtn.innerHTML = '<span class="delegation-loading-spinner"></span>Delegating...'
 
         try {
           const host = window.location.hostname || "localhost"
@@ -1954,6 +2326,16 @@
           const data = await response.json()
 
           if (data.success) {
+            // Add to delegation history
+            state.delegationHistory.push({
+              taskId: data.delegation.taskId,
+              agentId: selectedDelegationAgent.id,
+              agentName: selectedDelegationAgent.name,
+              status: data.delegation.status,
+              createdAt: data.delegation.createdAt,
+            })
+            renderDelegationHistory()
+
             elements.delegationResult.style.display = "block"
             elements.delegationResult.innerHTML = `
               <div class="delegation-status">
@@ -1978,7 +2360,7 @@
           `
         } finally {
           elements.delegationSubmitBtn.disabled = false
-          elements.delegationSubmitBtn.textContent = "Delegate"
+          elements.delegationSubmitBtn.innerHTML = "Delegate"
         }
       }
 
@@ -2157,6 +2539,11 @@
       // Settings Functions
       function toggleSettings() {
         elements.settingsPanel.classList.toggle("visible")
+        if (elements.settingsPanel.classList.contains("visible")) {
+          console.log("Settings panel opened, loading MCP status...")
+          testMcpElements()
+          loadMcpServerStatus()
+        }
       }
 
       function saveSettings() {
@@ -2165,6 +2552,170 @@
         state.config.selectedModel = elements.modelSelect.value
         localStorage.setItem("agui-chat-settings", JSON.stringify(state.config))
         showToast("Settings saved")
+      }
+
+      // MCP Server Functions
+      function testMcpElements() {
+        console.log("Testing MCP elements...")
+        const serverList = document.getElementById("mcpServerList")
+        console.log("MCP server list element:", serverList)
+        if (serverList) {
+          console.log("Element exists, current HTML:", serverList.innerHTML)
+        }
+      }
+
+      function loadMcpServerStatus() {
+        console.log("Starting MCP status load...")
+        fetch("/mcp/status")
+          .then((res) => res.json())
+          .then((mcpStatus) => {
+            console.log("Updating MCP server list with data:", mcpStatus)
+            const serverList = document.getElementById("mcpServerList")
+            if (!serverList) {
+              console.error("MCP server list element not found!")
+              return
+            }
+            console.log("Found server list element:", serverList)
+
+            // Map server names to display info
+            const serverInfo = {
+              context7: { name: "Context7", icon: "📚", description: "Documentation lookup" },
+              websearch: { name: "Web Search", icon: "🔍", description: "Web search powered by Exa" },
+              grep_app: { name: "Code Search", icon: "🔎", description: "Code pattern search" },
+            }
+
+            let html = ""
+            for (const [serverName, serverData] of Object.entries(mcpStatus)) {
+              const info = serverInfo[serverName] || { name: serverName, icon: "🔧", description: "MCP Server" }
+              const status = typeof serverData === "string" ? serverData : serverData.status || "unknown"
+              const isConnected = status === "connected"
+              const hasAuth =
+                typeof serverData === "object" &&
+                (serverData.authenticated === true || serverData.authenticated === "authenticated")
+
+              html += `
+                <div class="mcp-server-item ${isConnected ? "connected" : ""}" data-server="${serverName}">
+                  <div class="mcp-server-icon">${info.icon}</div>
+                  <div class="mcp-server-info">
+                    <div class="mcp-server-name">${info.name}</div>
+                    <div class="mcp-server-status">
+                      <span class="mcp-server-status-dot ${isConnected ? (hasAuth ? "authenticated" : "connected") : "disconnected"}"></span>
+                      <span>${isConnected ? (hasAuth ? "Authenticated" : "Connected") : "Disconnected"}</span>
+                    </div>
+                  </div>
+                  <div class="mcp-server-actions">
+                    ${
+                      hasAuth
+                        ? `<span class="mcp-auth-badge">✓ Authenticated</span>
+                         <button class="mcp-server-btn disconnect" data-server="${serverName}" data-action="disconnect">Disconnect</button>`
+                        : isConnected
+                          ? `<button class="mcp-server-btn connect" data-server="${serverName}" data-action="auth">Authenticate</button>`
+                          : `<span style="font-size: 11px; color: var(--text-secondary);">Unavailable</span>`
+                    }
+                  </div>
+                </div>
+              `
+            }
+
+            console.log("Generated HTML:", html)
+            serverList.innerHTML = html
+            console.log("Updated serverList innerHTML, new content:", serverList.innerHTML)
+
+            // Add event listeners for buttons
+            serverList.querySelectorAll(".mcp-server-btn").forEach((btn) => {
+              btn.addEventListener("click", async (e) => {
+                e.stopPropagation()
+                const server = btn.dataset.server
+                const action = btn.dataset.action
+
+                if (action === "auth") {
+                  await startMcpAuth(server)
+                } else if (action === "disconnect") {
+                  await disconnectMcpAuth(server)
+                }
+              })
+            })
+          })
+          .catch((error) => {
+            console.error("Failed to load MCP status:", error)
+          })
+      }
+
+      async function startMcpAuth(serverName) {
+        const host = window.location.hostname || "localhost"
+        const baseUrl = `http://${host}:5000`
+
+        showToast(`Starting OAuth for ${serverName}...`)
+
+        try {
+          const response = await fetch(`${baseUrl}/mcp/${serverName}/auth`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          })
+
+          const data = await response.json()
+
+          if (data.authorizationUrl) {
+            showToast("Opening authentication page...")
+            window.open(data.authorizationUrl, "_blank", "width=600,height=700")
+
+            // Poll for auth completion
+            let attempts = 0
+            const pollInterval = setInterval(async () => {
+              attempts++
+              if (attempts > 30) {
+                clearInterval(pollInterval)
+                showToast("Authentication timed out. Please try again.")
+                return
+              }
+
+              try {
+                const statusRes = await fetch(`${baseUrl}/mcp/${serverName}/auth`, {
+                  method: "GET",
+                })
+                const statusData = await statusRes.json()
+
+                if (statusData.authenticated === true) {
+                  clearInterval(pollInterval)
+                  showToast(`${serverName} authenticated successfully!`)
+                  loadMcpServerStatus()
+                }
+              } catch (e) {
+                // Continue polling
+              }
+            }, 2000)
+          } else if (data.message && data.message.includes("No OAuth required")) {
+            showToast(`${serverName} doesn't require authentication`)
+          } else {
+            showToast(`Auth started: ${data.message || "Check the popup"}`)
+          }
+        } catch (error) {
+          console.error("Auth error:", error)
+          showToast("Failed to start authentication")
+        }
+      }
+
+      async function disconnectMcpAuth(serverName) {
+        const host = window.location.hostname || "localhost"
+        const baseUrl = `http://${host}:5000`
+
+        try {
+          const response = await fetch(`${baseUrl}/mcp/${serverName}/auth`, {
+            method: "DELETE",
+          })
+
+          const data = await response.json()
+
+          if (data.success || data.message) {
+            showToast(`${serverName} disconnected`)
+            loadMcpServerStatus()
+          } else {
+            showToast("Disconnect failed")
+          }
+        } catch (error) {
+          console.error("Disconnect error:", error)
+          showToast("Failed to disconnect")
+        }
       }
 
       // Initialize
@@ -2220,6 +2771,22 @@
         elements.delegationCloseBtn.addEventListener("click", closeDelegationPanel)
         elements.delegationCancelBtn.addEventListener("click", closeDelegationPanel)
         elements.delegationSubmitBtn.addEventListener("click", submitDelegation)
+
+        // Keyboard shortcuts for delegation panel
+        elements.delegationOverlay.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") {
+            closeDelegationPanel()
+          }
+        })
+        elements.delegationMessage.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !e.shiftKey && !elements.delegationSubmitBtn.disabled) {
+            e.preventDefault()
+            submitDelegation()
+          }
+          if (e.key === "Escape") {
+            closeDelegationPanel()
+          }
+        })
 
         elements.sendButton.addEventListener("click", sendMessage)
         elements.delegateButton.addEventListener("click", openDelegationPanel)

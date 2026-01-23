@@ -6,6 +6,10 @@ import fs from "fs/promises"
 import fsSync from "fs"
 import { afterAll } from "bun:test"
 
+// Set OPENCODE_LIBC for file watcher compatibility
+// This is needed for @parcel/watcher-linux-{arch}-glibc
+process.env["OPENCODE_LIBC"] = "glibc"
+
 const dir = path.join(os.tmpdir(), "opencode-test-data-" + process.pid)
 await fs.mkdir(dir, { recursive: true })
 afterAll(() => {

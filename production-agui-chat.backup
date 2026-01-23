@@ -1,0 +1,1977 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AG-UI Chat</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f5f5f5;
+        --text-primary: #333333;
+        --text-secondary: #666666;
+        --border-color: #e0e0e0;
+        --accent-color: #2196f3;
+        --accent-hover: #1976d2;
+        --success-color: #4caf50;
+        --error-color: #f44336;
+        --warning-color: #ff9800;
+        --user-bubble: #2196f3;
+        --agent-bubble: #ffffff;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg-primary: #1a1a1a;
+          --bg-secondary: #2d2d2d;
+          --text-primary: #ffffff;
+          --text-secondary: #b0b0b0;
+          --border-color: #404040;
+          --agent-bubble: #2d2d2d;
+        }
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg-secondary);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .header {
+        background: var(--bg-primary);
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-shrink: 0;
+      }
+
+      .header h1 {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .connection-status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+      }
+
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        transition: background-color 0.3s ease;
+      }
+
+      .status-dot.connected {
+        background-color: var(--success-color);
+      }
+      .status-dot.connecting {
+        background-color: var(--warning-color);
+        animation: pulse 1s infinite;
+      }
+      .status-dot.disconnected {
+        background-color: var(--error-color);
+      }
+      .status-dot.reconnecting {
+        background-color: var(--warning-color);
+        animation: pulse 0.5s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      .metrics-display {
+        display: flex;
+        gap: 16px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-left: 16px;
+        padding-left: 16px;
+        border-left: 1px solid var(--border-color);
+      }
+
+      .metric-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .metric-value {
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text-secondary);
+        transition: background-color 0.3s;
+      }
+
+      .status-dot.connected {
+        background: var(--success-color);
+      }
+      .status-dot.connecting {
+        background: var(--warning-color);
+        animation: pulse 1s infinite;
+      }
+      .status-dot.disconnected {
+        background: var(--error-color);
+      }
+      .status-dot.reconnecting {
+        background: var(--warning-color);
+        animation: pulse 0.5s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      .model-selector {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 14px;
+        color: var(--text-primary);
+        cursor: pointer;
+      }
+
+      .model-selector select {
+        background: transparent;
+        border: none;
+        color: var(--text-primary);
+        font-size: 14px;
+        cursor: pointer;
+        outline: none;
+      }
+
+      .chat-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .message {
+        max-width: 80%;
+        padding: 12px 16px;
+        border-radius: 12px;
+        font-size: 14px;
+        line-height: 1.5;
+        animation: fadeIn 0.3s ease;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .message.user {
+        align-self: flex-end;
+        background: var(--user-bubble);
+        color: white;
+        border-bottom-right-radius: 4px;
+      }
+
+      .message.agent {
+        align-self: flex-start;
+        background: var(--agent-bubble);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        border-bottom-left-radius: 4px;
+      }
+
+      .message-content {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+
+      .message-content code {
+        background: rgba(0, 0, 0, 0.1);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: "Monaco", "Menlo", monospace;
+        font-size: 13px;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .message-content code {
+          background: rgba(255, 255, 255, 0.1);
+        }
+      }
+
+      .timestamp {
+        font-size: 11px;
+        opacity: 0.7;
+        margin-top: 4px;
+        text-align: right;
+      }
+
+      .typing-indicator {
+        display: none;
+        padding: 12px 16px;
+        background: var(--agent-bubble);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        align-self: flex-start;
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+
+      .typing-indicator.visible {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .typing-dots {
+        display: flex;
+        gap: 4px;
+      }
+
+      .typing-dots span {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text-secondary);
+        animation: bounce 1.4s infinite ease-in-out;
+      }
+
+      .typing-dots span:nth-child(1) {
+        animation-delay: -0.32s;
+      }
+      .typing-dots span:nth-child(2) {
+        animation-delay: -0.16s;
+      }
+
+      @keyframes bounce {
+        0%,
+        80%,
+        100% {
+          transform: scale(0);
+        }
+        40% {
+          transform: scale(1);
+        }
+      }
+
+      .input-area {
+        background: var(--bg-primary);
+        padding: 16px 20px;
+        border-top: 1px solid var(--border-color);
+        flex-shrink: 0;
+      }
+
+      .input-row {
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+      }
+
+      .input-wrapper {
+        flex: 1;
+        position: relative;
+      }
+
+      .input-wrapper textarea {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        font-size: 14px;
+        font-family: inherit;
+        color: var(--text-primary);
+        background: var(--bg-secondary);
+        resize: none;
+        outline: none;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+        max-height: 120px;
+        min-height: 48px;
+      }
+
+      .input-wrapper textarea:focus {
+        border-color: var(--accent-color);
+        box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+      }
+
+      .input-wrapper textarea::placeholder {
+        color: var(--text-secondary);
+      }
+
+      .input-wrapper textarea:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .send-button {
+        padding: 12px 24px;
+        background: var(--accent-color);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition:
+          background-color 0.2s,
+          transform 0.1s;
+        flex-shrink: 0;
+      }
+
+      .send-button:hover:not(:disabled) {
+        background: var(--accent-hover);
+      }
+
+      .send-button:active:not(:disabled) {
+        transform: scale(0.98);
+      }
+
+      .send-button:disabled {
+        background: var(--text-secondary);
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+
+      .error-toast {
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--error-color);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 14px;
+        display: none;
+        animation: slideUp 0.3s ease;
+      }
+
+      .error-toast.visible {
+        display: block;
+      }
+
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateX(-50%) translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(-50%) translateY(0);
+        }
+      }
+
+      .clear-chat {
+        padding: 8px 16px;
+        background: transparent;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 13px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .clear-chat:hover {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+      }
+
+      .settings-panel {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+
+      .settings-panel.visible {
+        display: flex;
+      }
+
+      .settings-content {
+        background: var(--bg-primary);
+        border-radius: 12px;
+        padding: 24px;
+        width: 90%;
+        max-width: 400px;
+      }
+
+      .settings-content h2 {
+        font-size: 18px;
+        margin-bottom: 20px;
+        color: var(--text-primary);
+      }
+
+      .setting-row {
+        margin-bottom: 16px;
+      }
+
+      .setting-row label {
+        display: block;
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+      }
+
+      .setting-row input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 14px;
+        color: var(--text-primary);
+        background: var(--bg-secondary);
+      }
+
+      .settings-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .settings-actions button {
+        flex: 1;
+        padding: 10px;
+        border-radius: 8px;
+        font-size: 14px;
+        cursor: pointer;
+      }
+
+      .settings-actions .save {
+        background: var(--accent-color);
+        color: white;
+        border: none;
+      }
+
+      .settings-actions .cancel {
+        background: transparent;
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+      }
+
+      .settings-toggle {
+        padding: 8px;
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+        font-size: 20px;
+      }
+
+      .settings-toggle:hover {
+        color: var(--text-primary);
+      }
+
+      .model-selector {
+        position: relative;
+        display: flex: center;
+        gap: 6;
+        align-itemspx;
+      }
+
+      .model-selector label {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+
+      .model-selector select {
+        padding: 6px 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 13px;
+        color: var(--text-primary);
+        background: var(--bg-primary);
+        cursor: pointer;
+        min-width: 180px;
+      }
+
+      .model-selector select:hover {
+        border-color: var(--accent-color);
+      }
+
+      .model-selector select:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .model-info {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-left: 4px;
+      }
+
+      /* File Upload Styles */
+      .file-upload-btn {
+        padding: 10px 16px;
+        background: transparent;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        font-size: 18px;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .file-upload-btn:hover {
+        background: var(--bg-secondary);
+        border-color: var(--accent-color);
+        color: var(--accent-color);
+      }
+
+      .file-upload-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .image-preview-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .image-preview-item {
+        position: relative;
+        width: 80px;
+        height: 80px;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 2px solid var(--border-color);
+      }
+
+      .image-preview-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .image-preview-remove {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        width: 20px;
+        height: 20px;
+        background: rgba(244, 67, 54, 0.9);
+        border: none;
+        border-radius: 50%;
+        color: white;
+        font-size: 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+
+      .image-preview-item:hover .image-preview-remove {
+        opacity: 1;
+      }
+
+      .image-upload-progress {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 12px;
+      }
+
+      .message-image {
+        max-width: 200px;
+        max-height: 200px;
+        border-radius: 8px;
+        margin-top: 8px;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+
+      .message-image:hover {
+        transform: scale(1.02);
+      }
+
+      .image-count-badge {
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+
+      .drop-zone {
+        border: 2px dashed var(--border-color);
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+        transition: all 0.2s;
+        display: none;
+      }
+
+      .drop-zone.active {
+        display: block;
+        border-color: var(--accent-color);
+        background: rgba(33, 150, 243, 0.1);
+      }
+
+      .drop-zone-text {
+        font-size: 13px;
+      }
+
+      .drop-zone-hint {
+        font-size: 11px;
+        margin-top: 4px;
+        opacity: 0.7;
+      }
+
+      .vision-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-size: 9px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-left: 4px;
+      }
+
+      /* Modal for image preview */
+      .image-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.9);
+        z-index: 10000;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .image-modal.active {
+        display: flex;
+      }
+
+      .image-modal img {
+        max-width: 90%;
+        max-height: 90%;
+        object-fit: contain;
+        border-radius: 8px;
+      }
+
+      .image-modal-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: transparent;
+        border: none;
+        color: white;
+        font-size: 30px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>AG-UI Chat</h1>
+      <div style="display: flex; align-items: center; gap: 12px">
+        <div class="connection-status">
+          <div class="status-dot disconnected" id="statusDot"></div>
+          <span id="statusText">Disconnected</span>
+        </div>
+        <div class="metrics-display" id="metricsDisplay" style="display: none">
+          <div class="metric-item" title="Total reconnection attempts">
+            <span>🔄</span>
+            <span class="metric-value" id="reconnectCount">0</span>
+          </div>
+          <div class="metric-item" title="Last connected time">
+            <span>🕐</span>
+            <span class="metric-value" id="lastConnected">--:--</span>
+          </div>
+          <div class="metric-item" title="Messages sent">
+            <span>💬</span>
+            <span class="metric-value" id="messageCount">0</span>
+          </div>
+          <div class="metric-item" id="authStatus" title="Authentication status" style="display: none">
+            <span>🔐</span>
+            <span class="metric-value" id="authStatusText">--</span>
+          </div>
+        </div>
+        <div class="model-selector" id="modelSelector" style="display: none">
+          <select id="modelSelect" onchange="handleModelChange()">
+            <option value="opencode/glm-4.7-free">opencode/glm-4.7-free (Default)</option>
+            <optgroup label="Ollama Vision (支援圖片)">
+              <option value="ollama/llama3.2-vision:11b">ollama/llama3.2-vision:11b ⭐ Vision</option>
+              <option value="ollama/llama3.2-vision:latest">ollama/llama3.2-vision:latest Vision</option>
+              <option value="ollama/llava:latest">ollama/llava:latest Vision</option>
+            </optgroup>
+            <optgroup label="Ollama (Local)">
+              <option value="ollama/llama3.2">ollama/llama3.2 (8B)</option>
+              <option value="ollama/qwen3:8b">ollama/qwen3:8b (8B)</option>
+              <option value="ollama/qwen3-coder:30b">ollama/qwen3-coder:30b (30B)</option>
+              <option value="ollama/wizardcoder:latest">ollama/wizardcoder (7B)</option>
+              <option value="ollama/deepseek-r1:7b">ollama/deepseek-r1:7b (7B)</option>
+              <option value="ollama/gemma3:12b">ollama/gemma3:12b (12B)</option>
+              <option value="ollama/mistral-nemo:latest">ollama/mistral-nemo (12B)</option>
+              <option value="ollama/llama3:latest">ollama/llama3 (8B)</option>
+            </optgroup>
+            <optgroup label="OpenCode Zen (Google)">
+              <option value="google/antigravity-claude-sonnet-4-5">google/antigravity-claude-sonnet-4-5 ⭐</option>
+              <option value="google/antigravity-claude-opus-4-5-thinking">google/antigravity-claude-opus-4-5</option>
+              <option value="google/gemini-2.5-flash">google/gemini-2.5-flash</option>
+              <option value="google/gemini-2.5-pro">google/gemini-2.5-pro</option>
+            </optgroup>
+          </select>
+        </div>
+        <button class="settings-toggle" id="settingsToggleBtn" title="Settings">⚙️</button>
+      </div>
+    </div>
+
+    <div class="chat-container" id="chatContainer">
+      <div class="message agent">
+        <div class="message-content">Welcome to AG-UI Chat! Start a conversation with the AI agent.</div>
+        <div class="timestamp" id="welcomeTimestamp"></div>
+      </div>
+    </div>
+
+    <div class="typing-indicator" id="typingIndicator">
+      <div class="typing-dots">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <span>Agent is thinking...</span>
+    </div>
+
+    <div class="input-area">
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-zone-text">📁 拖放圖片到這裡</div>
+        <div class="drop-zone-hint">支援 JPG, PNG, GIF, WebP (最大 10MB)</div>
+      </div>
+      <div class="image-preview-container" id="imagePreviewContainer"></div>
+      <div class="input-row">
+        <input type="file" id="fileInput" accept="image/*" multiple style="display: none" />
+        <button
+          class="file-upload-btn"
+          id="fileUploadBtn"
+          onclick="document.getElementById('fileInput').click()"
+          title="上傳圖片 (支援拖放)"
+        >
+          📎
+        </button>
+        <div class="input-wrapper">
+          <textarea
+            id="messageInput"
+            placeholder="輸入訊息... (Enter 傳送，Shift+Enter 換行)"
+            rows="1"
+            disabled
+          ></textarea>
+        </div>
+        <button class="send-button" id="sendButton" disabled>傳送</button>
+      </div>
+
+      <!-- Workspace Actions Toolbar -->
+      <div
+        class="workspace-toolbar"
+        id="workspaceToolbar"
+        style="
+          display: flex;
+          gap: 8px;
+          padding: 8px 16px;
+          background: var(--bg-secondary);
+          border-top: 1px solid var(--border-color);
+          font-size: 12px;
+        "
+      >
+        <span style="color: var(--text-secondary); margin-right: 8px">Workspace:</span>
+        <button
+          onclick="getWorkspaceInfo()"
+          style="
+            padding: 4px 8px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 11px;
+          "
+        >
+          📁 Browse
+        </button>
+        <select
+          id="toolbarWorkspaceSelect"
+          onchange="handleToolbarWorkspaceChange()"
+          style="
+            padding: 4px 8px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 11px;
+            max-width: 150px;
+            cursor: pointer;
+          "
+        >
+          <option value="">Loading...</option>
+        </select>
+        <input
+          type="text"
+          id="filePathInput"
+          placeholder="path/to/file.js"
+          style="
+            flex: 1;
+            padding: 4px 8px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 11px;
+            max-width: 200px;
+          "
+        />
+        <button
+          onclick="readFileFromInput()"
+          style="
+            padding: 4px 8px;
+            background: var(--accent-color);
+            border: none;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            font-size: 11px;
+          "
+        >
+          📄 Open
+        </button>
+      </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div class="image-modal" id="imageModal" onclick="closeImageModal()">
+      <button class="image-modal-close" onclick="closeImageModal()">×</button>
+      <img id="modalImage" src="" alt="Preview" />
+    </div>
+
+    <div class="error-toast" id="errorToast"></div>
+
+    <div class="settings-panel" id="settingsPanel">
+      <div class="settings-content">
+        <h2>Settings</h2>
+        <div class="setting-row">
+          <label for="serverUrl">WebSocket URL</label>
+          <input type="text" id="serverUrl" placeholder="ws://localhost:5000/ag-ui/ws" />
+        </div>
+        <div class="setting-row">
+          <label for="ollamaHost">Ollama Host (for vision models)</label>
+          <div style="display: flex; gap: 8px">
+            <input type="text" id="ollamaHost" placeholder="http://localhost:11434" style="flex: 1" />
+            <button
+              onclick="fetchOllamaModels()"
+              style="
+                padding: 8px 12px;
+                background: var(--accent-color);
+                color: white;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 12px;
+              "
+              title="Fetch models from Ollama"
+            >
+              🔄
+            </button>
+          </div>
+        </div>
+        <div class="setting-row" id="ollamaModelsRow" style="display: none">
+          <label>Available Models on Ollama:</label>
+          <div
+            id="ollamaModelsList"
+            style="
+              max-height: 150px;
+              overflow-y: auto;
+              padding: 8px;
+              background: var(--bg-secondary);
+              border-radius: 6px;
+              font-size: 12px;
+            "
+          ></div>
+        </div>
+        <div class="setting-row">
+          <label for="sessionId">Session ID</label>
+          <input type="text" id="sessionId" placeholder="test-session" />
+        </div>
+        <div class="setting-row">
+          <label for="authToken">Auth Token (optional)</label>
+          <input type="text" id="authToken" placeholder="Leave empty for no auth" />
+        </div>
+        <div class="setting-row">
+          <label for="workspacePath">Workspace Path (for coding projects)</label>
+          <div style="display: flex; gap: 8px; align-items: center">
+            <select
+              id="workspacePath"
+              style="
+                flex: 1;
+                padding: 8px 12px;
+                background: var(--bg-tertiary);
+                border: 1px solid var(--border-color);
+                border-radius: 6px;
+                color: var(--text-primary);
+                font-size: 13px;
+                cursor: pointer;
+              "
+            >
+              <option value="">-- Select Workspace --</option>
+            </select>
+            <button
+              onclick="addCustomWorkspace()"
+              style="
+                padding: 8px 12px;
+                background: var(--bg-tertiary);
+                border: 1px solid var(--border-color);
+                border-radius: 6px;
+                color: var(--text-primary);
+                cursor: pointer;
+                font-size: 12px;
+              "
+              title="Add custom workspace"
+            >
+              ➕
+            </button>
+          </div>
+          <small style="color: var(--text-secondary); font-size: 11px; margin-top: 4px; display: block">
+            Select or add a workspace directory for coding projects.
+          </small>
+        </div>
+        <div class="settings-actions">
+          <button class="cancel" id="cancelSettingsBtn">Cancel</button>
+          <button class="save" id="saveSettingsBtn">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+
+      // Configuration
+      const DEFAULT_CONFIG = {
+        wsUrl: new URL(window.location).searchParams.get("ws") || "ws://127.0.0.1:5000/ag-ui/ws",
+        ollamaHost: new URL(window.location).searchParams.get("ollama") || "http://127.0.0.1:11434",
+        sessionId: new URL(window.location).searchParams.get("session") || "test-session",
+        authToken: new URL(window.location).searchParams.get("token") || "dev-token-12345",
+        model: new URL(window.location).searchParams.get("model") || "opencode/glm-4.7-free",
+        workspacePath: new URL(window.location).searchParams.get("workspace") || "/home/rick/prj/opencode",
+        maxReconnectAttempts: 5,
+        baseReconnectDelay: 1000,
+      }
+
+      // Default workspace options
+      const DEFAULT_WORKSPACES = [
+        { name: "OpenCode", path: "/home/rick/prj/opencode" },
+        { name: "Home", path: "/home/rick" },
+        { name: "Projects", path: "/home/rick/projects" },
+        { name: "Downloads", path: "/home/rick/Downloads" },
+        { name: "Root", path: "/" },
+      ]
+
+      // State
+      let config = { ...DEFAULT_CONFIG }
+      let ws = null
+      let reconnectAttempts = 0
+      let reconnectTimeout = null
+      let totalReconnects = 0
+      let messageCount = 0
+      let lastConnectedTime = null
+      let isAuthenticated = false
+      let uploadedImages = [] // Store base64 encoded images
+
+      // DOM Elements
+      const chatContainer = document.getElementById("chatContainer")
+      const messageInput = document.getElementById("messageInput")
+      const sendButton = document.getElementById("sendButton")
+      const statusDot = document.getElementById("statusDot")
+      const statusText = document.getElementById("statusText")
+      const typingIndicator = document.getElementById("typingIndicator")
+      const welcomeTimestamp = document.getElementById("welcomeTimestamp")
+      const errorToast = document.getElementById("errorToast")
+      const settingsPanel = document.getElementById("settingsPanel")
+      const modelSelector = document.getElementById("modelSelector")
+      const modelSelect = document.getElementById("modelSelect")
+      const fileInput = document.getElementById("fileInput")
+      const imagePreviewContainer = document.getElementById("imagePreviewContainer")
+      const dropZone = document.getElementById("dropZone")
+      const imageModal = document.getElementById("imageModal")
+      const modalImage = document.getElementById("modalImage")
+
+      // Initialize (DOM is ready since script is at end of body)
+      welcomeTimestamp.textContent = new Date().toLocaleTimeString()
+      loadSettings()
+      setupEventListeners()
+      updateWorkspaceToolbar()
+      connect()
+
+      function setupEventListeners() {
+        messageInput.addEventListener("keydown", handleKeyDown)
+        messageInput.addEventListener("input", autoResize)
+        sendButton.addEventListener("click", sendMessage)
+
+        // Settings button
+        document.getElementByById("settingsToggleBtn")?.addEventListener("click", toggleSettings)
+        document.getElementById("cancelSettingsBtn")?.addEventListener("click", toggleSettings)
+        document.getElementById("saveSettingsBtn")?.addEventListener("click", saveSettings)
+
+        // Workspace dropdown
+        document.getElementById("workspacePath")?.addEventListener("change", handleWorkspaceChange)
+
+        // File upload handlers
+        fileInput.addEventListener("change", handleFileSelect)
+
+        // Drag and drop handlers
+        document.addEventListener("dragover", handleDragOver)
+        document.addEventListener("dragleave", handleDragLeave)
+        document.addEventListener("drop", handleDrop)
+
+        // Auto-save settings
+        document.getElementById("serverUrl").addEventListener("change", saveSettingsToStorage)
+        document.getElementById("sessionId").addEventListener("change", saveSettingsToStorage)
+        document.getElementById("authToken").addEventListener("change", saveSettingsToStorage)
+      }
+
+      // File Upload Functions
+      function handleFileSelect(e) {
+        const files = e.target.files
+        if (files.length > 0) {
+          processFiles(files)
+        }
+        fileInput.value = "" // Reset input
+      }
+
+      function handleDragOver(e) {
+        e.preventDefault()
+        dropZone.classList.add("active")
+      }
+
+      function handleDragLeave(e) {
+        e.preventDefault()
+        dropZone.classList.remove("active")
+      }
+
+      function handleDrop(e) {
+        e.preventDefault()
+        dropZone.classList.remove("active")
+
+        const files = e.dataTransfer.files
+        if (files.length > 0) {
+          processFiles(files)
+        }
+      }
+
+      function processFiles(files) {
+        const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"))
+
+        if (imageFiles.length === 0) {
+          showError("請選擇圖片檔案 (JPG, PNG, GIF, WebP)")
+          return
+        }
+
+        // Check total file size
+        const totalSize = uploadedImages.length * 10 * 1024 * 1024 + imageFiles.reduce((sum, f) => sum + f.size, 0)
+        if (totalSize > 10 * 1024 * 1024) {
+          showError("圖片總大小不能超過 10MB")
+          return
+        }
+
+        // Process each image
+        imageFiles.forEach((file) => {
+          if (file.size > 10 * 1024 * 1024) {
+            showError(`檔案 "${file.name}" 超過 10MB 限制`)
+            return
+          }
+
+          const reader = new FileReader()
+          reader.onload = function (e) {
+            // Get raw base64 - extract from Data URI if present
+            let base64 = e.target.result
+            if (base64.startsWith("data:")) {
+              // Extract base64 from "data:image/jpeg;base64,XXXXX=="
+              const parts = base64.split(",")
+              base64 = parts.length >= 2 ? parts[1] : base64
+            }
+            // Now base64 is just the raw data (no data: prefix)
+
+            uploadedImages.push({
+              id: Date.now() + Math.random(),
+              data: base64,
+              name: file.name,
+              size: file.size,
+            })
+            updateImagePreviews()
+          }
+          reader.onerror = function () {
+            showError(`無法讀取檔案 "${file.name}"`)
+          }
+          reader.readAsDataURL(file)
+        })
+      }
+
+      function updateImagePreviews() {
+        imagePreviewContainer.innerHTML = ""
+
+        uploadedImages.forEach((img, index) => {
+          // Add data URI prefix for display (we store raw base64)
+          const displaySrc = img.data.startsWith("data:") ? img.data : `data:image/jpeg;base64,${img.data}`
+
+          const item = document.createElement("div")
+          item.className = "image-preview-item"
+          item.innerHTML = `
+            <img src="${displaySrc}" alt="${img.name}" onclick="openImageModal('${displaySrc}')" />
+            <button class="image-preview-remove" onclick="removeImage(${index})">×</button>
+            ${uploadedImages.length > 1 ? `<span class="image-count-badge">${index + 1}/${uploadedImages.length}</span>` : ""}
+          `
+          imagePreviewContainer.appendChild(item)
+        })
+      }
+
+      function removeImage(index) {
+        uploadedImages.splice(index, 1)
+        updateImagePreviews()
+      }
+
+      function clearAllImages() {
+        uploadedImages = []
+        updateImagePreviews()
+      }
+
+      function openImageModal(imageData) {
+        modalImage.src = imageData
+        imageModal.classList.add("active")
+      }
+
+      function closeImageModal() {
+        imageModal.classList.remove("active")
+      }
+
+      // Workspace dropdown functions
+      function getWorkspaces() {
+        // Get saved custom workspaces from localStorage
+        const stored = localStorage.getItem("customWorkspaces")
+        const customWorkspaces = stored ? JSON.parse(stored) : []
+        return [...DEFAULT_WORKSPACES, ...customWorkspaces]
+      }
+
+      function populateWorkspaceDropdown() {
+        const select = document.getElementById("workspacePath")
+        if (!select) return
+
+        const currentValue = select.value
+        select.innerHTML = '<option value="">-- Select Workspace --</option>'
+
+        const workspaces = getWorkspaces()
+        workspaces.forEach((ws) => {
+          const option = document.createElement("option")
+          option.value = ws.path
+          option.textContent = ws.name
+          select.appendChild(option)
+        })
+
+        // Restore selection or set default
+        if (currentValue) {
+          select.value = currentValue
+        } else if (config.workspacePath) {
+          select.value = config.workspacePath
+        }
+      }
+
+      function handleWorkspaceChange() {
+        const select = document.getElementById("workspacePath")
+        if (!select) return
+
+        const selectedPath = select.value
+        if (selectedPath) {
+          config.workspacePath = selectedPath
+          saveSettingsToStorage()
+          updateWorkspaceToolbar()
+          console.log(`[AG-UI] Workspace changed to: ${selectedPath}`)
+        }
+      }
+
+      function addCustomWorkspace() {
+        const path = prompt("Enter custom workspace path:")
+        if (path && path.trim()) {
+          const trimmedPath = path.trim()
+
+          // Validate path
+          if (trimmedPath.includes("..")) {
+            showError("Invalid path: directory traversal not allowed")
+            return
+          }
+
+          // Get current custom workspaces
+          const stored = localStorage.getItem("customWorkspaces")
+          const customWorkspaces = stored ? JSON.parse(stored) : []
+
+          // Check if already exists
+          const exists = customWorkspaces.some((ws) => ws.path === trimmedPath)
+          if (exists) {
+            showError("Workspace already exists")
+            return
+          }
+
+          // Add new workspace
+          const name = trimmedPath.split("/").pop() || "Custom"
+          customWorkspaces.push({ name: `📁 ${name}`, path: trimmedPath })
+          localStorage.setItem("customWorkspaces", JSON.stringify(customWorkspaces))
+
+          // Update dropdown
+          populateWorkspaceDropdown()
+          document.getElementById("workspacePath").value = trimmedPath
+          config.workspacePath = trimmedPath
+          saveSettingsToStorage()
+          updateWorkspaceToolbar()
+
+          console.log(`[AG-UI] Added custom workspace: ${trimmedPath}`)
+        }
+      }
+
+      function updateWorkspaceToolbar() {
+        const toolbarSelect = document.getElementById("toolbarWorkspaceSelect")
+        if (!toolbarSelect) return
+
+        // Populate toolbar dropdown
+        const workspaces = getWorkspaces()
+        toolbarSelect.innerHTML = ""
+
+        workspaces.forEach((ws) => {
+          const option = document.createElement("option")
+          option.value = ws.path
+          option.textContent = ws.name
+          toolbarSelect.appendChild(option)
+        })
+
+        // Set current selection
+        if (config.workspacePath) {
+          toolbarSelect.value = config.workspacePath
+        }
+      }
+
+      function handleToolbarWorkspaceChange() {
+        const select = document.getElementById("toolbarWorkspaceSelect")
+        if (!select) return
+
+        const selectedPath = select.value
+        if (selectedPath) {
+          config.workspacePath = selectedPath
+          saveSettingsToStorage()
+          console.log(`[AG-UI] Toolbar workspace changed to: ${selectedPath}`)
+        }
+      }
+
+      // Check if current model supports vision
+      function isVisionModel() {
+        const model = config.model || ""
+        const visionPatterns = [/llama3\.2-vision/, /llava/, /qwen.*-vl/, /bakllava/, /yolo/]
+        return visionPatterns.some((pattern) => pattern.test(model))
+      }
+
+      function handleKeyDown(e) {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault()
+          sendMessage()
+        }
+      }
+
+      function autoResize() {
+        messageInput.style.height = "auto"
+        messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + "px"
+      }
+
+      function loadSettings() {
+        const stored = localStorage.getItem("agui-chat-settings")
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored)
+            config = { ...config, ...parsed }
+          } catch (e) {
+            console.warn("Failed to parse settings:", e)
+          }
+        }
+
+        // Update settings panel
+        document.getElementById("serverUrl").value = config.wsUrl
+        document.getElementById("ollamaHost").value = config.ollamaHost
+        document.getElementById("sessionId").value = config.sessionId
+        document.getElementById("authToken").value = config.authToken
+
+        // Populate and set workspace dropdown
+        populateWorkspaceDropdown()
+        const workspaceSelect = document.getElementById("workspacePath")
+        if (workspaceSelect && config.workspacePath) {
+          workspaceSelect.value = config.workspacePath
+        }
+
+        // Update model selector
+        if (modelSelect) {
+          modelSelect.value = config.model || DEFAULT_CONFIG.model
+        }
+      }
+
+      function saveSettingsToStorage() {
+        config.wsUrl = document.getElementById("serverUrl").value || DEFAULT_CONFIG.wsUrl
+        config.ollamaHost = document.getElementById("ollamaHost").value || DEFAULT_CONFIG.ollamaHost
+        config.sessionId = document.getElementById("sessionId").value || DEFAULT_CONFIG.sessionId
+        config.authToken = document.getElementById("authToken").value || ""
+
+        const workspaceSelect = document.getElementById("workspacePath")
+        config.workspacePath = workspaceSelect?.value || DEFAULT_CONFIG.workspacePath
+
+        if (modelSelect) {
+          config.model = modelSelect.value
+        }
+
+        localStorage.setItem("agui-chat-settings", JSON.stringify(config))
+        updateWorkspaceToolbar()
+
+        // Update settings panel
+        document.getElementById("serverUrl").value = config.wsUrl
+        document.getElementById("ollamaHost").value = config.ollamaHost
+        document.getElementById("sessionId").value = config.sessionId
+        document.getElementById("authToken").value = config.authToken
+        document.getElementById("workspacePath").value = config.workspacePath || DEFAULT_CONFIG.workspacePath
+
+        // Update model selector
+        if (modelSelect) {
+          modelSelect.value = config.model || DEFAULT_CONFIG.model
+        }
+      }
+
+      function saveSettingsToStorage() {
+        config.wsUrl = document.getElementById("serverUrl").value || DEFAULT_CONFIG.wsUrl
+        config.ollamaHost = document.getElementById("ollamaHost").value || DEFAULT_CONFIG.ollamaHost
+        config.sessionId = document.getElementById("sessionId").value || DEFAULT_CONFIG.sessionId
+        config.authToken = document.getElementById("authToken").value || ""
+        config.workspacePath = document.getElementById("workspacePath").value || DEFAULT_CONFIG.workspacePath
+        if (modelSelect) {
+          config.model = modelSelect.value
+        }
+        localStorage.setItem("agui-chat-settings", JSON.stringify(config))
+      }
+
+      function handleModelChange() {
+        if (modelSelect) {
+          config.model = modelSelect.value
+          saveSettingsToStorage()
+          console.log(`[AG-UI] Model changed to: ${config.model}`)
+        }
+      }
+
+      function toggleSettings() {
+        settingsPanel.classList.toggle("visible")
+      }
+
+      function saveSettings() {
+        saveSettingsToStorage()
+        toggleSettings()
+        // Reconnect with new settings
+        if (ws) {
+          ws.close()
+        }
+        reconnectAttempts = 0
+        connect()
+      }
+
+      function updateConnectionStatus(status) {
+        statusDot.className = "status-dot " + status
+        switch (status) {
+          case "connected":
+            statusText.textContent = "Connected"
+            messageInput.disabled = false
+            sendButton.disabled = false
+            messageInput.placeholder = "Type your message..."
+            lastConnectedTime = new Date()
+            updateMetricsDisplay()
+            // Show model selector
+            if (modelSelector) {
+              modelSelector.style.display = "flex"
+            }
+            break
+          case "connecting":
+            statusText.textContent = "Connecting..."
+            messageInput.disabled = true
+            sendButton.disabled = true
+            messageInput.placeholder = "Connecting..."
+            break
+          case "disconnected":
+            statusText.textContent = "Disconnected"
+            messageInput.disabled = true
+            sendButton.disabled = true
+            messageInput.placeholder = "Disconnected"
+            break
+          case "reconnecting":
+            statusText.textContent = `Reconnecting... (${totalReconnects + 1})`
+            messageInput.disabled = true
+            sendButton.disabled = true
+            messageInput.placeholder = "Reconnecting..."
+            break
+        }
+      }
+
+      function updateMetricsDisplay() {
+        const metricsDisplay = document.getElementById("metricsDisplay")
+        const authStatus = document.getElementById("authStatus")
+        if (totalReconnects > 0 || messageCount > 0 || lastConnectedTime || isAuthenticated) {
+          metricsDisplay.style.display = "flex"
+          document.getElementById("reconnectCount").textContent = totalReconnects
+          document.getElementById("messageCount").textContent = messageCount
+          if (lastConnectedTime) {
+            document.getElementById("lastConnected").textContent = lastConnectedTime.toLocaleTimeString()
+          }
+          // Show auth status if connected and has auth token
+          if (config.authToken && config.authToken.length >= 10) {
+            authStatus.style.display = "flex"
+            document.getElementById("authStatusText").textContent = isAuthenticated ? "OK" : "Pending"
+          } else {
+            authStatus.style.display = "none"
+          }
+        } else {
+          metricsDisplay.style.display = "none"
+        }
+      }
+
+      function updateAuthDisplay() {
+        const authStatus = document.getElementById("authStatus")
+        if (config.authToken && config.authToken.length >= 10) {
+          authStatus.style.display = "flex"
+          document.getElementById("authStatusText").textContent = isAuthenticated ? "OK" : "Pending"
+        }
+      }
+
+      function showError(message) {
+        errorToast.textContent = message
+        errorToast.classList.add("visible")
+        setTimeout(() => {
+          errorToast.classList.remove("visible")
+        }, 5000)
+      }
+
+      function addMessage(content, sender, images = [], timestamp = null) {
+        const messageDiv = document.createElement("div")
+        messageDiv.className = "message " + sender
+
+        // Format content with code highlighting
+        const formattedContent = formatMessage(content)
+
+        let imagesHTML = ""
+        if (images && images.length > 0) {
+          imagesHTML = '<div class="message-images" style="margin-top: 8px;">'
+          images.forEach((img) => {
+            // Add data URI prefix for display
+            const displaySrc = img.startsWith("data:") ? img : `data:image/jpeg;base64,${img}`
+            imagesHTML += `<img src="${displaySrc}" class="message-image" onclick="openImageModal('${displaySrc}')" />`
+          })
+          imagesHTML += "</div>"
+        }
+
+        messageDiv.innerHTML = `
+          <div class="message-content">${formattedContent}</div>
+          ${imagesHTML}
+          <div class="timestamp">${timestamp || new Date().toLocaleTimeString()}</div>
+        `
+
+        chatContainer.appendChild(messageDiv)
+        chatContainer.scrollTop = chatContainer.scrollHeight
+      }
+
+      function formatMessage(text) {
+        // Escape HTML
+        let formatted = escapeHtml(text)
+
+        // Code blocks
+        formatted = formatted.replace(/```(\w*)\n([\s\S]*?)```/g, "<code>$2</code>")
+
+        // Inline code
+        formatted = formatted.replace(/`([^`]+)`/g, "<code>$1</code>")
+
+        return formatted
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement("div")
+        div.textContent = text
+        return div.innerHTML
+      }
+
+      // Simple path join for browser
+      function pathJoin(...parts) {
+        return parts
+          .map((part) => part.replace(/\\/g, "/").replace(/\/+/g, "/"))
+          .join("/")
+          .replace(/\/$/, "")
+      }
+
+      function connect() {
+        updateConnectionStatus("connecting")
+
+        try {
+          ws = new WebSocket(config.wsUrl)
+
+          ws.onopen = () => {
+            console.log("[AG-UI] WebSocket connected")
+            updateConnectionStatus("connected")
+            if (reconnectAttempts > 0) {
+              totalReconnects += reconnectAttempts
+              reconnectAttempts = 0
+            }
+            updateMetricsDisplay()
+            updateAuthDisplay()
+
+            // Send authentication
+            sendAuthMessage()
+          }
+
+          ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data)
+              handleMessage(data)
+            } catch (e) {
+              console.error("[AG-UI] Error parsing message:", e)
+            }
+          }
+
+          ws.onclose = (event) => {
+            console.log("[AG-UI] WebSocket closed:", event.code, event.reason)
+            updateConnectionStatus("disconnected")
+
+            if (event.code !== 1000 && event.code !== 1008) {
+              scheduleReconnect()
+            }
+          }
+
+          ws.onerror = (error) => {
+            console.error("[AG-UI] WebSocket error:", error)
+            updateConnectionStatus("disconnected")
+          }
+        } catch (e) {
+          console.error("[AG-UI] Failed to connect:", e)
+          updateConnectionStatus("disconnected")
+          scheduleReconnect()
+        }
+      }
+
+      function sendAuthMessage() {
+        const authMessage = {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "authenticate",
+          params: {
+            sessionId: config.sessionId,
+            token: config.authToken,
+            ollamaHost: config.ollamaHost,
+          },
+        }
+        ws.send(JSON.stringify(authMessage))
+      }
+
+      // Get Ollama host URL for display/reference
+      function getOllamaHost() {
+        return config.ollamaHost || DEFAULT_CONFIG.ollamaHost
+      }
+
+      // Fetch available models from Ollama host
+      async function fetchOllamaModels() {
+        const host = document.getElementById("ollamaHost").value || getOllamaHost()
+        const modelsList = document.getElementById("ollamaModelsList")
+        const modelsRow = document.getElementById("ollamaModelsRow")
+
+        modelsList.innerHTML = "🔄 Fetching models..."
+        modelsRow.style.display = "block"
+
+        try {
+          const response = await fetch(`${host}/api/tags`)
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`)
+          }
+
+          const data = await response.json()
+          const models = data.models || []
+
+          if (models.length === 0) {
+            modelsList.innerHTML = "⚠️ No models found on this Ollama host"
+            return
+          }
+
+          // Group models by type
+          const visionModels = models.filter((m) => m.name.match(/vision|llava|vl|bakllava|yolo/i))
+          const otherModels = models.filter((m) => !m.name.match(/vision|llava|vl|bakllava|yolo/i))
+
+          let html = `<div style="margin-bottom: 8px;"><strong>Vision Models (支援圖片):</strong></div>`
+          if (visionModels.length > 0) {
+            html += visionModels
+              .map(
+                (m) =>
+                  `<div style="padding: 4px 0; border-bottom: 1px solid var(--border-color);">
+                ⭐ <code>${m.name}</code> ${m.size ? `(${formatSize(m.size)})` : ""}
+              </div>`,
+              )
+              .join("")
+          } else {
+            html += `<div style="color: var(--text-secondary);">No vision models found</div>`
+          }
+
+          html += `<div style="margin: 8px 0 8px 0;"><strong>Other Models:</strong></div>`
+          html += otherModels
+            .slice(0, 10)
+            .map(
+              (m) =>
+                `<div style="padding: 4px 0; border-bottom: 1px solid var(--border-color);">
+              • <code>${m.name}</code> ${m.size ? `(${formatSize(m.size)})` : ""}
+            </div>`,
+            )
+            .join("")
+
+          if (otherModels.length > 10) {
+            html += `<div style="color: var(--text-secondary); margin-top: 8px;">... and ${otherModels.length - 10} more models</div>`
+          }
+
+          modelsList.innerHTML = html
+          console.log(`[AG-UI] Found ${models.length} models on ${host}`)
+        } catch (error) {
+          console.error(`[AG-UI] Failed to fetch models from ${host}:`, error)
+          modelsList.innerHTML = `❌ Cannot connect to Ollama at ${host}<br/>
+            <span style="color: var(--text-secondary); font-size: 11px;">
+            Make sure:<br/>
+            1. Ollama is running on the remote host<br/>
+            2. Firewall allows port 11434<br/>
+            3. Use OLLAMA_HOST env var on server
+            </span>`
+        }
+      }
+
+      function formatSize(bytes) {
+        if (bytes < 1024) return bytes + " B"
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
+        return (bytes / (1024 * 1024)).toFixed(1) + " MB"
+      }
+
+      function handleMessage(data) {
+        console.log("[AG-UI] Received:", data)
+
+        // Handle authentication response
+        if (data.result && data.result.authenticated !== undefined) {
+          if (data.result.authenticated) {
+            console.log("[AG-UI] Authentication successful")
+            isAuthenticated = true
+            updateAuthDisplay()
+          } else {
+            console.log("[AG-UI] Authentication failed")
+            isAuthenticated = false
+            updateAuthDisplay()
+            showError("Authentication failed. Check your settings.")
+          }
+          return
+        }
+
+        // Handle errors
+        if (data.error) {
+          console.error("[AG-UI] Server error:", data.error)
+          typingIndicator.classList.remove("visible")
+          showError("Server error: " + (data.error.message || "Unknown error"))
+          return
+        }
+
+        // Handle agent messages
+        if (data.type === "agent.thinking") {
+          typingIndicator.classList.add("visible")
+          return
+        }
+
+        if (data.type === "agent.message") {
+          typingIndicator.classList.remove("visible")
+          const content = data.data?.content || data.content || ""
+          addMessage(content, "agent")
+          return
+        }
+
+        if (data.type === "agent.error") {
+          typingIndicator.classList.remove("visible")
+          addMessage("Error: " + (data.data?.error || "Unknown error"), "agent")
+          return
+        }
+
+        // Handle raw messages with method
+        if (data.method) {
+          if (data.method === "agent.message") {
+            typingIndicator.classList.remove("visible")
+            const content = data.params?.content || ""
+            addMessage(content, "agent")
+          } else if (data.method === "agent.thinking") {
+            typingIndicator.classList.add("visible")
+          } else if (data.method === "agent.error") {
+            typingIndicator.classList.remove("visible")
+            addMessage("Error: " + (data.params?.error || "Unknown error"), "agent")
+          }
+        }
+      }
+
+      function getReconnectDelay(attempt) {
+        const delay = config.baseReconnectDelay * Math.pow(2, attempt)
+        return Math.min(delay, 30000)
+      }
+
+      function scheduleReconnect() {
+        if (reconnectAttempts >= config.maxReconnectAttempts) {
+          console.log("[AG-UI] Max reconnection attempts reached")
+          showError("Connection lost. Please check your settings.")
+          return
+        }
+
+        updateConnectionStatus("reconnecting")
+        const delay = getReconnectDelay(reconnectAttempts)
+
+        console.log(
+          `[AG-UI] Reconnecting in ${delay}ms (attempt ${reconnectAttempts + 1}/${config.maxReconnectAttempts})`,
+        )
+
+        reconnectTimeout = setTimeout(() => {
+          reconnectAttempts++
+          connect()
+        }, delay)
+      }
+
+      // Retry configuration
+      const MAX_RETRIES = 2
+      const RETRY_DELAY = 2000
+
+      // Send message with retry logic for image uploads
+      function sendMessageWithRetry(messageData, retryCount = 0) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          showError("連接已斷開，請重新連線")
+          return
+        }
+
+        try {
+          ws.send(JSON.stringify(messageData))
+          console.log(`[AG-UI] Message sent (attempt ${retryCount + 1})`)
+        } catch (error) {
+          console.error(`[AG-UI] Failed to send message:`, error)
+
+          if (retryCount < MAX_RETRIES) {
+            console.log(`[AG-UI] Retrying in ${RETRY_DELAY}ms... (attempt ${retryCount + 2}/${MAX_RETRIES + 1})`)
+            setTimeout(() => {
+              sendMessageWithRetry(messageData, retryCount + 1)
+            }, RETRY_DELAY)
+          } else {
+            showError("訊息發送失敗，請重試")
+            // Re-add the message to the chat since it failed
+            const content = messageData.params.content
+            const images = messageData.params.images || []
+            addMessage(content, "user", images)
+          }
+        }
+      }
+
+      function sendMessage() {
+        const content = messageInput.value.trim()
+        if ((!content && uploadedImages.length === 0) || !ws || ws.readyState !== WebSocket.OPEN) {
+          return
+        }
+
+        // Check if images are uploaded but no text
+        if (uploadedImages.length > 0 && !content) {
+          // Set default prompt for vision models
+          if (isVisionModel()) {
+            content = "分析這些圖片中的內容"
+          } else {
+            showError("請輸入訊息描述或搭配圖片")
+            return
+          }
+        }
+
+        // Add user message with images
+        const imageDatas = uploadedImages.map((img) => img.data)
+        addMessage(content, "user", imageDatas)
+
+        messageInput.value = ""
+        messageInput.style.height = "auto"
+        messageCount++
+        updateMetricsDisplay()
+
+        // Clear uploaded images after sending
+        const sentImages = [...uploadedImages]
+        clearAllImages()
+
+        const messageData = {
+          jsonrpc: "2.0",
+          id: Date.now(),
+          method: "agent.message",
+          params: {
+            content: content,
+            sessionId: config.sessionId,
+            model: config.model,
+            images: sentImages.map((img) => img.data), // Send base64 images
+          },
+        }
+
+        // Send with retry logic
+        sendMessageWithRetry(messageData)
+      }
+
+      // File operation functions for coding work
+      function readFile(relativePath) {
+        const workspace = config.workspacePath || DEFAULT_CONFIG.workspacePath
+        const fullPath = pathJoin(workspace, relativePath)
+
+        // Send request to backend to read file
+        const content = `read ${relativePath}`
+        addMessage(content, "user")
+
+        const messageData = {
+          jsonrpc: "2.0",
+          id: Date.now(),
+          method: "agent.message",
+          params: {
+            content: `Please read the file at: ${relativePath}\nWorkspace: ${workspace}\n\nShow me the file contents.`,
+            sessionId: config.sessionId,
+            model: config.model,
+            images: [],
+          },
+        }
+        sendMessageWithRetry(messageData)
+      }
+
+      function getWorkspaceInfo() {
+        const workspace = config.workspacePath || DEFAULT_CONFIG.workspacePath
+        const content = `Show me the directory structure of: ${workspace}\n\nList all files and subdirectories.`
+        addMessage(content, "user")
+
+        const messageData = {
+          jsonrpc: "2.0",
+          id: Date.now(),
+          method: "agent.message",
+          params: {
+            content: content,
+            sessionId: config.sessionId,
+            model: config.model,
+            images: [],
+          },
+        }
+        sendMessageWithRetry(messageData)
+      }
+
+      function readFileFromInput() {
+        const filePath = document.getElementById("filePathInput").value.trim()
+        if (filePath) {
+          readFile(filePath)
+        } else {
+          showError("請輸入檔案路徑")
+        }
+      }
+
+      // Expose for debugging
+      window.aguiChat = {
+        connect,
+        sendMessage,
+        readFile,
+        readFileFromInput,
+        getWorkspaceInfo,
+        getConfig: () => config,
+        getStatus: () => statusText.textContent,
+        getModel: () => config.model,
+        setModel: (model) => {
+          config.model = model
+          if (modelSelect) {
+            modelSelect.value = model
+          }
+          saveSettingsToStorage()
+        },
+        getMetrics: () => ({
+          totalReconnects,
+          messageCount,
+          lastConnectedTime,
+          reconnectAttempts,
+          isAuthenticated,
+        }),
+        resetMetrics: () => {
+          totalReconnects = 0
+          messageCount = 0
+          lastConnectedTime = null
+          isAuthenticated = false
+          updateMetricsDisplay()
+        },
+      }
+
+      // Enter key support for file path input
+      document.getElementById("filePathInput")?.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault()
+          readFileFromInput()
+        }
+      })
+
+      // Enter key support for file path input
+      document.getElementById("filePathInput")?.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault()
+          readFileFromInput()
+        }
+      })
+    
+</script>
+  </body>
+</html>

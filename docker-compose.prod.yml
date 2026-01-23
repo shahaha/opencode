@@ -1,0 +1,103 @@
+version: "3.8"
+
+services:
+  # 前端應用
+  opencode-frontend:
+    build:
+      context: ./packages/console/app
+      dockerfile: Dockerfile
+    container_name: opencode-frontend
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:3001:3001" # 開發模式端口
+    environment:
+      - VITE_OPENCODE_API_URL=http://host.docker.internal:3000
+      - VITE_OPENCODE_WS_URL=ws://host.docker.internal:3000
+      - HOST=0.0.0.0
+    networks:
+      - opencode-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - opencode-backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 後端 API
+  opencode-backend:
+    build:
+      context: ./packages/opencode
+      dockerfile: Dockerfile
+    container_name: opencode-backend
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:3000:3000"
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=3000
+      - DATABASE_URL=postgresql://opencode:${POSTGRES_PASSWORD}@postgres:5432/opencode
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - SENTRY_DSN=${SENTRY_DSN}
+    networks:
+      - opencode-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 資料庫
+  postgres:
+    image: postgres:15-alpine
+    container_name: opencode-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=opencode
+      - POSTGRES_USER=opencode
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - opencode-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opencode -d opencode"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 快取
+  redis:
+    image: redis:7-alpine
+    container_name: opencode-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - opencode-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+networks:
+  opencode-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

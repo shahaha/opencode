@@ -1,0 +1,31 @@
+[2026-01-19 00:26:10] Starting WebSocket health monitoring
+[2026-01-19 00:26:10] Backend: 192.168.0.221:4000
+[2026-01-19 00:26:10] Check interval: 30s
+[2026-01-19 00:26:10] Log file: websocket-health.log
+[2026-01-19 00:26:10] \033[0;32m✓\033[0m Backend health OK
+[2026-01-19 00:26:20] \033[0;32m✓\033[0m WebSocket endpoint accessible
+[2026-01-19 00:32:24] Starting WebSocket health monitoring
+[2026-01-19 00:32:24] Backend: 192.168.0.221:4000
+[2026-01-19 00:32:24] Check interval: 30s
+[2026-01-19 00:32:24] Log file: websocket-health.log
+[2026-01-19 00:32:25] \033[0;32m✓\033[0m Backend health OK
+[2026-01-19 00:40:47] Starting WebSocket health monitoring
+[2026-01-19 00:40:47] Backend: 192.168.0.221:4000
+[2026-01-19 00:40:47] Check interval: 30s
+[2026-01-19 00:40:47] Log file: websocket-health.log
+[2026-01-19 00:40:48] \033[0;32m✓\033[0m Backend health OK
+[2026-01-19 00:55:52] Starting WebSocket health monitoring
+[2026-01-19 00:55:52] Backend: 192.168.0.221:4000
+[2026-01-19 00:55:52] Check interval: 30s
+[2026-01-19 00:55:52] Log file: websocket-health.log
+[2026-01-19 00:55:52] \033[0;32m✓\033[0m Backend health OK
+[2026-01-19 11:44:02] Starting WebSocket health monitoring
+[2026-01-19 11:44:02] Backend: 192.168.0.221:4000
+[2026-01-19 11:44:02] Check interval: 30s
+[2026-01-19 11:44:02] Log file: websocket-health.log
+[2026-01-19 11:44:02] \033[0;31m[CRITICAL]\033[0m Backend health check failed - server may be down
+[2026-01-19 20:22:41] Starting WebSocket health monitoring
+[2026-01-19 20:22:41] Backend: 192.168.0.221:4000
+[2026-01-19 20:22:41] Check interval: 30s
+[2026-01-19 20:22:41] Log file: websocket-health.log
+[2026-01-19 20:22:41] \033[0;31m[CRITICAL]\033[0m Backend health check failed - server may be down

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AG-UI Chat Test</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: #f5f5f5;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      .header {
+        text-align: center;
+        color: #2e7d32;
+        margin-bottom: 20px;
+      }
+      .chat-container {
+        border: 2px solid #4caf50;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 20px 0;
+        background: #f9f9f9;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🧪 AG-UI Chat Component Test</h1>
+        <p>Session ID: <strong>test-session</strong></p>
+      </div>
+
+      <div style="margin: 20px 0; padding: 15px; background: #e8f5e8; border-left: 4px solid #4caf50">
+        <h3>✅ 路由系统工作正常！</h3>
+        <p>🎯 AGUIChat组件正在加载...</p>
+        <p>🔌 WebSocket将连接到端口5000</p>
+        <p>🤖 模型选择器将显示11个选项</p>
+      </div>
+
+      <div class="chat-container" id="chat-container">
+        <!-- AGUIChat component will be rendered here -->
+        <div style="text-align: center; color: #666; padding: 40px">
+          <div style="font-size: 2rem; margin-bottom: 10px">⏳</div>
+          <p>Loading AG-UI Chat component...</p>
+          <p style="font-size: 0.9em; margin-top: 10px">如果几秒钟后没有加载，请检查浏览器控制台错误。</p>
+        </div>
+      </div>
+
+      <div style="margin-top: 30px; padding: 15px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px">
+        <h4>🔍 调试信息：</h4>
+        <ul>
+          <li>检查浏览器控制台是否有 "[AG-UI] AGUIChat component rendered" 消息</li>
+          <li>确认模型选择器是否显示11个选项</li>
+          <li>测试发送消息是否触发WebSocket连接</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Load the built JavaScript -->
+    <script type="module" crossorigin src="/assets/index-DZjXDAeF.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-D4QnJkbm.css" />
+
+    <script>
+      // Simple test to verify JavaScript is loading
+      console.log("🧪 AG-UI Test page loaded")
+
+      // Wait for DOM and then try to render AGUIChat
+      setTimeout(() => {
+        console.log("⏳ Attempting to render AGUIChat component...")
+
+        // This would normally be handled by SolidJS router
+        // For now, we'll just verify the JS loads
+        if (typeof window !== "undefined") {
+          console.log("✅ JavaScript environment ready")
+        }
+      }, 1000)
+    </script>
+  </body>
+</html>

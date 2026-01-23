@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AG-UI Chat - OpenCode</title>
+    <style>
+      /* Chat interface styles */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: #f5f7fa;
+        color: #333;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .chat-container {
+        display: flex;
+        height: calc(100vh - 80px);
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+        background: white;
+      }
+
+      .chat-sidebar {
+        width: 300px;
+        background: #f8f9fa;
+        border-right: 1px solid #e9ecef;
+        padding: 20px;
+      }
+
+      .chat-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .chat-messages {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+      }
+
+      .chat-input {
+        padding: 20px;
+        border-top: 1px solid #e9ecef;
+        background: white;
+      }
+
+      .message {
+        margin-bottom: 20px;
+        padding: 15px;
+        border-radius: 10px;
+        max-width: 80%;
+      }
+
+      .message.user {
+        background: #007bff;
+        color: white;
+        margin-left: auto;
+        text-align: right;
+      }
+
+      .message.assistant {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+      }
+
+      .message-input {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e9ecef;
+        border-radius: 25px;
+        font-size: 16px;
+        outline: none;
+      }
+
+      .message-input:focus {
+        border-color: #007bff;
+      }
+
+      .send-button {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .input-container {
+        position: relative;
+      }
+
+      /* Settings panel styles */
+      .settings-panel {
+        position: fixed;
+        top: 0;
+        right: -400px;
+        width: 380px;
+        height: 100vh;
+        background: white;
+        box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+        transition: right 0.3s ease;
+        z-index: 1000;
+        overflow-y: auto;
+      }
+
+      .settings-panel.visible {
+        right: 0;
+      }
+
+      .settings-header {
+        padding: 20px;
+        border-bottom: 1px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .settings-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: #666;
+      }
+
+      .settings-section {
+        padding: 20px;
+      }
+
+      .workspace-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .workspace-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px;
+        border: 1px solid #e1e5e9;
+        border-radius: 8px;
+        background: #f8f9fa;
+      }
+
+      .workspace-item.active {
+        border-color: #007bff;
+        background: #e3f2fd;
+      }
+
+      .delete {
+        color: #dc3545;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 4px;
+      }
+
+      .delete:hover {
+        background: #f8d7da;
+      }
+
+      .add-workspace {
+        margin-top: 15px;
+        display: flex;
+        gap: 10px;
+      }
+
+      .add-workspace input {
+        flex: 1;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+
+      .add-workspace button {
+        padding: 8px 16px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      /* Settings button */
+      #settingsBtn {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        cursor: pointer;
+        font-size: 20px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        z-index: 999;
+      }
+
+      #settingsBtn:hover {
+        background: #0056b3;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Settings Button -->
+    <button id="settingsBtn">⚙️</button>
+
+    <!-- Main Chat Interface -->
+    <div class="container">
+      <div class="chat-container">
+        <div class="chat-sidebar">
+          <h3>AG-UI Chat</h3>
+          <p>AI Coding Assistant</p>
+          <div id="mcp-status">
+            <h4>MCP Status</h4>
+            <div id="mcp-server-list">
+              <div class="mcp-server-item">
+                <span class="status-dot" style="background: #ffc107"></span>
+                Loading MCP servers...
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-main">
+          <div class="chat-messages" id="chatMessages">
+            <div class="message assistant">
+              <strong>AG-UI:</strong> Hello! I'm your AI coding assistant. How can I help you today?
+            </div>
+          </div>
+
+          <div class="chat-input">
+            <div class="input-container">
+              <input type="text" id="messageInput" class="message-input" placeholder="Type your message..." />
+              <button id="sendButton" class="send-button">📤</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div class="settings-panel" id="settingsPanel">
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <button class="settings-close" id="settingsCloseBtn">×</button>
+      </div>
+
+      <div class="settings-section">
+        <h3>Workspace</h3>
+        <div class="workspace-list" id="workspaceList">
+          <!-- Workspace items will be dynamically inserted here -->
+        </div>
+        <div class="add-workspace">
+          <input type="text" id="newWorkspacePath" placeholder="Enter workspace path..." />
+          <button id="addWorkspaceBtn">Add</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Configuration</h3>
+        <div class="setting-row">
+          <label for="serverUrl">Server URL</label>
+          <input type="text" id="serverUrl" value="ws://localhost:5000/ag-ui/ws" />
+        </div>
+        <div class="setting-row">
+          <label for="timeoutSetting">Request Timeout (ms)</label>
+          <input type="number" id="timeoutSetting" value="60000" />
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Metrics</h3>
+        <div class="metrics">
+          <div class="metric">
+            <span>Messages:</span>
+            <span id="messageCount">1</span>
+          </div>
+          <div class="metric">
+            <span>Latency:</span>
+            <span id="latency">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ==================== 修復後的 JavaScript 代碼 ====================
+
+      // 全域變數
+      let workspaces = []
+      let settingsEventBound = false // 防止重複事件綁定
+      let settingsVisible = false
+      let messageCount = 1
+      let conversationHistory = []
+
+      // 修復 1: 防抖函數 - 防止快速重複點擊
+      function debounce(func, wait) {
+        let timeout
+        return function executedFunction(...args) {
+          const later = () => {
+            clearTimeout(timeout)
+            func(...args)
+          }
+          clearTimeout(timeout)
+          timeout = setTimeout(later, wait)
+        }
+      }
+
+      // 修復 2: 安全的 localStorage 操作
+      function safeLocalStorageGet(key, defaultValue = null) {
+        try {
+          const item = localStorage.getItem(key)
+          return item ? JSON.parse(item) : defaultValue
+        } catch (error) {
+          console.warn("localStorage read error:", error)
+          return defaultValue
+        }
+      }
+
+      function safeLocalStorageSet(key, value) {
+        try {
+          localStorage.setItem(key, JSON.stringify(value))
+        } catch (error) {
+          console.warn("localStorage write error:", error)
+        }
+      }
+
+      // 修復 3: 修復 localStorage 中的重複 workspace
+      function fixDuplicateWorkspaces() {
+        const stored = safeLocalStorageGet("workspaces", [])
+        if (!Array.isArray(stored)) return
+
+        // 移除重複項目（基於 path）
+        const uniqueWorkspaces = stored.filter(
+          (workspace, index, self) => index === self.findIndex((w) => w.path === workspace.path),
+        )
+
+        if (uniqueWorkspaces.length !== stored.length) {
+          console.log(`修復了 ${stored.length - uniqueWorkspaces.length} 個重複 workspace`)
+          safeLocalStorageSet("workspaces", uniqueWorkspaces)
+        }
+
+        workspaces = uniqueWorkspaces
+      }
+
+      // 修復 4: 重構 renderWorkspaceList - 關鍵修復！
+      function renderWorkspaceList() {
+        const container = document.getElementById("workspaceList")
+        if (!container) {
+          console.error("workspaceList container not found")
+          return
+        }
+
+        // 🔧 關鍵修復：完全清空容器，防止重複渲染
+        container.innerHTML = ""
+
+        workspaces.forEach((workspace, index) => {
+          const item = document.createElement("div")
+          item.className = "workspace-item"
+          if (workspace.active) {
+            item.classList.add("active")
+          }
+
+          item.innerHTML = `
+                    <div>
+                        <span class="name">${workspace.name}</span>
+                        <span class="path">${workspace.path}</span>
+                    </div>
+                    <button class="delete" data-index="${index}">×</button>
+                `
+
+          // 綁定刪除事件
+          const deleteBtn = item.querySelector(".delete")
+          deleteBtn.addEventListener("click", (e) => {
+            e.stopPropagation()
+            deleteWorkspace(index)
+          })
+
+          container.appendChild(item)
+        })
+      }
+
+      // 修復 5: 安全的設置面板初始化
+      function initSettingsPanel() {
+        if (settingsEventBound) return // 已經初始化過了
+
+        const settingsBtn = document.getElementById("settingsBtn")
+        const settingsCloseBtn = document.getElementById("settingsCloseBtn")
+        const settingsPanel = document.getElementById("settingsPanel")
+        const addWorkspaceBtn = document.getElementById("addWorkspaceBtn")
+        const newWorkspacePath = document.getElementById("newWorkspacePath")
+
+        if (!settingsBtn || !settingsCloseBtn || !settingsPanel) {
+          console.error("Required elements not found")
+          return
+        }
+
+        // 使用防抖的切換函數
+        const debouncedToggle = debounce(() => {
+          settingsVisible = !settingsVisible
+          settingsPanel.classList.toggle("visible", settingsVisible)
+        }, 200)
+
+        settingsBtn.addEventListener("click", debouncedToggle)
+        settingsCloseBtn.addEventListener("click", debouncedToggle)
+
+        // 添加 workspace 功能
+        if (addWorkspaceBtn && newWorkspacePath) {
+          addWorkspaceBtn.addEventListener("click", () => {
+            const path = newWorkspacePath.value.trim()
+            if (path) {
+              addWorkspace(path)
+              newWorkspacePath.value = ""
+            }
+          })
+
+          newWorkspacePath.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+              addWorkspaceBtn.click()
+            }
+          })
+        }
+
+        settingsEventBound = true
+        console.log("Settings panel initialized")
+      }
+
+      // Workspace 管理函數
+      function addWorkspace(path) {
+        if (!path) return
+
+        // 檢查是否已存在
+        if (workspaces.some((w) => w.path === path)) {
+          alert("Workspace already exists")
+          return
+        }
+
+        const name = path.split("/").pop() || path
+        workspaces.push({
+          name: name,
+          path: path,
+          active: workspaces.length === 0, // 第一個設為活躍
+        })
+
+        saveWorkspaces()
+        renderWorkspaceList()
+      }
+
+      function deleteWorkspace(index) {
+        if (index >= 0 && index < workspaces.length) {
+          workspaces.splice(index, 1)
+          saveWorkspaces()
+          renderWorkspaceList()
+        }
+      }
+
+      function saveWorkspaces() {
+        safeLocalStorageSet("workspaces", workspaces)
+      }
+
+      function loadWorkspaces() {
+        fixDuplicateWorkspaces() // 修復重複項目
+
+        // 如果沒有 workspace，添加默認的
+        if (workspaces.length === 0) {
+          workspaces = [
+            { name: "OpenCode", path: "/home/rick/prj/opencode", active: true },
+            { name: "Home", path: "/home/rick", active: false },
+            { name: "Projects", path: "/home/rick/projects", active: false },
+            { name: "Downloads", path: "/home/rick/Downloads", active: false },
+            { name: "Root", path: "/", active: false },
+          ]
+          saveWorkspaces()
+        }
+      }
+
+      // 聊天功能
+      function addMessage(content, type = "user") {
+        const chatMessages = document.getElementById("chatMessages")
+        const messageDiv = document.createElement("div")
+        messageDiv.className = `message ${type}`
+
+        messageDiv.innerHTML = `<strong>${type === "user" ? "You" : "AG-UI"}:</strong> ${content}`
+        chatMessages.appendChild(messageDiv)
+        chatMessages.scrollTop = chatMessages.scrollHeight
+
+        // 保存到對話歷史
+        conversationHistory.push({ content, type, timestamp: Date.now() })
+
+        // 更新訊息計數
+        messageCount++
+        document.getElementById("messageCount").textContent = messageCount
+      }
+
+      // 處理發送訊息
+      function sendMessage() {
+        const input = document.getElementById("messageInput")
+        const message = input.value.trim()
+
+        if (!message) return
+
+        addMessage(message, "user")
+        input.value = ""
+
+        // 模擬 AI 回應
+        setTimeout(() => {
+          const responses = [
+            "我理解了您的問題。讓我來協助您解決這個編程問題。",
+            "根據您的描述，這是一個常見的編程模式。以下是解決方案：",
+            "您的程式碼看起來不錯！不過我建議做一些優化。",
+            "這是一個有趣的技術挑戰。讓我為您分析一下。",
+            "謝謝您的提問！我可以提供一些相關的建議。",
+          ]
+          const randomResponse = responses[Math.floor(Math.random() * responses.length)]
+          addMessage(randomResponse, "assistant")
+        }, 1000)
+      }
+
+      // MCP 狀態載入 - 修復 CORS 問題
+      async function loadMcpServerStatus() {
+        try {
+          console.log("Loading MCP status...")
+          const response = await fetch("http://100.94.136.15:5000/mcp", {
+            headers: {
+              Accept: "application/json",
+            },
+            mode: "cors", // 明確指定 CORS 模式
+          })
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+
+          const data = await response.json()
+          console.log("MCP status loaded:", data)
+
+          // 更新 MCP 服務器列表
+          updateMcpServerList(data)
+        } catch (error) {
+          console.error("Failed to load MCP status:", error)
+          // 顯示錯誤狀態
+          showMcpError(error.message)
+        }
+      }
+
+      function updateMcpServerList(data) {
+        const mcpList = document.getElementById("mcpServerList")
+        if (!mcpList) return
+
+        // 清空現有內容
+        mcpList.innerHTML = ""
+
+        // 渲染每個 MCP 服務器
+        Object.entries(data).forEach(([serverName, status]) => {
+          const item = document.createElement("div")
+          item.className = "mcp-server-item"
+          item.innerHTML = `
+                    <span class="status-dot" style="background: ${status.status === "connected" ? "#28a745" : "#ffc107"};"></span>
+                    ${serverName}: ${status.status}
+                `
+          mcpList.appendChild(item)
+        })
+      }
+
+      function showMcpError(message) {
+        const mcpList = document.getElementById("mcpServerList")
+        if (!mcpList) return
+
+        mcpList.innerHTML = `
+                <div class="mcp-server-item">
+                    <span class="status-dot" style="background: #dc3545;"></span>
+                    MCP Error: ${message}
+                </div>
+            `
+      }
+
+      // 修復 6: 安全的頁面初始化
+      function initApp() {
+        console.log("AG-UI Chat initialized")
+
+        // 載入 workspaces
+        loadWorkspaces()
+
+        // 初始化設置面板（只執行一次）
+        initSettingsPanel()
+
+        // 渲染 workspace 列表
+        renderWorkspaceList()
+
+        // 初始化聊天功能
+        const sendButton = document.getElementById("sendButton")
+        const messageInput = document.getElementById("messageInput")
+
+        if (sendButton && messageInput) {
+          sendButton.addEventListener("click", sendMessage)
+          messageInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+              sendMessage()
+            }
+          })
+        }
+
+        // 載入 MCP 狀態
+        loadMcpServerStatus()
+      }
+
+      // 修復 7: 防止意外的全局事件
+      window.addEventListener("beforeunload", () => {
+        // 清理資源
+        console.log("Cleaning up AG-UI Chat")
+      })
+
+      // 頁面載入完成後初始化
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initApp)
+      } else {
+        initApp()
+      }
+    </script>
+  </body>
+</html>

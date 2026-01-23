@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AG-UI Chat - OpenCode</title>
+    <style>
+      /* 原有的 CSS 樣式保持不變 */
+      .settings-panel {
+        position: fixed;
+        top: 0;
+        right: -400px;
+        width: 380px;
+        height: 100vh;
+        background: white;
+        box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+        transition: right 0.3s ease;
+        z-index: 1000;
+        overflow-y: auto;
+      }
+
+      .settings-panel.visible {
+        right: 0;
+      }
+
+      .workspace-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .workspace-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px;
+        border: 1px solid #e1e5e9;
+        border-radius: 8px;
+        background: #f8f9fa;
+      }
+
+      .workspace-item.active {
+        border-color: #007bff;
+        background: #e3f2fd;
+      }
+
+      .delete {
+        color: #dc3545;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 4px;
+      }
+
+      .delete:hover {
+        background: #f8d7da;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <!-- 原有的 HTML 結構 -->
+      <button id="settingsBtn">⚙️ Settings</button>
+
+      <div class="settings-panel" id="settingsPanel">
+        <div class="settings-header">
+          <h2>Settings</h2>
+          <button class="settings-close" id="settingsCloseBtn">×</button>
+        </div>
+
+        <div class="settings-section">
+          <h3>Workspace</h3>
+          <div class="workspace-list" id="workspaceList">
+            <!-- Workspace 項目將動態插入這裡 -->
+          </div>
+          <div class="add-workspace">
+            <input type="text" id="newWorkspacePath" placeholder="Enter workspace path..." />
+            <button id="addWorkspaceBtn">Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ==================== 修復後的 JavaScript 代碼 ====================
+
+      // 全域變數
+      let workspaces = []
+      let settingsEventBound = false // 防止重複事件綁定
+      let settingsVisible = false
+
+      // 修復 1: 防抖函數 - 防止快速重複點擊
+      function debounce(func, wait) {
+        let timeout
+        return function executedFunction(...args) {
+          const later = () => {
+            clearTimeout(timeout)
+            func(...args)
+          }
+          clearTimeout(timeout)
+          timeout = setTimeout(later, wait)
+        }
+      }
+
+      // 修復 2: 安全的 localStorage 操作
+      function safeLocalStorageGet(key, defaultValue = null) {
+        try {
+          const item = localStorage.getItem(key)
+          return item ? JSON.parse(item) : defaultValue
+        } catch (error) {
+          console.warn("localStorage read error:", error)
+          return defaultValue
+        }
+      }
+
+      function safeLocalStorageSet(key, value) {
+        try {
+          localStorage.setItem(key, JSON.stringify(value))
+        } catch (error) {
+          console.warn("localStorage write error:", error)
+        }
+      }
+
+      // 修復 3: 修復 localStorage 中的重複 workspace
+      function fixDuplicateWorkspaces() {
+        const stored = safeLocalStorageGet("workspaces", [])
+        if (!Array.isArray(stored)) return
+
+        // 移除重複項目（基於 path）
+        const uniqueWorkspaces = stored.filter(
+          (workspace, index, self) => index === self.findIndex((w) => w.path === workspace.path),
+        )
+
+        if (uniqueWorkspaces.length !== stored.length) {
+          console.log(`修復了 ${stored.length - uniqueWorkspaces.length} 個重複 workspace`)
+          safeLocalStorageSet("workspaces", uniqueWorkspaces)
+        }
+
+        workspaces = uniqueWorkspaces
+      }
+
+      // 修復 4: 重構 renderWorkspaceList - 關鍵修復！
+      function renderWorkspaceList() {
+        const container = document.getElementById("workspaceList")
+        if (!container) {
+          console.error("workspaceList container not found")
+          return
+        }
+
+        // 🔧 關鍵修復：完全清空容器，防止重複渲染
+        container.innerHTML = ""
+
+        workspaces.forEach((workspace, index) => {
+          const item = document.createElement("div")
+          item.className = "workspace-item"
+          if (workspace.active) {
+            item.classList.add("active")
+          }
+
+          item.innerHTML = `
+                    <div>
+                        <span class="name">${workspace.name}</span>
+                        <span class="path">${workspace.path}</span>
+                    </div>
+                    <button class="delete" data-index="${index}">×</button>
+                `
+
+          // 綁定刪除事件
+          const deleteBtn = item.querySelector(".delete")
+          deleteBtn.addEventListener("click", (e) => {
+            e.stopPropagation()
+            deleteWorkspace(index)
+          })
+
+          container.appendChild(item)
+        })
+      }
+
+      // 修復 5: 安全的設置面板初始化
+      function initSettingsPanel() {
+        if (settingsEventBound) return // 已經初始化過了
+
+        const settingsBtn = document.getElementById("settingsBtn")
+        const settingsCloseBtn = document.getElementById("settingsCloseBtn")
+        const settingsPanel = document.getElementById("settingsPanel")
+        const addWorkspaceBtn = document.getElementById("addWorkspaceBtn")
+        const newWorkspacePath = document.getElementById("newWorkspacePath")
+
+        if (!settingsBtn || !settingsCloseBtn || !settingsPanel) {
+          console.error("Required elements not found")
+          return
+        }
+
+        // 使用防抖的切換函數
+        const debouncedToggle = debounce(() => {
+          settingsVisible = !settingsVisible
+          settingsPanel.classList.toggle("visible", settingsVisible)
+        }, 200)
+
+        settingsBtn.addEventListener("click", debouncedToggle)
+        settingsCloseBtn.addEventListener("click", debouncedToggle)
+
+        // 添加 workspace 功能
+        if (addWorkspaceBtn && newWorkspacePath) {
+          addWorkspaceBtn.addEventListener("click", () => {
+            const path = newWorkspacePath.value.trim()
+            if (path) {
+              addWorkspace(path)
+              newWorkspacePath.value = ""
+            }
+          })
+
+          newWorkspacePath.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+              addWorkspaceBtn.click()
+            }
+          })
+        }
+
+        settingsEventBound = true
+        console.log("Settings panel initialized")
+      }
+
+      // Workspace 管理函數
+      function addWorkspace(path) {
+        if (!path) return
+
+        // 檢查是否已存在
+        if (workspaces.some((w) => w.path === path)) {
+          alert("Workspace already exists")
+          return
+        }
+
+        const name = path.split("/").pop() || path
+        workspaces.push({
+          name: name,
+          path: path,
+          active: workspaces.length === 0, // 第一個設為活躍
+        })
+
+        saveWorkspaces()
+        renderWorkspaceList()
+      }
+
+      function deleteWorkspace(index) {
+        if (index >= 0 && index < workspaces.length) {
+          workspaces.splice(index, 1)
+          saveWorkspaces()
+          renderWorkspaceList()
+        }
+      }
+
+      function saveWorkspaces() {
+        safeLocalStorageSet("workspaces", workspaces)
+      }
+
+      function loadWorkspaces() {
+        fixDuplicateWorkspaces() // 修復重複項目
+
+        // 如果沒有 workspace，添加默認的
+        if (workspaces.length === 0) {
+          workspaces = [
+            { name: "OpenCode", path: "/home/rick/prj/opencode", active: true },
+            { name: "Home", path: "/home/rick", active: false },
+            { name: "Projects", path: "/home/rick/projects", active: false },
+            { name: "Downloads", path: "/home/rick/Downloads", active: false },
+            { name: "Root", path: "/", active: false },
+          ]
+          saveWorkspaces()
+        }
+      }
+
+      // MCP 狀態載入 - 修復 CORS 問題
+      async function loadMcpServerStatus() {
+        try {
+          console.log("Loading MCP status...")
+          const response = await fetch("http://100.94.136.15:5000/mcp", {
+            method: "GET",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            mode: "cors", // 明確指定 CORS 模式
+          })
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+
+          const data = await response.json()
+          console.log("MCP status loaded:", data)
+
+          // 更新 MCP 服務器列表
+          updateMcpServerList(data)
+        } catch (error) {
+          console.error("Failed to load MCP status:", error)
+          // 顯示錯誤狀態
+          showMcpError(error.message)
+        }
+      }
+
+      function updateMcpServerList(data) {
+        const mcpList = document.getElementById("mcpServerList")
+        if (!mcpList) return
+
+        // 清空現有內容
+        mcpList.innerHTML = ""
+
+        // 渲染每個 MCP 服務器
+        Object.entries(data).forEach(([serverName, status]) => {
+          const item = document.createElement("div")
+          item.className = "mcp-server-item"
+          item.setAttribute("data-server", serverName)
+
+          item.innerHTML = `
+                    <div class="mcp-server-icon">${getServerIcon(serverName)}</div>
+                    <div class="mcp-server-info">
+                        <div class="mcp-server-name">${formatServerName(serverName)}</div>
+                        <div class="mcp-server-status">
+                            <span class="mcp-server-status-dot ${status.status === "connected" ? "connected" : "disconnected"}"></span>
+                            <span>${status.status === "connected" ? "Connected" : "Disconnected"}</span>
+                        </div>
+                    </div>
+                    <div class="mcp-server-actions">
+                        <span class="mcp-auth-badge">✓ Authenticated</span>
+                    </div>
+                `
+
+          mcpList.appendChild(item)
+        })
+      }
+
+      function showMcpError(message) {
+        const mcpList = document.getElementById("mcpServerList")
+        if (!mcpList) return
+
+        mcpList.innerHTML = `
+                <div class="mcp-error">
+                    <p>Failed to load MCP servers: ${message}</p>
+                    <button onclick="loadMcpServerStatus()">Retry</button>
+                </div>
+            `
+      }
+
+      function getServerIcon(serverName) {
+        const icons = {
+          context7: "📚",
+          websearch: "🔍",
+          grep_app: "🔎",
+        }
+        return icons[serverName] || "🔧"
+      }
+
+      function formatServerName(serverName) {
+        return serverName.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
+      }
+
+      // 修復 6: 安全的頁面初始化
+      function initApp() {
+        console.log("AG-UI Chat initialized")
+
+        // 載入 workspaces
+        loadWorkspaces()
+
+        // 初始化設置面板（只執行一次）
+        initSettingsPanel()
+
+        // 渲染 workspace 列表
+        renderWorkspaceList()
+
+        // 載入 MCP 狀態
+        loadMcpServerStatus()
+      }
+
+      // 頁面載入完成後初始化
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initApp)
+      } else {
+        initApp()
+      }
+
+      // 修復 7: 防止意外的全局事件
+      window.addEventListener("beforeunload", () => {
+        // 清理資源
+        console.log("Cleaning up AG-UI Chat")
+      })
+    </script>
+  </body>
+</html>

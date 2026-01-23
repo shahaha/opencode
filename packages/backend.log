@@ -1,0 +1,5 @@
+$ bun run --conditions=browser ./src/index.ts
+error: Cannot find module '../../auth/auth' from '/home/rick/prj/opencode/packages/opencode/src/server/middleware/auth.ts'
+
+Bun v1.3.6 (Linux x64)
+error: script "dev" exited with code 1

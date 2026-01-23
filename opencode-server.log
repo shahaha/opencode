@@ -1,0 +1,183 @@
+Warning: OPENCODE_SERVER_PASSWORD is not set; server is unsecured.
+opencode server listening on http://127.0.0.1:5000
+WebSocket message: {
+  jsonrpc: "2.0",
+  id: 1,
+  method: "authenticate",
+  params: {
+    sessionId: "test-session",
+    token: "dev-token-123",
+  },
+}
+[AG-UI] Authentication attempt with token: dev-token-...
+[AG-UI] Registering WebSocket for session: test-session
+[AG-UI] User authenticated via WebSocket, session: test-session
+WebSocket message: {
+  jsonrpc: "2.0",
+  id: 1,
+  method: "authenticate",
+  params: {
+    sessionId: "test-session",
+    token: "dev-token-123",
+  },
+}
+[AG-UI] Authentication attempt with token: dev-token-...
+[AG-UI] Registering WebSocket for session: test-session
+[AG-UI] User authenticated via WebSocket, session: test-session
+WebSocket message: {
+  jsonrpc: "2.0",
+  id: 1768939380218,
+  method: "agent.message",
+  params: {
+    content: "Hello, this is a test message!",
+    sessionId: "test-session",
+  },
+}
+[AG-UI] Handling agent.message for authenticated session: test-session
+[AG-UI] Processing agent message: "Hello, this is a test message!" for session test-session (from state)
+[AG-UI] Broadcasting thinking status for session test-session
+[AG-UI] Broadcasting to session test-session, found connection: true
+[AG-UI] Sending event: {"id":"thinking_1768939380219","type":"agent.thinking","timestamp":1768939380219,"data":{},"metadata":{"sessionId":"test-session","userId":"dev-user","agentId":"default"}}
+[AG-UI] Generated AI response using model: opencode/glm-4.7-free, with 2 messages of context
+[AG-UI] Broadcasting response for session: test-session
+[AG-UI] Broadcasting to session test-session, found connection: true
+[AG-UI] Sending event: {"id":"response_1768939380220","type":"agent.message","timestamp":1768939380220,"data":{"content":"Hello! I'm responding as opencode/glm-4.7-free. Previous conversation: user: Hello, this is a test message!.... You said: \"Hello, this is a test message!\". How can I help you further?","role":"assistant","model":"opencode/glm-4.7-free"},"metadata":{"sessionId":"test-session","userId":"dev-user","agentId":"default"}}
+[AG-UI] Successfully processed message for session: test-session
+WebSocket message: {
+  jsonrpc: "2.0",
+  id: 1,
+  method: "authenticate",
+  params: {
+    sessionId: "test-session",
+    token: "dev-token-123",
+  },
+}
+[AG-UI] Authentication attempt with token: dev-token-...
+[AG-UI] Registering WebSocket for session: test-session
+[AG-UI] User authenticated via WebSocket, session: test-session
+WebSocket message: {
+  jsonrpc: "2.0",
+  id: 1,
+  method: "authenticate",
+  params: {
+    sessionId: "test-session",
+    token: "dev-token-123",
+  },
+}
+[AG-UI] Authentication attempt with token: dev-token-...
+[AG-UI] Registering WebSocket for session: test-session
+[AG-UI] User authenticated via WebSocket, session: test-session
+WebSocket message: {
+  jsonrpc: "2.0",
+  id: 1768962568607,
+  method: "agent.message",
+  params: {
+    content: "Test message from Sisyphus",
+    sessionId: "test-session",
+  },
+}
+[AG-UI] Handling agent.message for authenticated session: test-session
+[AG-UI] Processing agent message: "Test message from Sisyphus" for session test-session (from state)
+[AG-UI] Broadcasting thinking status for session test-session
+[AG-UI] Broadcasting to session test-session, found connection: true
+[AG-UI] Sending event: {"id":"thinking_1768962568607","type":"agent.thinking","timestamp":1768962568607,"data":{},"metadata":{"sessionId":"test-session","userId":"dev-user","agentId":"default"}}
+[AG-UI] Generated AI response using model: opencode/glm-4.7-free, with 3 messages of context
+[AG-UI] Broadcasting response for session: test-session
+[AG-UI] Broadcasting to session test-session, found connection: true
+[AG-UI] Sending event: {"id":"response_1768962568608","type":"agent.message","timestamp":1768962568608,"data":{"content":"Hello! I'm responding as opencode/glm-4.7-free. Previous conversation: user: Hello, this is a test message!...; user: Test message from Sisyphus.... You said: \"Test message from Sisyphus\". How can I help you further?","role":"assistant","model":"opencode/glm-4.7-free"},"metadata":{"sessionId":"test-session","userId":"dev-user","agentId":"default"}}
+[AG-UI] Successfully processed message for session: test-session
+WebSocket message: {
+  jsonrpc: "2.0",
+  id: 1,
+  method: "authenticate",
+  params: {
+    sessionId: "test-session",
+    token: "",
+  },
+}
+[AG-UI] Authentication attempt with token: ...
+[AG-UI] Authentication failed for token: 
+WebSocket message: {
+  jsonrpc: "2.0",
+  id: 1,
+  method: "authenticate",
+  params: {
+    sessionId: "test-session",
+    token: "",
+  },
+}
+[AG-UI] Authentication attempt with token: ...
+[AG-UI] Authentication failed for token: 
+WebSocket message: {
+  jsonrpc: "2.0",
+  id: 1,
+  method: "authenticate",
+  params: {
+    sessionId: "test-session",
+    token: "",
+  },
+}
+[AG-UI] Authentication attempt with token: ...
+[AG-UI] Authentication failed for token: 
+WebSocket message: {
+  jsonrpc: "2.0",
+  id: 1,
+  method: "authenticate",
+  params: {
+    sessionId: "test-session",
+    token: "dev-token-12345",
+  },
+}
+[AG-UI] Authentication attempt with token: dev-token-...
+[AG-UI] Registering WebSocket for session: test-session
+[AG-UI] User authenticated via WebSocket, session: test-session
+WebSocket message: {
+  jsonrpc: "2.0",
+  id: 1768968289195,
+  method: "agent.message",
+  params: {
+    content: "Final production test message",
+    sessionId: "test-session",
+  },
+}
+[AG-UI] Handling agent.message for authenticated session: test-session
+[AG-UI] Processing agent message: "Final production test message" for session test-session (from state)
+[AG-UI] Broadcasting thinking status for session test-session
+[AG-UI] Broadcasting to session test-session, found connection: true
+[AG-UI] Sending event: {"id":"thinking_1768968289196","type":"agent.thinking","timestamp":1768968289196,"data":{},"metadata":{"sessionId":"test-session","userId":"dev-user","agentId":"default"}}
+[AG-UI] Generated AI response using model: opencode/glm-4.7-free, with 4 messages of context
+[AG-UI] Broadcasting response for session: test-session
+[AG-UI] Broadcasting to session test-session, found connection: true
+[AG-UI] Sending event: {"id":"response_1768968289196","type":"agent.message","timestamp":1768968289196,"data":{"content":"Hello! I'm responding as opencode/glm-4.7-free. Previous conversation: user: Hello, this is a test message!...; user: Test message from Sisyphus...; user: Final production test message.... You said: \"Final production test message\". How can I help you further?","role":"assistant","model":"opencode/glm-4.7-free"},"metadata":{"sessionId":"test-session","userId":"dev-user","agentId":"default"}}
+[AG-UI] Successfully processed message for session: test-session
+WebSocket message: {
+  jsonrpc: "2.0",
+  id: 1,
+  method: "authenticate",
+  params: {
+    sessionId: "test-session",
+    token: "dev-token-12345",
+  },
+}
+[AG-UI] Authentication attempt with token: dev-token-...
+[AG-UI] Registering WebSocket for session: test-session
+[AG-UI] User authenticated via WebSocket, session: test-session
+WebSocket message: {
+  jsonrpc: "2.0",
+  id: 1768968973734,
+  method: "agent.message",
+  params: {
+    content: "Final deployment test message",
+    sessionId: "test-session",
+  },
+}
+[AG-UI] Handling agent.message for authenticated session: test-session
+[AG-UI] Processing agent message: "Final deployment test message" for session test-session (from state)
+[AG-UI] Broadcasting thinking status for session test-session
+[AG-UI] Broadcasting to session test-session, found connection: true
+[AG-UI] Sending event: {"id":"thinking_1768968973734","type":"agent.thinking","timestamp":1768968973734,"data":{},"metadata":{"sessionId":"test-session","userId":"dev-user","agentId":"default"}}
+[AG-UI] Generated AI response using model: opencode/glm-4.7-free, with 5 messages of context
+[AG-UI] Broadcasting response for session: test-session
+[AG-UI] Broadcasting to session test-session, found connection: true
+[AG-UI] Sending event: {"id":"response_1768968973734","type":"agent.message","timestamp":1768968973734,"data":{"content":"Hello! I'm responding as opencode/glm-4.7-free. Previous conversation: user: Test message from Sisyphus...; user: Final production test message...; user: Final deployment test message.... You said: \"Final deployment test message\". How can I help you further?","role":"assistant","model":"opencode/glm-4.7-free"},"metadata":{"sessionId":"test-session","userId":"dev-user","agentId":"default"}}
+[AG-UI] Successfully processed message for session: test-session

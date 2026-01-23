@@ -30,6 +30,8 @@ import { ToastProvider, useToast } from "./ui/toast"
 import { ExitProvider, useExit } from "./context/exit"
 import { Session as SessionApi } from "@/session"
 import { TuiEvent } from "./event"
+import { RepairVerification } from "@/auto-repair-verification"
+import { Bus } from "@/bus"
 import { KVProvider, useKV } from "./context/kv"
 import { Provider } from "@/provider/provider"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
@@ -604,6 +606,29 @@ function App() {
       type: "session",
       sessionID: evt.properties.sessionID,
     })
+  })
+
+  // Listen for repair verification completion events
+  Bus.subscribe(RepairVerification.Event.Completed, (evt: any) => {
+    const { success, summary, triggeredBy } = evt.properties
+
+    if (!success) {
+      // Show warning toast for failed verification
+      toast.show({
+        title: "修復驗證失敗",
+        message: `${triggeredBy} 編輯後驗證失敗 (${summary.failed}/${summary.total} 檢查失敗)`,
+        variant: "warning",
+        duration: 8000,
+      })
+    } else {
+      // Show success toast for passed verification
+      toast.show({
+        title: "修復驗證通過",
+        message: `${triggeredBy} 編輯後驗證成功 (${summary.passed}/${summary.total} 檢查通過)`,
+        variant: "success",
+        duration: 5000,
+      })
+    }
   })
 
   sdk.event.on(SessionApi.Event.Deleted.type, (evt) => {

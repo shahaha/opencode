@@ -17,7 +17,10 @@ import { readdir } from "fs/promises"
 
 const SUBSCRIBE_TIMEOUT_MS = 10_000
 
-declare const OPENCODE_LIBC: string | undefined
+// Provide default for OPENCODE_LIBC on globalThis for test environments
+if (typeof (globalThis as any).OPENCODE_LIBC === "undefined") {
+  ;(globalThis as any).OPENCODE_LIBC = "glibc"
+}
 
 export namespace FileWatcher {
   const log = Log.create({ service: "file.watcher" })
@@ -33,8 +36,9 @@ export namespace FileWatcher {
   }
 
   const watcher = lazy(() => {
+    const opencodeLibc = (globalThis as any).OPENCODE_LIBC || "glibc"
     const binding = require(
-      `@parcel/watcher-${process.platform}-${process.arch}${process.platform === "linux" ? `-${OPENCODE_LIBC || "glibc"}` : ""}`,
+      `@parcel/watcher-${process.platform}-${process.arch}${process.platform === "linux" ? `-${opencodeLibc}` : ""}`,
     )
     return createWrapper(binding) as typeof import("@parcel/watcher")
   })

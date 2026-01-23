@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AG-UI Chat - OpenCode (Test 2)</title>
+    <title>AG-UI Chat - OpenCode (Test 7)</title>
     <style>
       /* Chat interface styles */
       * {
@@ -586,16 +586,51 @@
         // 清空現有內容
         mcpList.innerHTML = ""
 
-        // 渲染每個 MCP 服務器
-        Object.entries(data).forEach(([serverName, status]) => {
-          const item = document.createElement("div")
-          item.className = "mcp-server-item"
-          item.innerHTML = `
-                    <span class="status-dot" style="background: ${status.status === "connected" ? "#28a745" : "#ffc107"};"></span>
-                    ${serverName}: ${status.status}
-                `
-          mcpList.appendChild(item)
-        })
+        // 檢查數據結構並正確渲染
+        if (data.servers && Array.isArray(data.servers)) {
+          // 新的數據結構：{servers: [...], status: "...", message: "..."}
+          data.servers.forEach((server) => {
+            const item = document.createElement("div")
+            item.className = "mcp-server-item"
+            item.innerHTML = `
+                        <span class="status-dot" style="background: ${server.status === "connected" ? "#28a745" : "#ffc107"};"></span>
+                        ${server.name}: ${server.status}
+                    `
+            mcpList.appendChild(item)
+          })
+
+          // 如果有總體狀態，也顯示出來
+          if (data.status) {
+            const statusItem = document.createElement("div")
+            statusItem.className = "mcp-server-item"
+            statusItem.innerHTML = `
+                        <span class="status-dot" style="background: #17a2b8;"></span>
+                        Status: ${data.status}
+                    `
+            mcpList.appendChild(statusItem)
+          }
+
+          if (data.message) {
+            const messageItem = document.createElement("div")
+            messageItem.className = "mcp-server-item"
+            messageItem.innerHTML = `
+                        <span class="status-dot" style="background: #6c757d;"></span>
+                        ${data.message}
+                    `
+            mcpList.appendChild(messageItem)
+          }
+        } else {
+          // 舊的數據結構或其他格式
+          Object.entries(data).forEach(([serverName, status]) => {
+            const item = document.createElement("div")
+            item.className = "mcp-server-item"
+            item.innerHTML = `
+                        <span class="status-dot" style="background: ${status && status.status === "connected" ? "#28a745" : "#ffc107"};"></span>
+                        ${serverName}: ${status ? status.status : "unknown"}
+                    `
+            mcpList.appendChild(item)
+          })
+        }
       }
 
       function showMcpError(message) {

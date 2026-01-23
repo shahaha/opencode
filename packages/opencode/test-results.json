@@ -1,0 +1,85 @@
+{
+  "config": {
+    "configFile": "/home/rick/prj/opencode/packages/opencode/playwright-working.config.js",
+    "rootDir": "/home/rick/prj/opencode/packages/opencode",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {},
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "html",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "test-results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "/home/rick/prj/opencode/packages/opencode/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {},
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/home/rick/prj/opencode/packages/opencode",
+        "testIgnore": [],
+        "testMatch": [
+          "test-repairs-simple.js"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.57.0",
+    "workers": 2,
+    "webServer": {
+      "command": "node production-server-final.mjs",
+      "port": 9101,
+      "reuseExistingServer": true
+    }
+  },
+  "suites": [],
+  "errors": [
+    {
+      "message": "Error: Playwright Test did not expect test.describe() to be called here.\nMost common reasons include:\n- You are calling test.describe() in a configuration file.\n- You are calling test.describe() in a file that is imported by the configuration file.\n- You have two different versions of @playwright/test. This usually happens\n  when one of the dependencies in your package.json depends on @playwright/test.",
+      "stack": "Error: Playwright Test did not expect test.describe() to be called here.\nMost common reasons include:\n- You are calling test.describe() in a configuration file.\n- You are calling test.describe() in a file that is imported by the configuration file.\n- You have two different versions of @playwright/test. This usually happens\n  when one of the dependencies in your package.json depends on @playwright/test.\n    at TestTypeImpl._currentSuite (/home/rick/prj/opencode/node_modules/.bun/playwright@1.57.0/node_modules/playwright/lib/common/testType.js:75:13)\n    at TestTypeImpl._describe (/home/rick/prj/opencode/node_modules/.bun/playwright@1.57.0/node_modules/playwright/lib/common/testType.js:115:24)\n    at Function.describe (/home/rick/prj/opencode/node_modules/.bun/playwright@1.57.0/node_modules/playwright/lib/transform/transform.js:275:12)\n    at /home/rick/prj/opencode/packages/opencode/test-repairs-simple.js:3:6",
+      "location": {
+        "file": "/home/rick/prj/opencode/packages/opencode/test-repairs-simple.js",
+        "column": 6,
+        "line": 3
+      },
+      "snippet": "\u001b[90m   at \u001b[39mtest-repairs-simple.js:3\n\n  1 | import { test, expect } from \"@playwright/test\"\n  2 |\n> 3 | test.describe(\"AG-UI Chat 修復驗證\", () => {\n    |      ^\n  4 |   test.beforeEach(async ({ page }) => {\n  5 |     await page.goto(\"http://100.94.136.15:9100/\")\n  6 |     await page.waitForLoadState(\"networkidle\")"
+    },
+    {
+      "message": "Error: No tests found",
+      "stack": "Error: No tests found"
+    }
+  ],
+  "stats": {
+    "startTime": "2026-01-23T07:59:15.386Z",
+    "duration": 43.399999999999864,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

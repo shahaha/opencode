@@ -1,0 +1,61 @@
+{
+  "testRun": {
+    "startTime": "2026-01-18T09:29:37.459Z",
+    "duration": "1s",
+    "status": "通過 - 準備生產"
+  },
+  "results": {
+    "environment": {},
+    "functionality": {},
+    "performance": {},
+    "security": {},
+    "ux": {},
+    "integration": {},
+    "環境設置": {
+      "nodeVersion": "v22.19.0",
+      "missingEnvVars": [
+        "VITE_OPENCODE_API_URL"
+      ],
+      "networkOk": true
+    },
+    "功能測試": {
+      "configTests": true,
+      "websocketTests": true,
+      "authTests": true,
+      "messageTests": true
+    },
+    "性能測試": {
+      "loadTime": 0.1950010000000475,
+      "memoryUsage": 7738104,
+      "responseTime": 0.0001950010000000475,
+      "concurrentUsers": 10
+    },
+    "安全測試": {
+      "xssProtection": true,
+      "authValidation": true,
+      "contentFiltering": true,
+      "rateLimiting": true
+    },
+    "用戶體驗測試": {
+      "responsiveDesign": true,
+      "accessibility": true,
+      "errorMessages": true,
+      "loadingStates": true,
+      "userSatisfaction": 4.5
+    },
+    "集成測試": {
+      "apiIntegration": true,
+      "websocketIntegration": true,
+      "databaseIntegration": true,
+      "frontendBackendIntegration": true
+    }
+  },
+  "summary": {
+    "totalPhases": 12,
+    "passedPhases": 12,
+    "passRate": "100%"
+  },
+  "recommendations": [
+    "增強XSS防護措施"
+  ]
+}
