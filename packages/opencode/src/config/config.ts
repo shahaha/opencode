@@ -907,6 +907,12 @@ export namespace Config {
         .describe(
           "Control sharing behavior:'manual' allows manual sharing via commands, 'auto' enables automatic sharing, 'disabled' disables all sharing",
         ),
+      crossPlatformSessions: z
+        .boolean()
+        .optional()
+        .describe(
+          "Show sessions from all platforms regardless of directory path. Useful when syncing the data directory across machines where paths differ (e.g., Windows vs macOS/Linux)",
+        ),
       autoshare: z
         .boolean()
         .optional()
