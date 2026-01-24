@@ -1264,12 +1264,34 @@ export namespace Provider {
         }
       }
 
-      // Custom fetch that gets fresh token before each request
+      // Custom fetch that gets fresh token before each request and fixes empty content
       const databricksFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
         const freshToken = await getFreshToken()
         const headers = new Headers(init?.headers)
         headers.set("Authorization", `Bearer ${freshToken}`)
-        return fetch(input, { ...init, headers })
+
+        // Fix empty content issue: Databricks API rejects messages with empty string content
+        // The AI SDK sends content: "" for assistant messages with only tool calls
+        let body = init?.body
+        if (body && typeof body === "string") {
+          try {
+            const parsed = JSON.parse(body)
+            if (parsed.messages && Array.isArray(parsed.messages)) {
+              parsed.messages = parsed.messages.map((msg: any) => {
+                // For assistant messages with tool_calls but empty content, set content to null
+                if (msg.role === "assistant" && msg.tool_calls && msg.content === "") {
+                  return { ...msg, content: null }
+                }
+                return msg
+              })
+              body = JSON.stringify(parsed)
+            }
+          } catch {
+            // If parsing fails, use original body
+          }
+        }
+
+        return fetch(input, { ...init, body, headers })
       }
 
       return {

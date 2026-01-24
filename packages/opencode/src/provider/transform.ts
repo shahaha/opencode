@@ -57,7 +57,7 @@ export namespace ProviderTransform {
           if (!Array.isArray(msg.content)) return msg
           const filtered = msg.content.filter((part) => {
             if (part.type === "text" || part.type === "reasoning") {
-              return part.text !== ""
+              return (part as any).text !== ""
             }
             return true
           })
