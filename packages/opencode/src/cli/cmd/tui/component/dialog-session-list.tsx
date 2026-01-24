@@ -68,6 +68,7 @@ export function DialogSessionList() {
       title="Sessions"
       options={options()}
       skipFilter={true}
+      maxLines={2}
       current={currentSessionID()}
       onFilter={setSearch}
       onMove={() => {
