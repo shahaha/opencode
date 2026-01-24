@@ -1,0 +1,1204 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AG-UI Chat - OpenCode (Test 7)</title>
+    <style>
+      /* Chat interface styles */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: #f5f7fa;
+        color: #333;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .chat-container {
+        display: flex;
+        height: calc(100vh - 80px);
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+        background: white;
+      }
+
+      .chat-sidebar {
+        width: 300px;
+        background: #f8f9fa;
+        border-right: 1px solid #e9ecef;
+        padding: 20px;
+      }
+
+      .chat-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .chat-messages {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+      }
+
+      .chat-input {
+        padding: 20px;
+        border-top: 1px solid #e9ecef;
+        background: white;
+      }
+
+      .message {
+        margin-bottom: 20px;
+        padding: 15px;
+        border-radius: 10px;
+        max-width: 80%;
+      }
+
+      .message.user {
+        background: #007bff;
+        color: white;
+        margin-left: auto;
+        text-align: right;
+      }
+
+      .message.assistant {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+      }
+
+      .message-input {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e9ecef;
+        border-radius: 25px;
+        font-size: 16px;
+        outline: none;
+      }
+
+      .message-input:focus {
+        border-color: #007bff;
+      }
+
+      .send-button {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .input-container {
+        position: relative;
+      }
+
+      /* Settings panel styles */
+      .settings-panel {
+        position: fixed;
+        top: 0;
+        right: -400px;
+        width: 380px;
+        height: 100vh;
+        background: white;
+        box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+        transition: right 0.3s ease;
+        z-index: 1000;
+        overflow-y: auto;
+      }
+
+      .settings-panel.visible {
+        right: 0;
+      }
+
+      .settings-header {
+        padding: 20px;
+        border-bottom: 1px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .settings-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: #666;
+      }
+
+      .settings-section {
+        padding: 20px;
+      }
+
+      .workspace-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .workspace-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px;
+        border: 1px solid #e1e5e9;
+        border-radius: 8px;
+        background: #f8f9fa;
+      }
+
+      .workspace-item.active {
+        border-color: #007bff;
+        background: #e3f2fd;
+      }
+
+      .delete {
+        color: #dc3545;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 4px;
+      }
+
+      .delete:hover {
+        background: #f8d7da;
+      }
+
+      .add-workspace {
+        margin-top: 15px;
+        display: flex;
+        gap: 10px;
+      }
+
+      .add-workspace input {
+        flex: 1;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+
+      .add-workspace button {
+        padding: 8px 16px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      /* Settings button */
+      #settingsBtn {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        cursor: pointer;
+        font-size: 20px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        z-index: 999;
+      }
+
+      #settingsBtn:hover {
+        background: #0056b3;
+      }
+
+      /* 打字指示器樣式 */
+      .typing {
+        opacity: 0.7;
+      }
+
+      .typing-dots {
+        display: flex;
+        gap: 4px;
+        padding: 8px 0;
+      }
+
+      .typing-dots span {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #007bff;
+        animation: typing 1.4s infinite;
+      }
+
+      .typing-dots span:nth-child(1) {
+        animation-delay: 0s;
+      }
+      .typing-dots span:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      .typing-dots span:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+
+      @keyframes typing {
+        0%,
+        60%,
+        100% {
+          transform: translateY(0);
+          opacity: 0.4;
+        }
+        30% {
+          transform: translateY(-10px);
+          opacity: 1;
+        }
+      }
+
+      .message.error .message-content {
+        background: #f8d7da;
+        border-left: 4px solid #dc3545;
+      }
+
+      .setting-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+        gap: 15px;
+      }
+
+      .setting-row label {
+        min-width: 120px;
+        font-weight: 500;
+      }
+
+      .setting-row select,
+      .setting-row input {
+        flex: 1;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+
+      .setting-row select:focus,
+      .setting-row input:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Settings Button -->
+    <button id="settingsBtn">⚙️</button>
+
+    <!-- Main Chat Interface -->
+    <div class="container">
+      <div class="chat-container">
+        <div class="chat-sidebar">
+          <h3>AG-UI Chat</h3>
+          <p>AI Coding Assistant</p>
+          <div id="mcp-status">
+            <h4>MCP Status</h4>
+            <div id="mcp-server-list">
+              <div class="mcp-server-item">
+                <span class="status-dot" style="background: #ffc107"></span>
+                Loading MCP servers...
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-main">
+          <div class="chat-messages" id="chatMessages">
+            <div class="message assistant">
+              <strong>AG-UI:</strong> Hello! I'm your AI coding assistant. How can I help you today?
+            </div>
+          </div>
+
+          <div class="chat-input">
+            <div class="input-container">
+              <input type="text" id="messageInput" class="message-input" placeholder="Type your message..." />
+              <button id="sendButton" class="send-button">📤</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div class="settings-panel" id="settingsPanel">
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <button class="settings-close" id="settingsCloseBtn">×</button>
+      </div>
+
+      <div class="settings-section">
+        <h3>Workspace</h3>
+        <div class="workspace-list" id="workspaceList">
+          <!-- Workspace items will be dynamically inserted here -->
+        </div>
+        <div class="add-workspace">
+          <input type="text" id="newWorkspacePath" placeholder="Enter workspace path..." />
+          <button id="addWorkspaceBtn">Add</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Model Selection</h3>
+        <div class="setting-row">
+          <label for="modelSelect">AI Model</label>
+          <select id="modelSelect">
+            <option value="opencode/glm-4.7-free">OpenCode GLM-4.7-Free (Default)</option>
+            <option value="opencode/big-pickle">OpenCode Big Pickle</option>
+            <option value="opencode/gpt-5-nano">OpenCode GPT-5-Nano</option>
+            <optgroup label="Ollama Local Models">
+              <option value="ollama/llama3.2">Ollama Llama3.2</option>
+              <option value="ollama/llama3.2:1b">Ollama Llama3.2:1B</option>
+              <option value="ollama/llama3.2-vision">Ollama Llama3.2-Vision</option>
+              <option value="ollama/llava">Ollama Llava</option>
+              <option value="ollama/qwen2.5:7b">Ollama Qwen2.5:7B</option>
+              <option value="ollama/deepseek-coder:6.7b">Ollama DeepSeek-Coder</option>
+              <option value="ollama/llama3:latest">Ollama Llama3</option>
+              <option value="ollama/phi3:latest">Ollama Phi3</option>
+              <option value="ollama/gemma3:12b">Ollama Gemma3:12B</option>
+              <option value="ollama/qwen3:8b">Ollama Qwen3:8B</option>
+              <option value="ollama/mistral-nemo:latest">Ollama Mistral-Nemo</option>
+            </optgroup>
+            <optgroup label="Ollama Cloud Models">
+              <option value="ollama/glm-4.7:cloud">Ollama GLM-4.7 (Cloud)</option>
+              <option value="ollama/minimax-m2.1:cloud">Ollama Minimax-M2.1 (Cloud)</option>
+            </optgroup>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Configuration</h3>
+        <div class="setting-row">
+          <label for="opencodeServerUrl">OpenCode Server URL</label>
+          <input type="text" id="opencodeServerUrl" value="http://localhost:3001" placeholder="http://localhost:3001" />
+        </div>
+        <div class="setting-row">
+          <label for="ollamaServerUrl">Ollama Server URL</label>
+          <input type="text" id="ollamaServerUrl" value="http://localhost:11434" placeholder="http://localhost:11434" />
+        </div>
+        <div class="setting-row">
+          <label for="serverUrl">MCP Server URL</label>
+          <input type="text" id="serverUrl" value="ws://localhost:5000/ag-ui/ws" />
+        </div>
+        <div class="setting-row">
+          <label for="timeoutSetting">Request Timeout (ms)</label>
+          <input type="number" id="timeoutSetting" value="60000" />
+        </div>
+        <div class="setting-row">
+          <button
+            id="reloadModelsBtn"
+            style="
+              margin-top: 10px;
+              padding: 8px 16px;
+              background: #007bff;
+              color: white;
+              border: none;
+              border-radius: 4px;
+              cursor: pointer;
+            "
+          >
+            重新載入模型
+          </button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Metrics</h3>
+        <div class="metrics">
+          <div class="metric">
+            <span>Messages:</span>
+            <span id="messageCount">1</span>
+          </div>
+          <div class="metric">
+            <span>Latency:</span>
+            <span id="latency">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+        // ==================== 修復後的 JavaScript 代碼 ====================
+
+        // 全域變數
+        let workspaces = []
+        let settingsEventBound = false // 防止重複事件綁定
+        let settingsVisible = false
+        let messageCount = 1
+        let conversationHistory = []
+
+        // 服務器設定
+        let settings = {
+          opencodeServerUrl: "http://localhost:3001",
+          ollamaServerUrl: "http://localhost:11434",
+          serverUrl: "ws://localhost:5000/ag-ui/ws",
+          timeoutSetting: 60000,
+        }
+
+        // 修復 1: 防抖函數 - 防止快速重複點擊
+        function debounce(func, wait) {
+          let timeout
+          return function executedFunction(...args) {
+            const later = () => {
+              clearTimeout(timeout)
+              func(...args)
+            }
+            clearTimeout(timeout)
+            timeout = setTimeout(later, wait)
+          }
+        }
+
+        // 修復 2: 安全的 localStorage 操作
+        function safeLocalStorageGet(key, defaultValue = null) {
+          try {
+            const item = localStorage.getItem(key)
+            return item ? JSON.parse(item) : defaultValue
+          } catch (error) {
+            console.warn("localStorage read error:", error)
+            return defaultValue
+          }
+        }
+
+        function safeLocalStorageSet(key, value) {
+          try {
+            localStorage.setItem(key, JSON.stringify(value))
+          } catch (error) {
+            console.warn("localStorage write error:", error)
+          }
+        }
+
+        // 設定管理
+        function loadSettings() {
+          const stored = safeLocalStorageGet("agui-settings", {})
+          settings = { ...settings, ...stored }
+
+          // 更新表單值
+          document.getElementById("opencodeServerUrl").value = settings.opencodeServerUrl
+          document.getElementById("ollamaServerUrl").value = settings.ollamaServerUrl
+          document.getElementById("serverUrl").value = settings.serverUrl
+          document.getElementById("timeoutSetting").value = settings.timeoutSetting
+
+          console.log("Settings loaded:", settings)
+        }
+
+        function saveSettings() {
+          settings.opencodeServerUrl = document.getElementById("opencodeServerUrl").value
+          settings.ollamaServerUrl = document.getElementById("ollamaServerUrl").value
+          settings.serverUrl = document.getElementById("serverUrl").value
+          settings.timeoutSetting = document.getElementById("timeoutSetting").value
+
+          safeLocalStorageSet("agui-settings", settings)
+          console.log("Settings saved:", settings)
+        }
+
+        // 修復 3: 修復 localStorage 中的重複 workspace
+        function fixDuplicateWorkspaces() {
+          const stored = safeLocalStorageGet("workspaces", [])
+          if (!Array.isArray(stored)) return
+
+          // 移除重複項目（基於 path）
+          const uniqueWorkspaces = stored.filter(
+            (workspace, index, self) => index === self.findIndex((w) => w.path === workspace.path),
+          )
+
+          if (uniqueWorkspaces.length !== stored.length) {
+            console.log(`修復了 ${stored.length - uniqueWorkspaces.length} 個重複 workspace`)
+            safeLocalStorageSet("workspaces", uniqueWorkspaces)
+          }
+
+          workspaces = uniqueWorkspaces
+        }
+
+        // 修復 4: 重構 renderWorkspaceList - 關鍵修復！
+        function renderWorkspaceList() {
+          const container = document.getElementById("workspaceList")
+          if (!container) {
+            console.error("workspaceList container not found")
+            return
+          }
+
+          // 🔧 關鍵修復：完全清空容器，防止重複渲染
+          container.innerHTML = ""
+
+          workspaces.forEach((workspace, index) => {
+            const item = document.createElement("div")
+            item.className = "workspace-item"
+            if (workspace.active) {
+              item.classList.add("active")
+            }
+
+            item.innerHTML = `
+                      <div>
+                          <span class="name">${workspace.name}</span>
+                          <span class="path">${workspace.path}</span>
+                      </div>
+                      <button class="delete" data-index="${index}">×</button>
+                  `
+
+            // 綁定刪除事件
+            const deleteBtn = item.querySelector(".delete")
+            deleteBtn.addEventListener("click", (e) => {
+              e.stopPropagation()
+              deleteWorkspace(index)
+            })
+
+            container.appendChild(item)
+          })
+        }
+
+        // 修復 5: 安全的設置面板初始化
+        function initSettingsPanel() {
+          if (settingsEventBound) return // 已經初始化過了
+
+          const settingsBtn = document.getElementById("settingsBtn")
+          const settingsCloseBtn = document.getElementById("settingsCloseBtn")
+          const settingsPanel = document.getElementById("settingsPanel")
+          const addWorkspaceBtn = document.getElementById("addWorkspaceBtn")
+          const newWorkspacePath = document.getElementById("newWorkspacePath")
+
+          if (!settingsBtn || !settingsCloseBtn || !settingsPanel) {
+            console.error("Required elements not found")
+            return
+          }
+
+          // 使用防抖的切換函數
+          const debouncedToggle = debounce(() => {
+            settingsVisible = !settingsVisible
+            settingsPanel.classList.toggle("visible", settingsVisible)
+          }, 200)
+
+          settingsBtn.addEventListener("click", debouncedToggle)
+          settingsCloseBtn.addEventListener("click", debouncedToggle)
+
+          // 添加 workspace 功能
+          if (addWorkspaceBtn && newWorkspacePath) {
+            addWorkspaceBtn.addEventListener("click", () => {
+              const path = newWorkspacePath.value.trim()
+              if (path) {
+                addWorkspace(path)
+                newWorkspacePath.value = ""
+              }
+            })
+
+            newWorkspacePath.addEventListener("keypress", (e) => {
+              if (e.key === "Enter") {
+                addWorkspaceBtn.click()
+              }
+            })
+          }
+
+          // 重新載入模型按鈕
+          const reloadModelsBtn = document.getElementById("reloadModelsBtn")
+          if (reloadModelsBtn) {
+            reloadModelsBtn.addEventListener("click", reloadModels)
+          }
+
+          // 設定變更時自動儲存
+          const settingInputs = ["opencodeServerUrl", "ollamaServerUrl", "serverUrl", "timeoutSetting"]
+          settingInputs.forEach((id) => {
+            const input = document.getElementById(id)
+            if (input) {
+              input.addEventListener("change", saveSettings)
+              input.addEventListener("input", debounce(saveSettings, 1000)) // 防抖儲存
+            }
+          })
+
+          settingsEventBound = true
+          console.log("Settings panel initialized")
+        }
+
+        // 模型管理函數
+        async function reloadModels() {
+          console.log("🔄 重新載入模型清單...")
+
+          try {
+          // 重新載入 Ollama 模型 (通過代理避免 CORS)
+          console.log("🔄 重新載入模型清單...")
+          console.log("📡 連接到您的 Ollama 服務器...")
+          console.log("🔧 服務器地址:", settings.ollamaServerUrl)
+
+          // 檢查用戶配置的 Ollama 地址
+          const userOllamaUrl = settings.ollamaServerUrl.replace(/\/$/, "") // 移除結尾斜槓
+
+          console.log("📡 用戶 Ollama 地址:", userOllamaUrl)
+
+        try {
+            // 直接連接到用戶配置的 Ollama 服務器
+            const ollamaResponse = await fetch(`${userOllamaUrl}/api/tags`, {
+              signal: AbortSignal.timeout(10000) // 10秒超時
+            })
+
+            if (ollamaResponse.ok) {
+              const data = await ollamaResponse.json()
+              console.log(`✅ 從 Ollama 服務器載入 ${data.models ? data.models.length : 0} 個模型`)
+
+              // 分類本地和雲端模型
+              const localModels = data.models.filter(m => !m.details?.remote_model)
+              const cloudModels = data.models.filter(m => m.details?.remote_model)
+
+              console.log(`📊 模型統計:`)
+              console.log(`   本地模型: ${localModels.length} 個`)
+              console.log(`   雲端模型: ${cloudModels.length} 個`)
+
+              if (localModels.length > 0) {
+                console.log(`🔧 前 5 個本地模型:`, localModels.slice(0, 5).map(m => m.name))
+              }
+
+              if (cloudModels.length > 0) {
+                console.log(`☁️ 雲端模型:`, cloudModels.map(m => `${m.name} (${m.details.remote_model})`))
+              }
+
+              // 更新模型下拉選單
+              updateModelDropdown(data.models || [])
+              console.log("✅ 模型下拉選單已更新")
+
+            } else {
+              console.warn("❌ 從 Ollama 服務器載入失敗:", ollamaResponse.status)
+              // 即使載入失敗，至少顯示 OpenCode 模型
+              updateModelDropdown([])
+            }
+        } catch (error) {
+          console.error("❌ 連接 Ollama 服務器失敗:", error)
+          // 即使出錯也要更新下拉選單，至少顯示 OpenCode 模型
+          updateModelDropdown([])
+          console.log("💡 建議:")
+          console.log("   - 檢查 Ollama 服務器是否正在運行")
+          console.log("   - 確認網路連接是否正常")
+          console.log("   - 在設定面板中檢查 Ollama 服務器地址")
+        }
+        }
+
+              // 更新模型下拉選單
+              updateModelDropdown(data.models || [])
+              console.log("✅ 模型下拉選單已更新")
+            } else {
+              console.warn("❌ 從 Ollama 服務器載入失敗:", ollamaResponse.status)
+              // 即使載入失敗，至少顯示 OpenCode 模型
+              updateModelDropdown([])
+            }
+          } else {
+            console.error("無法連接到本地 Ollama 服務器")
+          }
+
+          } catch (error) {
+            console.error("本地 Ollama 服務器檢查失敗:", error)
+          }
+        } else {
+          console.log("❌ 無法識別用戶的 Ollama 服務器地址格式:", userOllamaUrl)
+          }
+
+          console.log("💡 設定建議：")
+          console.log("1. 請保您的 Ollama 服務器正在運行在 http://localhost:11434")
+          console.log("2. 檢查 Ollama 配置：ollama run")
+          console.log("3. 如需使用雲端模型，請先在 ollama.com 登入您的帳號")
+          console.log("4. 在設定面板中您可以修改 Ollama 服務器地址為您的遠端服務器")
+          console.log("5. 修改地址後點擊「重新載入模型」按鈕")
+          console.log("6. 如果仍然看不到雲端模型，請檢查：")
+          console.log("   - Ollama 服務器是否正在運行？")
+          console.log("   - 您的網路是否能訪問 https://ollama.com")
+          console.log("   - 在瀏覽器開發者工具中輸入：ollama list")
+          console.log("   - 清除瀏覽器緩存後重新載入頁面")
+        }
+      }
+          } catch (error) {
+            console.error("❌ 載入模型時發生錯誤:", error)
+            // 即使出錯也要更新下拉選單，至少顯示 OpenCode 模型
+            updateModelDropdown([])
+            // 顯示一個溫和的提示，讓用戶知道可以手動重新載入
+            console.log("💡 提示：如果沒有看到所有可用模型，請點擊設定面板中的「重新載入模型」按鈕")
+          }
+        }
+
+        function updateModelDropdown(ollamaModels) {
+          const modelSelect = document.getElementById("modelSelect")
+          if (!modelSelect) {
+            console.error("❌ 找不到 modelSelect 元素")
+            return
+          }
+
+          console.log("🔄 更新模型下拉選單...")
+
+          // 清除現有選項
+          modelSelect.innerHTML = ""
+
+          // 加入 OpenCode 模型 (硬編碼)
+          const opencodeModels = [
+            { value: "opencode/glm-4.7-free", text: "OpenCode GLM-4.7-Free (Default)" },
+            { value: "opencode/big-pickle", text: "OpenCode Big Pickle" },
+            { value: "opencode/gpt-5-nano", text: "OpenCode GPT-5-Nano" }
+          ]
+
+          opencodeModels.forEach(model => {
+            const option = document.createElement("option")
+            option.value = model.value
+            option.textContent = model.text
+            modelSelect.appendChild(option)
+          })
+          console.log(`✅ 已加入 ${opencodeModels.length} 個 OpenCode 模型`)
+
+          // 分類 Ollama 模型
+          const localModels = []
+          const cloudModels = []
+
+          ollamaModels.forEach((model) => {
+            const isCloudModel = model.details && model.details.remote_model
+            if (isCloudModel) {
+              cloudModels.push(model)
+            } else {
+              localModels.push(model)
+            }
+          })
+
+          console.log(`📊 分類結果: ${localModels.length} 個本地模型, ${cloudModels.length} 個雲端模型`)
+
+          // 加入本地模型
+          if (localModels.length > 0) {
+            const localGroup = document.createElement("optgroup")
+            localGroup.label = "Ollama Local Models"
+
+            localModels.slice(0, 10).forEach((model) => { // 限制前10個
+              const option = document.createElement("option")
+              option.value = `ollama/${model.name}`
+              option.textContent = `Ollama ${model.name}`
+              localGroup.appendChild(option)
+            })
+
+            modelSelect.appendChild(localGroup)
+            console.log(`✅ 已加入本地模型分組 (${localModels.length} 個模型)`)
+          }
+
+          // 加入雲端模型
+          if (cloudModels.length > 0) {
+            const cloudGroup = document.createElement("optgroup")
+            cloudGroup.label = "Ollama Cloud Models"
+
+            cloudModels.forEach((model) => {
+              const option = document.createElement("option")
+              option.value = `ollama/${model.name}`
+              option.textContent = `Ollama ${model.name} (Cloud)`
+              cloudGroup.appendChild(option)
+            })
+
+            modelSelect.appendChild(cloudGroup)
+            console.log(`✅ 已加入雲端模型分組 (${cloudModels.length} 個模型):`, cloudModels.map(m => m.name))
+          } else {
+            console.log("⚠️ 沒有找到雲端模型")
+          }
+
+          console.log("✅ 模型下拉選單更新完成")
+        }
+          })
+
+          // 加入本地模型
+          if (localModels.length > 0) {
+            const localGroup = document.createElement("optgroup")
+            localGroup.label = "Ollama Local Models"
+
+            localModels.slice(0, 10).forEach((model) => {
+              // 限制前10個
+              const option = document.createElement("option")
+              option.value = `ollama/${model.name}`
+              option.textContent = `Ollama ${model.name}`
+              localGroup.appendChild(option)
+            })
+
+            modelSelect.appendChild(localGroup)
+          }
+
+          // 加入雲端模型
+          if (cloudModels.length > 0) {
+            const cloudGroup = document.createElement("optgroup")
+            cloudGroup.label = "Ollama Cloud Models"
+
+            cloudModels.forEach((model) => {
+              const option = document.createElement("option")
+              option.value = `ollama/${model.name}`
+              option.textContent = `Ollama ${model.name} (Cloud)`
+              cloudGroup.appendChild(option)
+            })
+
+            modelSelect.appendChild(cloudGroup)
+          }
+
+          console.log(
+            `Updated model dropdown: ${opencodeModels.length} OpenCode, ${localModels.length} local Ollama, ${cloudModels.length} cloud Ollama models`,
+          )
+        }
+
+        // Workspace 管理函數
+        function addWorkspace(path) {
+          if (!path) return
+
+          // 檢查是否已存在
+          if (workspaces.some((w) => w.path === path)) {
+            alert("Workspace already exists")
+            return
+          }
+
+          const name = path.split("/").pop() || path
+          workspaces.push({
+            name: name,
+            path: path,
+            active: workspaces.length === 0, // 第一個設為活躍
+          })
+
+          saveWorkspaces()
+          renderWorkspaceList()
+        }
+
+        function deleteWorkspace(index) {
+          if (index >= 0 && index < workspaces.length) {
+            workspaces.splice(index, 1)
+            saveWorkspaces()
+            renderWorkspaceList()
+          }
+        }
+
+        function saveWorkspaces() {
+          safeLocalStorageSet("workspaces", workspaces)
+        }
+
+        function loadWorkspaces() {
+          fixDuplicateWorkspaces() // 修復重複項目
+
+          // 如果沒有 workspace，添加默認的
+          if (workspaces.length === 0) {
+            workspaces = [
+              { name: "OpenCode", path: "/home/rick/prj/opencode", active: true },
+              { name: "Home", path: "/home/rick", active: false },
+              { name: "Projects", path: "/home/rick/projects", active: false },
+              { name: "Downloads", path: "/home/rick/Downloads", active: false },
+              { name: "Root", path: "/", active: false },
+            ]
+            saveWorkspaces()
+          }
+        }
+
+        // 聊天功能
+        function addMessage(content, type = "user") {
+          const chatMessages = document.getElementById("chatMessages")
+          const messageDiv = document.createElement("div")
+          messageDiv.className = `message ${type}`
+
+          messageDiv.innerHTML = `<strong>${type === "user" ? "You" : "AG-UI"}:</strong> ${content}`
+          chatMessages.appendChild(messageDiv)
+          chatMessages.scrollTop = chatMessages.scrollHeight
+
+          // 保存到對話歷史
+          conversationHistory.push({ content, type, timestamp: Date.now() })
+
+          // 更新訊息計數
+          messageCount++
+          document.getElementById("messageCount").textContent = messageCount
+        }
+
+        // 處理發送訊息
+        function sendMessage() {
+          const input = document.getElementById("messageInput")
+          const message = input.value.trim()
+
+          if (!message) return
+
+          // 獲取選定的模型
+          const modelSelect = document.getElementById("modelSelect")
+          const selectedModel = modelSelect ? modelSelect.value : "opencode/glm-4.7-free"
+
+          addMessage(message, "user")
+          input.value = ""
+
+          // 顯示正在輸入的指示器
+          showTypingIndicator()
+
+          // 發送消息到服務器
+          sendToServer(message, selectedModel)
+        }
+
+        function showTypingIndicator() {
+          const messagesDiv = document.getElementById("chatMessages")
+          const typingDiv = document.createElement("div")
+          typingDiv.className = "message assistant typing"
+          typingDiv.id = "typingIndicator"
+          typingDiv.innerHTML = `
+            <div class="message-avatar">🤖</div>
+            <div class="message-content">
+              <div class="typing-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+          `
+          messagesDiv.appendChild(typingDiv)
+          messagesDiv.scrollTop = messagesDiv.scrollHeight
+        }
+
+        function hideTypingIndicator() {
+          const typingDiv = document.getElementById("typingIndicator")
+          if (typingDiv) {
+            typingDiv.remove()
+          }
+        }
+
+        async function sendToServer(message, model) {
+          try {
+            console.log(`[AG-UI] Sending message with model: ${model}`)
+
+            // 檢查是否為 Ollama 模型
+            const isOllama = model && model.startsWith("ollama/")
+
+            if (isOllama) {
+              // 使用 Ollama API
+              await sendToOllama(message, model)
+            } else {
+              // 使用 OpenCode API
+              await sendToOpenCode(message, model)
+            }
+          } catch (error) {
+            console.error("[AG-UI] Error sending message:", error)
+            hideTypingIndicator()
+            addMessage("抱歉，發生錯誤。請稍後再試。", "assistant", "error")
+          }
+        }
+
+        async function sendToOllama(message, model) {
+          try {
+            const serverUrl = settings.ollamaServerUrl.replace(/\/$/, "") // 移除結尾斜槓
+            const ollamaModel = model.replace("ollama/", "")
+            console.log(`[AG-UI] Calling Ollama API at ${serverUrl} with model: ${ollamaModel}`)
+
+            const response = await fetch(`${serverUrl}/api/generate`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                model: ollamaModel,
+                prompt: message,
+                stream: false,
+              }),
+            })
+
+            if (!response.ok) {
+              throw new Error(`Ollama API error: ${response.status}`)
+            }
+
+            const data = await response.json()
+            hideTypingIndicator()
+            addMessage(data.response || "收到 Ollama 回應", "assistant")
+          } catch (error) {
+            console.error("[AG-UI] Ollama API error:", error)
+            hideTypingIndicator()
+            addMessage(`Ollama 模型錯誤: ${error.message}`, "assistant", "error")
+          }
+        }
+
+        async function sendToOpenCode(message, model) {
+          try {
+            const serverUrl = settings.opencodeServerUrl.replace(/\/$/, "") // 移除結尾斜槓
+            console.log(`[AG-UI] Calling OpenCode API at ${serverUrl} with model: ${model}`)
+
+            const response = await fetch(`${serverUrl}/chat`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                message: message,
+                model: model,
+                sessionId: Date.now().toString(), // 簡單的 session ID
+              }),
+            })
+
+            if (!response.ok) {
+              throw new Error(`OpenCode API error: ${response.status}`)
+            }
+
+            const data = await response.json()
+            hideTypingIndicator()
+            addMessage(data.response || "收到 OpenCode 回應", "assistant")
+          } catch (error) {
+            console.error("[AG-UI] OpenCode API error:", error)
+            hideTypingIndicator()
+            addMessage(`OpenCode API 錯誤: ${error.message}`, "assistant", "error")
+          }
+        }
+
+        function testMcpElements() {
+          console.log("Testing MCP elements...")
+          const serverList = document.getElementById("mcp-server-list")
+          console.log("MCP server list element:", serverList)
+          if (serverList) {
+            console.log("Element exists, current HTML:", serverList.innerHTML)
+          }
+        }
+
+        // MCP 狀態載入 - 修復 CORS 問題
+        async function loadMcpServerStatus() {
+          console.log("Starting MCP status load...")
+          try {
+            const response = await fetch("/mcp/status", {
+              headers: {
+                Accept: "application/json",
+              },
+            })
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+            }
+
+            const data = await response.json()
+            console.log("MCP status loaded:", data)
+
+            // 更新 MCP 服務器列表
+            console.log("Updating MCP server list with data:", data)
+            updateMcpServerList(data)
+          } catch (error) {
+            console.error("Failed to load MCP status:", error)
+            // 顯示錯誤狀態
+            showMcpError(error.message)
+          }
+        }
+
+        function updateMcpServerList(data) {
+          console.log("updateMcpServerList called with:", data)
+          const mcpList = document.getElementById("mcp-server-list")
+          console.log("MCP list element found:", mcpList)
+          if (!mcpList) return
+
+          // 清空現有內容
+          mcpList.innerHTML = ""
+
+          // 檢查數據結構並正確渲染
+          if (data.servers && Array.isArray(data.servers)) {
+            // 新的數據結構：{servers: [...], status: "...", message: "..."}
+            data.servers.forEach((server) => {
+              const item = document.createElement("div")
+              item.className = "mcp-server-item"
+              item.innerHTML = `
+                          <span class="status-dot" style="background: ${server.status === "connected" ? "#28a745" : "#ffc107"};"></span>
+                          ${server.name}: ${server.status}
+                      `
+              mcpList.appendChild(item)
+            })
+
+            // 如果有總體狀態，也顯示出來
+            if (data.status) {
+              const statusItem = document.createElement("div")
+              statusItem.className = "mcp-server-item"
+              statusItem.innerHTML = `
+                          <span class="status-dot" style="background: #17a2b8;"></span>
+                          Status: ${data.status}
+                      `
+              mcpList.appendChild(statusItem)
+            }
+
+            if (data.message) {
+              const messageItem = document.createElement("div")
+              messageItem.className = "mcp-server-item"
+              messageItem.innerHTML = `
+                          <span class="status-dot" style="background: #6c757d;"></span>
+                          ${data.message}
+                      `
+              mcpList.appendChild(messageItem)
+            }
+          } else {
+            // 舊的數據結構或其他格式
+            Object.entries(data).forEach(([serverName, status]) => {
+              const item = document.createElement("div")
+              item.className = "mcp-server-item"
+              item.innerHTML = `
+                          <span class="status-dot" style="background: ${status && status.status === "connected" ? "#28a745" : "#ffc107"};"></span>
+                          ${serverName}: ${status ? status.status : "unknown"}
+                      `
+              mcpList.appendChild(item)
+            })
+          }
+        }
+
+        function showMcpError(message) {
+          const mcpList = document.getElementById("mcp-server-list")
+          if (!mcpList) return
+
+          mcpList.innerHTML = `
+                  <div class="mcp-server-item">
+                      <span class="status-dot" style="background: #dc3545;"></span>
+                      MCP Error: ${message}
+                  </div>
+              `
+        }
+
+        // 修復 6: 安全的頁面初始化
+        function initApp() {
+          console.log("AG-UI Chat initialized")
+          console.log("DOM loaded, testing MCP elements...")
+          setTimeout(testMcpElements, 1000)
+
+          // 載入設定
+          loadSettings()
+
+          // 載入 workspaces
+          loadWorkspaces()
+
+          // 初始化設置面板（只執行一次）
+          initSettingsPanel()
+
+          // 渲染 workspace 列表
+          renderWorkspaceList()
+
+          // 初始化聊天功能
+          const sendButton = document.getElementById("sendButton")
+          const messageInput = document.getElementById("messageInput")
+
+          if (sendButton && messageInput) {
+            sendButton.addEventListener("click", sendMessage)
+            messageInput.addEventListener("keypress", (e) => {
+              if (e.key === "Enter") {
+                sendMessage()
+              }
+            })
+          }
+
+          // 載入 MCP 狀態
+          loadMcpServerStatus()
+
+          // 初始載入模型清單
+          setTimeout(() => reloadModels(), 1000)
+        }
+
+        // 修復 7: 防止意外的全局事件
+        window.addEventListener("beforeunload", () => {
+          // 清理資源
+          console.log("Cleaning up AG-UI Chat")
+        })
+
+        // 頁面載入完成後初始化
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", initApp)
+        } else {
+          initApp()
+        }
+    </script>
+
+    <!-- Browser Diagnostics Collector -->
+    <script src="/browser-diagnostics-injector.js"></script>
+  </body>
+</html>

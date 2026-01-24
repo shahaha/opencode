@@ -4,6 +4,7 @@ import { DomChecks } from "./checks/dom-checks.js"
 import { FunctionalChecks } from "./checks/functional-checks.js"
 import { PerformanceChecks } from "./checks/performance-checks.js"
 import { SecurityChecks } from "./checks/security-checks.js"
+import { IntelligentDiagnostics } from "./checks/intelligent-diagnostics.js"
 import { ConsoleReporter } from "./reporters/console-reporter.js"
 import { JsonReporter } from "./reporters/json-reporter.js"
 
@@ -13,7 +14,7 @@ export class RepairVerifier {
       url: config.url || "http://100.94.136.15:9100/",
       timeout: config.timeout || 30000,
       retries: config.retries || 3,
-      checks: config.checks || ["code", "dom", "functional", "security"],
+      checks: config.checks || ["code", "dom", "functional", "intelligent", "security"],
       reporters: config.reporters || ["console"],
       enableCaching: config.enableCaching ?? true,
       cacheTtl: config.cacheTtl || 300000,
@@ -27,6 +28,7 @@ export class RepairVerifier {
       functional: new FunctionalChecks(),
       performance: new PerformanceChecks(),
       security: new SecurityChecks(),
+      intelligent: new IntelligentDiagnostics(),
     }
 
     this.reporters = {

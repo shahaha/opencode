@@ -215,18 +215,24 @@ export namespace AutoRepairVerification {
     // Monitor OpenCode diagnostics API
     setInterval(async () => {
       try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 5000)
+
         const response = await fetch("http://localhost:3001/diagnostics/all", {
-          timeout: 5000,
+          signal: controller.signal,
           redirect: "manual", // Don't follow redirects for health check
         })
+
+        clearTimeout(timeoutId)
 
         // 302 redirect is expected (needs auth), but connection should work
         if (response.status !== 302 && response.status !== 200) {
           console.warn("[AutoRepairVerification] OpenCode diagnostics API issue:", response.status)
         }
       } catch (error) {
-        console.error("[AutoRepairVerification] OpenCode diagnostics API unavailable:", error.message)
-        log.error("opencode diagnostics api unavailable", { error: error.message })
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error("[AutoRepairVerification] OpenCode diagnostics API unavailable:", errorMessage)
+        log.error("opencode diagnostics api unavailable", { error: errorMessage })
       }
     }, 60000) // Check every minute
   }
@@ -277,7 +283,8 @@ export namespace AutoRepairVerification {
           })
         }
       } catch (error) {
-        log.error("browser diagnostics monitoring error", { error: error.message })
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        log.error("browser diagnostics monitoring error", { error: errorMessage })
       }
     }, 10000) // Check every 10 seconds
   }
@@ -518,13 +525,15 @@ export namespace AutoRepairVerification {
             console.error("[AutoRepairVerification] AG-UI server restart failed - bad response:", response.status)
           }
         } catch (error) {
-          console.error("[AutoRepairVerification] AG-UI server restart verification failed:", error.message)
-          log.error("ag-ui server restart verification failed", { error: error.message })
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          console.error("[AutoRepairVerification] AG-UI server restart verification failed:", errorMessage)
+          log.error("ag-ui server restart verification failed", { error: errorMessage })
         }
       }, 5000)
     } catch (error) {
-      console.error("[AutoRepairVerification] Failed to restart AG-UI server:", error)
-      log.error("ag-ui server restart failed", { error: error.message })
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error("[AutoRepairVerification] Failed to restart AG-UI server:", errorMessage)
+      log.error("ag-ui server restart failed", { error: errorMessage })
     }
   }
 }

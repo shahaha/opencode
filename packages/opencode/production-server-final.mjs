@@ -39,7 +39,7 @@ const server = http.createServer((req, res) => {
       console.log("Proxying MCP status request to backend...")
 
       const options = {
-        hostname: "100.94.136.15",
+        hostname: "127.0.0.1",
         port: 5000,
         path: "/mcp",
         method: "GET",
@@ -144,6 +144,276 @@ const server = http.createServer((req, res) => {
           res.end(JSON.stringify({ error: "Invalid diagnostics data" }))
         }
       })
+      return
+    }
+
+    // Handle OpenCode chat endpoint
+    if (req.method === "POST" && req.url === "/chat") {
+      let body = ""
+      req.on("data", (chunk) => {
+        body += chunk.toString()
+      })
+
+      req.on("end", () => {
+        try {
+          const requestData = JSON.parse(body)
+          console.log("📨 Proxying chat request to OpenCode:", {
+            model: requestData.model,
+            messageLength: requestData.message?.length || 0,
+          })
+
+          // Proxy to OpenCode server
+          const options = {
+            hostname: "127.0.0.1",
+            port: 3001,
+            path: "/chat",
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "User-Agent": "AG-UI-Proxy/1.0",
+            },
+          }
+
+          const backendReq = http.request(options, (backendRes) => {
+            // Handle authentication redirects
+            if (backendRes.statusCode === 302 || backendRes.statusCode === 401) {
+              console.log("OpenCode requires authentication")
+              res.writeHead(200, {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization",
+              })
+              res.end(
+                JSON.stringify({
+                  response: "抱歉，OpenCode 需要身份驗證。請先登入 OpenCode 服務器。",
+                  model: requestData.model,
+                  timestamp: Date.now(),
+                  error: "authentication_required",
+                }),
+              )
+              backendReq.destroy()
+              return
+            }
+
+            let data = ""
+
+            backendRes.on("data", (chunk) => {
+              data += chunk
+            })
+
+            backendRes.on("end", () => {
+              res.writeHead(backendRes.statusCode, {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization",
+              })
+              res.end(data)
+            })
+          })
+
+          backendReq.on("error", (error) => {
+            console.error("OpenCode proxy error:", error)
+            res.writeHead(500, {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
+            })
+            res.end(
+              JSON.stringify({
+                error: "OpenCode service unavailable",
+                details: error.message,
+              }),
+            )
+          })
+
+          backendReq.write(JSON.stringify(requestData))
+          backendReq.end()
+        } catch (error) {
+          console.error("Error processing chat request:", error)
+          res.writeHead(400, {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          })
+          res.end(JSON.stringify({ error: "Invalid request data" }))
+        }
+      })
+      return
+    }
+
+    // Handle Ollama chat endpoint
+    if (req.method === "POST" && req.url === "/ollama/chat") {
+      let body = ""
+      req.on("data", (chunk) => {
+        body += chunk.toString()
+      })
+
+      req.on("end", () => {
+        try {
+          const requestData = JSON.parse(body)
+          const ollamaModel = requestData.model.replace("ollama/", "")
+          console.log("📨 Proxying chat request to Ollama:", {
+            model: ollamaModel,
+            messageLength: requestData.message?.length || 0,
+          })
+
+          // Convert to Ollama API format
+          const ollamaRequest = {
+            model: ollamaModel,
+            prompt: requestData.message,
+            stream: false,
+          }
+
+          // Proxy to Ollama server
+          const options = {
+            hostname: "127.0.0.1",
+            port: 11434,
+            path: "/api/generate",
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "User-Agent": "AG-UI-Proxy/1.0",
+            },
+          }
+
+          const backendReq = http.request(options, (backendRes) => {
+            let data = ""
+
+            backendRes.on("data", (chunk) => {
+              data += chunk
+            })
+
+            backendRes.on("end", () => {
+              try {
+                const ollamaResponse = JSON.parse(data)
+
+                // Handle Ollama authentication errors for cloud models
+                if (ollamaResponse.error === "unauthorized") {
+                  console.log("Ollama cloud model requires authentication")
+                  res.writeHead(200, {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                  })
+                  res.end(
+                    JSON.stringify({
+                      response: "此 Ollama 雲端模型需要身份驗證。請先在 Ollama 中登入您的帳號：ollama.com",
+                      model: requestData.model,
+                      timestamp: Date.now(),
+                      error: "ollama_auth_required",
+                    }),
+                  )
+                  return
+                }
+
+                // Convert Ollama response format to AG-UI expected format
+                const aguiResponse = {
+                  response: ollamaResponse.response || "No response from Ollama",
+                  model: requestData.model,
+                  timestamp: Date.now(),
+                }
+
+                res.writeHead(200, {
+                  "Content-Type": "application/json",
+                  "Access-Control-Allow-Origin": "*",
+                  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                })
+                res.end(JSON.stringify(aguiResponse))
+              } catch (parseError) {
+                console.error("Error parsing Ollama response:", parseError)
+                res.writeHead(500, {
+                  "Content-Type": "application/json",
+                  "Access-Control-Allow-Origin": "*",
+                })
+                res.end(
+                  JSON.stringify({
+                    error: "Invalid Ollama response",
+                    details: parseError.message,
+                  }),
+                )
+              }
+            })
+          })
+
+          backendReq.on("error", (error) => {
+            console.error("Ollama proxy error:", error)
+            res.writeHead(500, {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
+            })
+            res.end(
+              JSON.stringify({
+                error: "Ollama service unavailable",
+                details: error.message,
+              }),
+            )
+          })
+
+          backendReq.write(JSON.stringify(ollamaRequest))
+          backendReq.end()
+        } catch (error) {
+          console.error("Error processing Ollama chat request:", error)
+          res.writeHead(400, {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          })
+          res.end(JSON.stringify({ error: "Invalid request data" }))
+        }
+      })
+      return
+    }
+
+    // Handle Ollama models endpoint for CORS proxy
+    if (req.method === "GET" && req.url === "/ollama/models") {
+      console.log("Proxying Ollama models request...")
+
+      const ollamaUrl = "http://100.94.136.15:11434" // Default Ollama server
+
+      const options = {
+        hostname: "100.94.136.15",
+        port: 11434,
+        path: "/api/tags",
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      }
+
+      const backendReq = http.request(options, (backendRes) => {
+        let data = ""
+
+        backendRes.on("data", (chunk) => {
+          data += chunk
+        })
+
+        backendRes.on("end", () => {
+          res.writeHead(200, {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          })
+          res.end(data)
+        })
+      })
+
+      backendReq.on("error", (error) => {
+        console.error("Ollama models proxy error:", error)
+        res.writeHead(500, {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        })
+        res.end(
+          JSON.stringify({
+            error: "Failed to load Ollama models",
+            details: error.message,
+          }),
+        )
+      })
+
+      backendReq.end()
       return
     }
 
