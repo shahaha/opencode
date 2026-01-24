@@ -83,6 +83,22 @@ export type EventLspUpdated = {
   }
 }
 
+export type OutputFormatText = {
+  type: "text"
+}
+
+export type JsonSchema = {
+  [key: string]: unknown
+}
+
+export type OutputFormatJsonSchema = {
+  type: "json_schema"
+  schema: JsonSchema
+  retryCount?: number
+}
+
+export type OutputFormat = OutputFormatText | OutputFormatJsonSchema
+
 export type EventFileEdited = {
   type: "file.edited"
   properties: {
@@ -105,6 +121,7 @@ export type UserMessage = {
   time: {
     created: number
   }
+  outputFormat?: OutputFormat
   summary?: {
     title?: string
     body?: string
@@ -151,6 +168,14 @@ export type MessageAbortedError = {
   }
 }
 
+export type StructuredOutputError = {
+  name: "StructuredOutputError"
+  data: {
+    message: string
+    retries: number
+  }
+}
+
 export type ApiError = {
   name: "APIError"
   data: {
@@ -175,7 +200,13 @@ export type AssistantMessage = {
     created: number
     completed?: number
   }
-  error?: ProviderAuthError | UnknownError | MessageOutputLengthError | MessageAbortedError | ApiError
+  error?:
+    | ProviderAuthError
+    | UnknownError
+    | MessageOutputLengthError
+    | MessageAbortedError
+    | StructuredOutputError
+    | ApiError
   parentID: string
   modelID: string
   providerID: string
@@ -196,6 +227,7 @@ export type AssistantMessage = {
       write: number
     }
   }
+  structured_output?: unknown
   finish?: string
 }
 
@@ -816,7 +848,13 @@ export type EventSessionError = {
   type: "session.error"
   properties: {
     sessionID?: string
-    error?: ProviderAuthError | UnknownError | MessageOutputLengthError | MessageAbortedError | ApiError
+    error?:
+      | ProviderAuthError
+      | UnknownError
+      | MessageOutputLengthError
+      | MessageAbortedError
+      | StructuredOutputError
+      | ApiError
   }
 }
 
@@ -3263,6 +3301,7 @@ export type SessionPromptData = {
     tools?: {
       [key: string]: boolean
     }
+    outputFormat?: OutputFormat
     system?: string
     variant?: string
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
@@ -3450,6 +3489,7 @@ export type SessionPromptAsyncData = {
     tools?: {
       [key: string]: boolean
     }
+    outputFormat?: OutputFormat
     system?: string
     variant?: string
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>

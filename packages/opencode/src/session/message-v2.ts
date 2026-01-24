@@ -16,6 +16,13 @@ import type { Provider } from "@/provider/provider"
 export namespace MessageV2 {
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
   export const AbortedError = NamedError.create("MessageAbortedError", z.object({ message: z.string() }))
+  export const StructuredOutputError = NamedError.create(
+    "StructuredOutputError",
+    z.object({
+      message: z.string(),
+      retries: z.number(),
+    }),
+  )
   export const AuthError = NamedError.create(
     "ProviderAuthError",
     z.object({
@@ -35,6 +42,28 @@ export namespace MessageV2 {
     }),
   )
   export type APIError = z.infer<typeof APIError.Schema>
+
+  export const OutputFormatText = z.object({
+    type: z.literal("text"),
+  }).meta({
+    ref: "OutputFormatText",
+  })
+
+  export const OutputFormatJsonSchema = z.object({
+    type: z.literal("json_schema"),
+    schema: z.record(z.string(), z.any()).meta({ ref: "JSONSchema" }),
+    retryCount: z.number().int().min(0).default(2),
+  }).meta({
+    ref: "OutputFormatJsonSchema",
+  })
+
+  export const OutputFormat = z.discriminatedUnion("type", [
+    OutputFormatText,
+    OutputFormatJsonSchema,
+  ]).meta({
+    ref: "OutputFormat",
+  })
+  export type OutputFormat = z.infer<typeof OutputFormat>
 
   const PartBase = z.object({
     id: z.string(),
@@ -307,6 +336,7 @@ export namespace MessageV2 {
     time: z.object({
       created: z.number(),
     }),
+    outputFormat: OutputFormat.optional(),
     summary: z
       .object({
         title: z.string().optional(),
@@ -359,6 +389,7 @@ export namespace MessageV2 {
         NamedError.Unknown.Schema,
         OutputLengthError.Schema,
         AbortedError.Schema,
+        StructuredOutputError.Schema,
         APIError.Schema,
       ])
       .optional(),
@@ -385,6 +416,7 @@ export namespace MessageV2 {
         write: z.number(),
       }),
     }),
+    structured_output: z.any().optional(),
     finish: z.string().optional(),
   }).meta({
     ref: "AssistantMessage",
