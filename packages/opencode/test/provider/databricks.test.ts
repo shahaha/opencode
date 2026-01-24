@@ -1148,3 +1148,185 @@ test("Databricks: env token takes precedence over CLI token cache", async () => 
     if (originalHome) process.env.HOME = originalHome
   }
 })
+
+test("Databricks: refreshes expired CLI token using refresh_token and updates cache", async () => {
+  const testHost = "https://my-workspace.cloud.databricks.com"
+  const expiredToken = "expired-access-token"
+  const refreshToken = "valid-refresh-token"
+  const newAccessToken = "new-refreshed-access-token"
+  const newRefreshToken = "new-refresh-token"
+
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(path.join(dir, "opencode.json"), JSON.stringify({ $schema: "https://opencode.ai/config.json" }))
+      // Create .databricks directory and token cache with expired token
+      const databricksDir = path.join(dir, ".databricks")
+      await Bun.write(path.join(databricksDir, ".gitkeep"), "")
+
+      // Create an expired token cache WITH refresh token
+      const pastExpiry = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+      await Bun.write(
+        path.join(databricksDir, "token-cache.json"),
+        JSON.stringify({
+          version: 1,
+          tokens: {
+            [testHost]: {
+              access_token: expiredToken,
+              token_type: "Bearer",
+              refresh_token: refreshToken,
+              expiry: pastExpiry,
+              expires_in: 3600,
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  // Clear auth.json
+  const authPath = path.join(Global.Path.data, "auth.json")
+  const authFile = Bun.file(authPath)
+  const existingAuth = (await authFile.exists()) ? await authFile.text() : null
+  await Bun.write(authPath, JSON.stringify({}))
+
+  const originalHome = process.env.HOME
+  process.env.HOME = tmp.path
+
+  // Mock fetch to intercept the token refresh request
+  const originalFetch = globalThis.fetch
+  const fetchMock = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input.toString()
+    if (url === `${testHost}/oidc/v1/token`) {
+      // Verify the refresh token request
+      const body = init?.body?.toString() ?? ""
+      expect(body).toContain("grant_type=refresh_token")
+      expect(body).toContain(`refresh_token=${refreshToken}`)
+      expect(body).toContain("client_id=databricks-cli")
+
+      return new Response(
+        JSON.stringify({
+          access_token: newAccessToken,
+          refresh_token: newRefreshToken,
+          expires_in: 3600,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      )
+    }
+    // For any other requests, use the original fetch
+    return originalFetch(input, init)
+  })
+  globalThis.fetch = fetchMock as unknown as typeof fetch
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.set("DATABRICKS_HOST", testHost)
+        Env.remove("DATABRICKS_TOKEN")
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        // Provider should load because token was refreshed
+        expect(providers["databricks"]).toBeDefined()
+        expect(providers["databricks"].name).toBe("Databricks")
+
+        // Verify the token refresh endpoint was called
+        expect(fetchMock).toHaveBeenCalled()
+
+        // Verify the token cache was updated with new tokens
+        const tokenCachePath = path.join(tmp.path, ".databricks", "token-cache.json")
+        const updatedCache = JSON.parse(await Bun.file(tokenCachePath).text())
+        expect(updatedCache.tokens[testHost].access_token).toBe(newAccessToken)
+        expect(updatedCache.tokens[testHost].refresh_token).toBe(newRefreshToken)
+        // Verify expiry was updated to future
+        const newExpiry = new Date(updatedCache.tokens[testHost].expiry)
+        expect(newExpiry.getTime()).toBeGreaterThan(Date.now())
+      },
+    })
+  } finally {
+    globalThis.fetch = originalFetch
+    if (originalHome) process.env.HOME = originalHome
+    if (existingAuth !== null) {
+      await Bun.write(authPath, existingAuth)
+    }
+  }
+})
+
+test("Databricks: falls back gracefully when token refresh fails", async () => {
+  const testHost = "https://my-workspace.cloud.databricks.com"
+
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(path.join(dir, "opencode.json"), JSON.stringify({ $schema: "https://opencode.ai/config.json" }))
+      // Create .databricks directory and token cache with expired token
+      const databricksDir = path.join(dir, ".databricks")
+      await Bun.write(path.join(databricksDir, ".gitkeep"), "")
+
+      // Create an expired token cache WITH refresh token
+      const pastExpiry = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+      await Bun.write(
+        path.join(databricksDir, "token-cache.json"),
+        JSON.stringify({
+          version: 1,
+          tokens: {
+            [testHost]: {
+              access_token: "expired-token",
+              token_type: "Bearer",
+              refresh_token: "invalid-refresh-token",
+              expiry: pastExpiry,
+              expires_in: 3600,
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  // Clear auth.json
+  const authPath = path.join(Global.Path.data, "auth.json")
+  const authFile = Bun.file(authPath)
+  const existingAuth = (await authFile.exists()) ? await authFile.text() : null
+  await Bun.write(authPath, JSON.stringify({}))
+
+  const originalHome = process.env.HOME
+  process.env.HOME = tmp.path
+
+  // Mock fetch to return an error for token refresh
+  const originalFetch = globalThis.fetch
+  const fetchMock = mock(async (input: RequestInfo | URL, _init?: RequestInit) => {
+    const url = input.toString()
+    if (url === `${testHost}/oidc/v1/token`) {
+      // Return 401 Unauthorized for invalid refresh token
+      return new Response(JSON.stringify({ error: "invalid_grant" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+    return originalFetch(input, _init)
+  })
+  globalThis.fetch = fetchMock as unknown as typeof fetch
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.set("DATABRICKS_HOST", testHost)
+        Env.remove("DATABRICKS_TOKEN")
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        // Provider should NOT load because refresh failed and no other auth available
+        expect(providers["databricks"]).toBeUndefined()
+
+        // Verify the token refresh endpoint was called
+        expect(fetchMock).toHaveBeenCalled()
+      },
+    })
+  } finally {
+    globalThis.fetch = originalFetch
+    if (originalHome) process.env.HOME = originalHome
+    if (existingAuth !== null) {
+      await Bun.write(authPath, existingAuth)
+    }
+  }
+})

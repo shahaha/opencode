@@ -816,7 +816,9 @@ export namespace Provider {
                   string,
                   {
                     access_token: string
+                    refresh_token?: string
                     expiry: string
+                    expires_in?: number
                   }
                 >
               }
@@ -830,7 +832,56 @@ export namespace Provider {
                 if (expiry.getTime() - 5 * 60 * 1000 > now.getTime()) {
                   return tokenEntry.access_token
                 }
-                // Token expired - user needs to run `databricks auth login`
+
+                // Token expired, try to refresh it if we have a refresh_token
+                if (tokenEntry.refresh_token) {
+                  log.debug("Databricks CLI token expired during session, attempting refresh")
+                  const tokenEndpoint = `${normalizedHost}/oidc/v1/token`
+                  try {
+                    const response = await fetch(tokenEndpoint, {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                      },
+                      body: new URLSearchParams({
+                        grant_type: "refresh_token",
+                        refresh_token: tokenEntry.refresh_token,
+                        client_id: "databricks-cli",
+                      }).toString(),
+                    })
+                    if (response.ok) {
+                      const data = (await response.json()) as {
+                        access_token: string
+                        refresh_token?: string
+                        expires_in?: number
+                      }
+                      log.info("Refreshed Databricks CLI token successfully during session")
+
+                      // Update the token cache with new tokens
+                      cache.tokens[normalizedHost] = {
+                        ...tokenEntry,
+                        access_token: data.access_token,
+                        refresh_token: data.refresh_token ?? tokenEntry.refresh_token,
+                        expiry: new Date(Date.now() + (data.expires_in ?? 3600) * 1000).toISOString(),
+                        expires_in: data.expires_in ?? 3600,
+                      }
+                      await Bun.write(tokenCachePath, JSON.stringify(cache, null, 2))
+
+                      return data.access_token
+                    } else {
+                      log.debug("Failed to refresh Databricks CLI token during session", {
+                        status: response.status,
+                        statusText: response.statusText,
+                      })
+                    }
+                  } catch (refreshError) {
+                    log.debug("Failed to refresh Databricks CLI token during session", {
+                      error: refreshError instanceof Error ? refreshError.message : "Unknown error",
+                    })
+                  }
+                }
+
+                // Token expired and refresh failed or no refresh token available
                 log.warn("Databricks CLI token expired. Run `databricks auth login --profile <profile>` to refresh.")
               }
             }
