@@ -508,6 +508,8 @@ export namespace Provider {
     },
     databricks: async (input) => {
       // Azure Databricks resource ID for OAuth/AAD authentication
+      // This is the official Azure AD application ID for Azure Databricks
+      // See: https://learn.microsoft.com/en-us/azure/databricks/dev-tools/auth/oauth-m2m
       const AZURE_DATABRICKS_RESOURCE_ID = "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d"
 
       const config = await Config.get()
@@ -890,20 +892,6 @@ export namespace Provider {
           limit: { context: 400000, output: 128000 },
           options: {},
         },
-        "databricks-gpt-5-1-codex-mini": {
-          id: "databricks-gpt-5-1-codex-mini",
-          name: "GPT-5.1 Codex Mini (Databricks)",
-          family: "gpt-5-codex",
-          attachment: true,
-          reasoning: true,
-          tool_call: true,
-          temperature: true,
-          release_date: "2025-10-10",
-          modalities: { input: ["text", "image"], output: ["text"] },
-          cost: { input: 0.625, output: 5, cache_read: 0.0625 },
-          limit: { context: 400000, output: 128000 },
-          options: {},
-        },
         "databricks-gpt-5": {
           id: "databricks-gpt-5",
           name: "GPT-5 (Databricks)",
@@ -946,13 +934,27 @@ export namespace Provider {
           limit: { context: 400000, output: 128000 },
           options: {},
         },
+        "databricks-gpt-5-1-codex-mini": {
+          id: "databricks-gpt-5-1-codex-mini",
+          name: "GPT-5.1 Codex Mini (Databricks)",
+          family: "gpt-5.1-codex",
+          attachment: true,
+          reasoning: true,
+          tool_call: false, // Only supports Responses API, not Chat Completions API
+          temperature: true,
+          release_date: "2025-09-15",
+          modalities: { input: ["text", "image"], output: ["text"] },
+          cost: { input: 0.15, output: 0.6, cache_read: 0.015 },
+          limit: { context: 400000, output: 128000 },
+          options: {},
+        },
         "databricks-gpt-oss-120b": {
           id: "databricks-gpt-oss-120b",
           name: "GPT OSS 120B (Databricks)",
           family: "gpt-oss",
           attachment: false,
           reasoning: true,
-          tool_call: false, // OSS models have unreliable tool support via OpenAI-compatible API
+          tool_call: false, // OSS models don't support full JSON Schema (e.g., maxLength) for tool parameters
           temperature: true,
           release_date: "2025-11-01",
           modalities: { input: ["text"], output: ["text"] },
@@ -966,7 +968,7 @@ export namespace Provider {
           family: "gpt-oss",
           attachment: false,
           reasoning: true,
-          tool_call: false, // OSS models have unreliable tool support via OpenAI-compatible API
+          tool_call: false, // OSS models don't support full JSON Schema (e.g., maxLength) for tool parameters
           temperature: true,
           release_date: "2025-11-01",
           modalities: { input: ["text"], output: ["text"] },

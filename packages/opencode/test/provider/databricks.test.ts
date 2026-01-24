@@ -73,17 +73,37 @@ test("Databricks: does not load when only DATABRICKS_HOST is set (no auth)", asy
       )
     },
   })
-  await Instance.provide({
-    directory: tmp.path,
-    init: async () => {
-      Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
-      Env.remove("DATABRICKS_TOKEN") // Explicitly clear token
-    },
-    fn: async () => {
-      const providers = await Provider.list()
-      expect(providers["databricks"]).toBeUndefined()
-    },
-  })
+
+  // Backup and clear auth.json to ensure no stored Databricks auth
+  const authPath = path.join(Global.Path.data, "auth.json")
+  const authFile = Bun.file(authPath)
+  const existingAuth = (await authFile.exists()) ? await authFile.text() : null
+  await Bun.write(authPath, JSON.stringify({}))
+
+  // Save and override HOME to prevent finding real ~/.databricks/token-cache.json
+  const originalHome = process.env.HOME
+  process.env.HOME = tmp.path
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
+        Env.remove("DATABRICKS_TOKEN") // Explicitly clear token
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(providers["databricks"]).toBeUndefined()
+      },
+    })
+  } finally {
+    // Restore HOME
+    if (originalHome) process.env.HOME = originalHome
+    // Restore auth.json
+    if (existingAuth !== null) {
+      await Bun.write(authPath, existingAuth)
+    }
+  }
 })
 
 test("Databricks: config host takes precedence over DATABRICKS_HOST env var", async () => {
@@ -520,10 +540,8 @@ test("Databricks: GPT-5 models have correct capabilities", async () => {
       expect(codexMax.family).toBe("gpt-5-codex")
       expect(codexMax.capabilities.reasoning).toBe(true)
 
-      // GPT-5.1 Codex Mini
-      const codexMini = models["databricks-gpt-5-1-codex-mini"]
-      expect(codexMini).toBeDefined()
-      expect(codexMini.family).toBe("gpt-5-codex")
+      // GPT-5.1 Codex Mini - excluded (only supports Responses API, not Chat Completions API)
+      expect(models["databricks-gpt-5-1-codex-mini"]).toBeUndefined()
 
       // GPT-5
       const gpt5 = models["databricks-gpt-5"]
