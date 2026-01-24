@@ -255,7 +255,7 @@ test("Databricks: loads when bearer token from auth.json is present", async () =
 
   // Backup existing auth.json if it exists
   const authFile = Bun.file(authPath)
-  const existingAuth = await authFile.exists() ? await authFile.text() : null
+  const existingAuth = (await authFile.exists()) ? await authFile.text() : null
 
   // Write test auth
   await Bun.write(
@@ -503,10 +503,7 @@ test("Databricks: model capabilities are set correctly", async () => {
 test("Databricks: GPT-5 models have correct capabilities", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
-        path.join(dir, "opencode.json"),
-        JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
-      )
+      await Bun.write(path.join(dir, "opencode.json"), JSON.stringify({ $schema: "https://opencode.ai/config.json" }))
     },
   })
   await Instance.provide({
@@ -571,10 +568,7 @@ test("Databricks: GPT-5 models have correct capabilities", async () => {
 test("Databricks: Gemini models have correct capabilities", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
-        path.join(dir, "opencode.json"),
-        JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
-      )
+      await Bun.write(path.join(dir, "opencode.json"), JSON.stringify({ $schema: "https://opencode.ai/config.json" }))
     },
   })
   await Instance.provide({
@@ -624,10 +618,7 @@ test("Databricks: Gemini models have correct capabilities", async () => {
 test("Databricks: Claude models have correct capabilities", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
-        path.join(dir, "opencode.json"),
-        JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
-      )
+      await Bun.write(path.join(dir, "opencode.json"), JSON.stringify({ $schema: "https://opencode.ai/config.json" }))
     },
   })
   await Instance.provide({
@@ -684,10 +675,7 @@ test("Databricks: Claude models have correct capabilities", async () => {
 test("Databricks: non-tool-calling models are excluded", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
-        path.join(dir, "opencode.json"),
-        JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
-      )
+      await Bun.write(path.join(dir, "opencode.json"), JSON.stringify({ $schema: "https://opencode.ai/config.json" }))
     },
   })
   await Instance.provide({
@@ -715,10 +703,7 @@ test("Databricks: non-tool-calling models are excluded", async () => {
 test("Databricks: all models have required API configuration and tool support", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
-        path.join(dir, "opencode.json"),
-        JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
-      )
+      await Bun.write(path.join(dir, "opencode.json"), JSON.stringify({ $schema: "https://opencode.ai/config.json" }))
     },
   })
   await Instance.provide({
@@ -747,10 +732,7 @@ test("Databricks: all models have required API configuration and tool support", 
 test("Databricks: model costs are set correctly", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
-        path.join(dir, "opencode.json"),
-        JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
-      )
+      await Bun.write(path.join(dir, "opencode.json"), JSON.stringify({ $schema: "https://opencode.ai/config.json" }))
     },
   })
   await Instance.provide({
@@ -782,4 +764,387 @@ test("Databricks: model costs are set correctly", async () => {
       expect(claude.cost.cache.read).toBeGreaterThan(0)
     },
   })
+})
+
+// === Databricks CLI Token Cache Tests ===
+
+test("Databricks: loads provider using valid CLI token cache", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(path.join(dir, "opencode.json"), JSON.stringify({ $schema: "https://opencode.ai/config.json" }))
+      // Create .databricks directory and token cache
+      const databricksDir = path.join(dir, ".databricks")
+      await Bun.write(path.join(databricksDir, ".gitkeep"), "")
+
+      // Create a valid token cache with a token that expires in 1 hour
+      const futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+      await Bun.write(
+        path.join(databricksDir, "token-cache.json"),
+        JSON.stringify({
+          version: 1,
+          tokens: {
+            "https://my-workspace.cloud.databricks.com": {
+              access_token: "cli-cached-token",
+              token_type: "Bearer",
+              refresh_token: "cli-refresh-token",
+              expiry: futureExpiry,
+              expires_in: 3600,
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  // Clear auth.json to ensure we're not using stored auth
+  const authPath = path.join(Global.Path.data, "auth.json")
+  const authFile = Bun.file(authPath)
+  const existingAuth = (await authFile.exists()) ? await authFile.text() : null
+  await Bun.write(authPath, JSON.stringify({}))
+
+  const originalHome = process.env.HOME
+  process.env.HOME = tmp.path
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
+        Env.remove("DATABRICKS_TOKEN") // No env token - should use CLI cache
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(providers["databricks"]).toBeDefined()
+        expect(providers["databricks"].name).toBe("Databricks")
+      },
+    })
+  } finally {
+    if (originalHome) process.env.HOME = originalHome
+    if (existingAuth !== null) {
+      await Bun.write(authPath, existingAuth)
+    }
+  }
+})
+
+test("Databricks: does not load with expired CLI token and no refresh token", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(path.join(dir, "opencode.json"), JSON.stringify({ $schema: "https://opencode.ai/config.json" }))
+      // Create .databricks directory and token cache
+      const databricksDir = path.join(dir, ".databricks")
+      await Bun.write(path.join(databricksDir, ".gitkeep"), "")
+
+      // Create an expired token cache without refresh token
+      const pastExpiry = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+      await Bun.write(
+        path.join(databricksDir, "token-cache.json"),
+        JSON.stringify({
+          version: 1,
+          tokens: {
+            "https://my-workspace.cloud.databricks.com": {
+              access_token: "expired-token",
+              token_type: "Bearer",
+              refresh_token: "", // Empty refresh token
+              expiry: pastExpiry,
+              expires_in: 3600,
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  // Clear auth.json
+  const authPath = path.join(Global.Path.data, "auth.json")
+  const authFile = Bun.file(authPath)
+  const existingAuth = (await authFile.exists()) ? await authFile.text() : null
+  await Bun.write(authPath, JSON.stringify({}))
+
+  const originalHome = process.env.HOME
+  process.env.HOME = tmp.path
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
+        Env.remove("DATABRICKS_TOKEN")
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        // Provider should not load because token is expired and can't be refreshed
+        expect(providers["databricks"]).toBeUndefined()
+      },
+    })
+  } finally {
+    if (originalHome) process.env.HOME = originalHome
+    if (existingAuth !== null) {
+      await Bun.write(authPath, existingAuth)
+    }
+  }
+})
+
+test("Databricks: does not load when CLI token cache has no matching host", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(path.join(dir, "opencode.json"), JSON.stringify({ $schema: "https://opencode.ai/config.json" }))
+      // Create .databricks directory and token cache
+      const databricksDir = path.join(dir, ".databricks")
+      await Bun.write(path.join(databricksDir, ".gitkeep"), "")
+
+      // Create a token cache for a different host
+      const futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+      await Bun.write(
+        path.join(databricksDir, "token-cache.json"),
+        JSON.stringify({
+          version: 1,
+          tokens: {
+            "https://other-workspace.cloud.databricks.com": {
+              access_token: "other-workspace-token",
+              token_type: "Bearer",
+              refresh_token: "other-refresh-token",
+              expiry: futureExpiry,
+              expires_in: 3600,
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  // Clear auth.json
+  const authPath = path.join(Global.Path.data, "auth.json")
+  const authFile = Bun.file(authPath)
+  const existingAuth = (await authFile.exists()) ? await authFile.text() : null
+  await Bun.write(authPath, JSON.stringify({}))
+
+  const originalHome = process.env.HOME
+  process.env.HOME = tmp.path
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
+        Env.remove("DATABRICKS_TOKEN")
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        // Provider should not load because no token for this host
+        expect(providers["databricks"]).toBeUndefined()
+      },
+    })
+  } finally {
+    if (originalHome) process.env.HOME = originalHome
+    if (existingAuth !== null) {
+      await Bun.write(authPath, existingAuth)
+    }
+  }
+})
+
+test("Databricks: CLI token cache handles trailing slash in host normalization", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(path.join(dir, "opencode.json"), JSON.stringify({ $schema: "https://opencode.ai/config.json" }))
+      // Create .databricks directory and token cache
+      const databricksDir = path.join(dir, ".databricks")
+      await Bun.write(path.join(databricksDir, ".gitkeep"), "")
+
+      // Create a token cache WITHOUT trailing slash
+      const futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+      await Bun.write(
+        path.join(databricksDir, "token-cache.json"),
+        JSON.stringify({
+          version: 1,
+          tokens: {
+            "https://my-workspace.cloud.databricks.com": {
+              access_token: "normalized-token",
+              token_type: "Bearer",
+              refresh_token: "refresh-token",
+              expiry: futureExpiry,
+              expires_in: 3600,
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  // Clear auth.json
+  const authPath = path.join(Global.Path.data, "auth.json")
+  const authFile = Bun.file(authPath)
+  const existingAuth = (await authFile.exists()) ? await authFile.text() : null
+  await Bun.write(authPath, JSON.stringify({}))
+
+  const originalHome = process.env.HOME
+  process.env.HOME = tmp.path
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        // Set host WITH trailing slash - should still match
+        Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com/")
+        Env.remove("DATABRICKS_TOKEN")
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        // Provider should load because host normalization removes trailing slash
+        expect(providers["databricks"]).toBeDefined()
+      },
+    })
+  } finally {
+    if (originalHome) process.env.HOME = originalHome
+    if (existingAuth !== null) {
+      await Bun.write(authPath, existingAuth)
+    }
+  }
+})
+
+test("Databricks: respects 5-minute buffer for token expiry", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(path.join(dir, "opencode.json"), JSON.stringify({ $schema: "https://opencode.ai/config.json" }))
+      // Create .databricks directory and token cache
+      const databricksDir = path.join(dir, ".databricks")
+      await Bun.write(path.join(databricksDir, ".gitkeep"), "")
+
+      // Create a token that expires in 3 minutes (less than 5 minute buffer)
+      // This should be treated as expired
+      const nearExpiry = new Date(Date.now() + 3 * 60 * 1000).toISOString()
+      await Bun.write(
+        path.join(databricksDir, "token-cache.json"),
+        JSON.stringify({
+          version: 1,
+          tokens: {
+            "https://my-workspace.cloud.databricks.com": {
+              access_token: "near-expiry-token",
+              token_type: "Bearer",
+              refresh_token: "", // No refresh token
+              expiry: nearExpiry,
+              expires_in: 180,
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  // Clear auth.json
+  const authPath = path.join(Global.Path.data, "auth.json")
+  const authFile = Bun.file(authPath)
+  const existingAuth = (await authFile.exists()) ? await authFile.text() : null
+  await Bun.write(authPath, JSON.stringify({}))
+
+  const originalHome = process.env.HOME
+  process.env.HOME = tmp.path
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
+        Env.remove("DATABRICKS_TOKEN")
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        // Provider should not load because token is within 5-minute buffer and no refresh token
+        expect(providers["databricks"]).toBeUndefined()
+      },
+    })
+  } finally {
+    if (originalHome) process.env.HOME = originalHome
+    if (existingAuth !== null) {
+      await Bun.write(authPath, existingAuth)
+    }
+  }
+})
+
+test("Databricks: handles malformed token cache gracefully", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(path.join(dir, "opencode.json"), JSON.stringify({ $schema: "https://opencode.ai/config.json" }))
+      // Create .databricks directory with malformed token cache
+      const databricksDir = path.join(dir, ".databricks")
+      await Bun.write(path.join(databricksDir, ".gitkeep"), "")
+      await Bun.write(path.join(databricksDir, "token-cache.json"), "{ invalid json }")
+    },
+  })
+
+  // Clear auth.json
+  const authPath = path.join(Global.Path.data, "auth.json")
+  const authFile = Bun.file(authPath)
+  const existingAuth = (await authFile.exists()) ? await authFile.text() : null
+  await Bun.write(authPath, JSON.stringify({}))
+
+  const originalHome = process.env.HOME
+  process.env.HOME = tmp.path
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
+        Env.remove("DATABRICKS_TOKEN")
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        // Provider should not load but also should not throw
+        expect(providers["databricks"]).toBeUndefined()
+      },
+    })
+  } finally {
+    if (originalHome) process.env.HOME = originalHome
+    if (existingAuth !== null) {
+      await Bun.write(authPath, existingAuth)
+    }
+  }
+})
+
+test("Databricks: env token takes precedence over CLI token cache", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(path.join(dir, "opencode.json"), JSON.stringify({ $schema: "https://opencode.ai/config.json" }))
+      // Create .databricks directory and token cache
+      const databricksDir = path.join(dir, ".databricks")
+      await Bun.write(path.join(databricksDir, ".gitkeep"), "")
+
+      const futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+      await Bun.write(
+        path.join(databricksDir, "token-cache.json"),
+        JSON.stringify({
+          version: 1,
+          tokens: {
+            "https://my-workspace.cloud.databricks.com": {
+              access_token: "cli-token-should-not-be-used",
+              token_type: "Bearer",
+              refresh_token: "refresh-token",
+              expiry: futureExpiry,
+              expires_in: 3600,
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  const originalHome = process.env.HOME
+  process.env.HOME = tmp.path
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.set("DATABRICKS_HOST", "https://my-workspace.cloud.databricks.com")
+        Env.set("DATABRICKS_TOKEN", "env-token-takes-precedence")
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(providers["databricks"]).toBeDefined()
+        // Provider should load using env token (PAT takes precedence)
+      },
+    })
+  } finally {
+    if (originalHome) process.env.HOME = originalHome
+  }
 })
