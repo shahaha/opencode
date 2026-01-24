@@ -34,10 +34,11 @@ export interface ListAddProps {
 export interface ListProps<T> extends FilteredListProps<T> {
   class?: string
   children: (item: T) => JSX.Element
-  emptyMessage?: string
+  emptyMessage?: string | JSX.Element
   loadingMessage?: string
   onKeyEvent?: (event: KeyboardEvent, item: T | undefined) => void
   onMove?: (item: T | undefined) => void
+  onSearch?: (query: string) => void
   activeIcon?: IconProps["name"]
   filter?: string
   search?: ListSearchProps | boolean
@@ -98,6 +99,7 @@ export function List<T>(props: ListProps<T> & { ref?: (ref: ListRef) => void }) 
     const current = internalFilter()
     if (prev !== current) {
       onInput(current)
+      props.onSearch?.(current)
     }
     return current
   }, "")
