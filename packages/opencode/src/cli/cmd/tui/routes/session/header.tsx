@@ -128,12 +128,8 @@ export function Header() {
   const { theme } = useTheme()
   const keybind = useKeybind()
   const command = useCommandDialog()
-<<<<<<< HEAD
-  const [hover, setHover] = createSignal<"parent" | "prev" | "next" | null>(null)
   const dimensions = useTerminalDimensions()
   const narrow = createMemo(() => dimensions().width < 80)
-=======
-  const dimensions = useTerminalDimensions()
   const [hover, setHover] = createSignal<"parent" | "root" | "prev" | "next" | "down" | "breadcrumb" | null>(null)
   const [hoverBreadcrumbIdx, setHoverBreadcrumbIdx] = createSignal<number | null>(null)
 
@@ -173,7 +169,6 @@ export function Header() {
     // Fallback: root + last segment
     return { truncated: true, segments: [path[0], path[path.length - 1]] }
   })
->>>>>>> d727ffefb (feat(tui): add hierarchical session navigation for subagent sessions)
 
   return (
     <box flexShrink={0}>
@@ -190,49 +185,6 @@ export function Header() {
       >
         <Switch>
           <Match when={session()?.parentID}>
-<<<<<<< HEAD
-            <box flexDirection="column" gap={1}>
-              <box flexDirection={narrow() ? "column" : "row"} justifyContent="space-between" gap={narrow() ? 1 : 0}>
-                <text fg={theme.text}>
-                  <b>Subagent session</b>
-                </text>
-                <box flexDirection="row" gap={1} flexShrink={0}>
-                  <ContextInfo context={context} cost={cost} />
-                  <text fg={theme.textMuted}>v{Installation.VERSION}</text>
-                </box>
-              </box>
-              <box flexDirection="row" gap={2}>
-                <box
-                  onMouseOver={() => setHover("parent")}
-                  onMouseOut={() => setHover(null)}
-                  onMouseUp={() => command.trigger("session.parent")}
-                  backgroundColor={hover() === "parent" ? theme.backgroundElement : theme.backgroundPanel}
-                >
-                  <text fg={theme.text}>
-                    Parent <span style={{ fg: theme.textMuted }}>{keybind.print("session_parent")}</span>
-                  </text>
-                </box>
-                <box
-                  onMouseOver={() => setHover("prev")}
-                  onMouseOut={() => setHover(null)}
-                  onMouseUp={() => command.trigger("session.child.previous")}
-                  backgroundColor={hover() === "prev" ? theme.backgroundElement : theme.backgroundPanel}
-                >
-                  <text fg={theme.text}>
-                    Prev <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle_reverse")}</span>
-                  </text>
-                </box>
-                <box
-                  onMouseOver={() => setHover("next")}
-                  onMouseOut={() => setHover(null)}
-                  onMouseUp={() => command.trigger("session.child.next")}
-                  backgroundColor={hover() === "next" ? theme.backgroundElement : theme.backgroundPanel}
-                >
-                  <text fg={theme.text}>
-                    Next <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle")}</span>
-                  </text>
-                </box>
-=======
             {/* Subagent session: 3-row layout */}
             <box flexDirection="column" gap={0}>
               {/* Row 1: Breadcrumb trail */}
@@ -346,17 +298,12 @@ export function Header() {
                     </text>
                   </box>
                 </Show>
->>>>>>> d727ffefb (feat(tui): add hierarchical session navigation for subagent sessions)
               </box>
             </box>
           </Match>
           <Match when={true}>
-<<<<<<< HEAD
-            <box flexDirection={narrow() ? "column" : "row"} justifyContent="space-between" gap={1}>
-=======
-            {/* Root session: unchanged */}
-            <box flexDirection="row" justifyContent="space-between" gap={1}>
->>>>>>> d727ffefb (feat(tui): add hierarchical session navigation for subagent sessions)
+            {/* Root session: responsive layout */}
+            <box flexDirection={narrow() ? "column" : "row"} justifyContent="space-between" gap={narrow() ? 1 : 0}>
               <Title session={session} />
               <box flexDirection="row" gap={1} flexShrink={0}>
                 <ContextInfo context={context} cost={cost} />
