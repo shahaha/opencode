@@ -17,6 +17,10 @@ import PROMPT_ANTHROPIC_SPOOF from "./prompt/anthropic_spoof.txt"
 import PROMPT_CODEX from "./prompt/codex_header.txt"
 import type { Provider } from "@/provider/provider"
 import { Flag } from "@/flag/flag"
+import { MCP } from "../mcp"
+import { Log } from "../util/log"
+
+const log = Log.create({ service: "system" })
 
 const log = Log.create({ service: "system-prompt" })
 
@@ -152,6 +156,36 @@ export namespace SystemPrompt {
         .catch(() => "")
         .then((x) => (x ? "Instructions from: " + url + "\n" + x : "")),
     )
-    return Promise.all([...foundFiles, ...foundUrls]).then((result) => result.filter(Boolean))
+
+    // Fetch MCP server instructions
+    const mcpInstructions = await SystemPrompt.mcpInstructions()
+
+    return Promise.all([...foundFiles, ...foundUrls, ...mcpInstructions]).then((result) => result.filter(Boolean))
+  }
+
+  /**
+   * Get MCP server instructions for system prompt integration.
+   * Returns formatted instructions from all connected MCP servers.
+   */
+  export async function mcpInstructions(): Promise<string[]> {
+    try {
+      const [status, serverInstructions] = await Promise.all([MCP.status(), MCP.serverInstructions()])
+      const instructions: string[] = []
+
+      // Only include instructions from connected servers
+      for (const [serverName, serverStatus] of Object.entries(status)) {
+        if (serverStatus.status === "connected" && serverInstructions[serverName]) {
+          const instructionText = serverInstructions[serverName]
+          if (instructionText?.trim()) {
+            instructions.push(`<mcp-server name="${serverName}"><![CDATA[\n${instructionText}\n]]></mcp-server>`)
+          }
+        }
+      }
+
+      return instructions
+    } catch (error) {
+      log.debug("failed to get MCP instructions", { error })
+      return [] // Return empty array on error to avoid breaking the system
+    }
   }
 }
