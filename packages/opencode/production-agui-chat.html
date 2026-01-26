@@ -265,9 +265,80 @@
       // Initialize on page load
       document.addEventListener("DOMContentLoaded", function () {
         console.log("AG-UI Chat initialized")
+        loadMcpServers()
         loadModels()
         initSettings()
       })
+
+      // Load MCP servers function
+      async function loadMcpServers() {
+        console.log("Loading MCP servers from /mcp/status...")
+
+        try {
+          const response = await fetch("/mcp/status", {
+            signal: AbortSignal.timeout(5000),
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            console.log("MCP Status Response:", data)
+
+            if (data && data.servers && Array.isArray(data.servers)) {
+              updateMcpServerList(data.servers)
+              console.log(`Loaded ${data.servers.length} MCP servers`)
+            } else {
+              console.warn("Invalid MCP response format:", data)
+              showDefaultMcpServers()
+            }
+          } else {
+            console.warn("Failed to load MCP servers:", response.status)
+            showDefaultMcpServers()
+          }
+        } catch (error) {
+          console.error("Error loading MCP servers:", error)
+          showDefaultMcpServers()
+        }
+      }
+
+      // Update MCP server list display
+      function updateMcpServerList(servers) {
+        const serverListDiv = document.getElementById("mcp-server-list")
+        if (!serverListDiv) return
+
+        // Clear existing content
+        serverListDiv.innerHTML = ""
+
+        servers.forEach((server) => {
+          const serverItem = document.createElement("div")
+          serverItem.className = "mcp-server-item"
+
+          const statusDot = document.createElement("span")
+          statusDot.className = "status-dot"
+          statusDot.style.background = server.status === "connected" ? "#28a745" : "#6c757d"
+
+          const serverName = document.createElement("span")
+          serverName.textContent = `${server.name} (${server.status})`
+
+          serverItem.appendChild(statusDot)
+          serverItem.appendChild(serverName)
+          serverListDiv.appendChild(serverItem)
+
+          console.log(`MCP Server: ${server.name} - ${server.status}`)
+        })
+      }
+
+      // Show default MCP servers when backend unavailable
+      function showDefaultMcpServers() {
+        const serverListDiv = document.getElementById("mcp-server-list")
+        if (!serverListDiv) return
+
+        serverListDiv.innerHTML = `
+          <div class="mcp-server-item">
+            <span class="status-dot" style="background: #6c757d"></span>
+            Backend Unavailable
+          </div>
+        `
+      }
 
       // Load models function
       async function loadModels() {
