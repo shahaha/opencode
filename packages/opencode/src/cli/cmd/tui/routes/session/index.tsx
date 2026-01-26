@@ -539,7 +539,7 @@ export function Session() {
       },
     },
     {
-      title: "Toggle diff wrapping",
+      title: diffWrapMode() === "word" ? "Hide diff wrapping" : "Show diff wrapping",
       value: "session.toggle.diffwrap",
       category: "Session",
       slash: {
@@ -561,7 +561,7 @@ export function Session() {
       },
     },
     {
-      title: "Toggle session scrollbar",
+      title: showScrollbar() ? "Hide session scrollbar" : "Show session scrollbar",
       value: "session.toggle.scrollbar",
       keybind: "scrollbar_toggle",
       category: "Session",
