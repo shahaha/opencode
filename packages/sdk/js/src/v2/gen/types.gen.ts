@@ -3219,6 +3219,8 @@ export type SessionMessagesData = {
   query?: {
     directory?: string
     limit?: number
+    ts_before?: number
+    breakpoint?: boolean
   }
   url: "/session/{sessionID}/message"
 }
