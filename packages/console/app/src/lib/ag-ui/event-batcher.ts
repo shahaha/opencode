@@ -3,9 +3,9 @@ import type { AGUIEvent } from "./types"
 
 export class EventBatcher {
   private queue: AGUIEvent[] = []
-  private timeoutId: number | null = null
-  private readonly batchSize = 10
-  private readonly batchDelay = 50 // 50ms
+  private timeoutId: ReturnType<typeof setTimeout> | null = null
+  private batchSize: number
+  private batchDelay: number
 
   constructor(
     private onBatch: (events: AGUIEvent[]) => void,
@@ -14,8 +14,8 @@ export class EventBatcher {
       batchDelay?: number
     },
   ) {
-    if (options?.batchSize) this.batchSize = options.batchSize
-    if (options?.batchDelay) this.batchDelay = options.batchDelay
+    this.batchSize = options?.batchSize ?? 10
+    this.batchDelay = options?.batchDelay ?? 50
   }
 
   addEvent(event: AGUIEvent): void {

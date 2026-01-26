@@ -6,7 +6,7 @@ export class MemoryManager {
   private readonly maxSessions = 50
   private readonly maxMessagesPerSession = 100
   private readonly cleanupInterval = 5 * 60 * 1000 // 5 minutes
-  private cleanupTimer: number | null = null
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null
 
   constructor() {
     this.startCleanupTimer()

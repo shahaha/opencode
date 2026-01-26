@@ -1,0 +1,122 @@
+/* Model Management Styles */
+.model-section {
+  margin-bottom: 20px;
+}
+
+.model-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.model-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.reload-btn {
+  padding: 6px 12px;
+  border: 1px solid #ced4da;
+  background: #f8f9fa;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reload-btn:hover {
+  background: #e9ecef;
+}
+
+.reload-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.model-select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 30px;
+}
+
+.model-select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.model-status {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  margin-top: 12px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.status-dot.online {
+  background: #28a745;
+}
+
+.status-dot.offline {
+  background: #dc3545;
+}
+
+.status-text {
+  font-size: 14px;
+  color: #495057;
+}
+
+.model-loading {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  background: #e7f3ff;
+  border-radius: 6px;
+  margin-top: 12px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e9ecef;
+  border-top: 2px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.model-error {
+  padding: 12px;
+  background: #f8d7da;
+  color: #721c24;
+  border-radius: 6px;
+  margin-top: 12px;
+  border: 1px solid #f5c6cb;
+}

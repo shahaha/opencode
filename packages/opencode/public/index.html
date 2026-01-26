@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AG-UI Chat - Refactored Version</title>
+    <link rel="stylesheet" href="/css/chat.css" />
+    <link rel="stylesheet" href="/css/settings.css" />
+    <link rel="stylesheet" href="/css/models.css" />
+  </head>
+  <body>
+    <!-- Header Bar -->
+    <header class="header">
+      <div class="header-left">
+        <h1 class="logo">AG-UI</h1>
+        <span class="tagline">AI Coding Assistant</span>
+      </div>
+      <div class="header-right">
+        <button id="settingsBtn" class="header-btn">
+          <span class="icon">⚙️</span>
+          <span class="text">設定</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Chat Interface -->
+    <div class="container">
+      <div class="chat-container">
+        <!-- Sidebar -->
+        <aside class="chat-sidebar">
+          <div class="sidebar-header">
+            <h2>AG-UI Chat</h2>
+            <p>AI 程式助手</p>
+          </div>
+
+          <div class="mcp-status">
+            <h3>MCP 狀態</h3>
+            <div class="status-container">
+              <div id="mcp-server-list">
+                <div class="status-item">
+                  <span class="status-dot online"></span>
+                  <span class="status-text">連接中</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="model-status">
+            <h3>模型狀態</h3>
+            <div id="model-status-info">
+              <span class="status-dot loading"></span>
+              <span class="status-text">載入中...</span>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-main">
+          <div class="chat-messages" id="chatMessages">
+            <!-- Welcome Message -->
+            <div class="message assistant">
+              <div class="message-content">
+                <h3>👋🤖</h3>
+                <p>歡迎使用 AG-UI！這是一個功能完整的 AI 聊天介面，支援遠端 Ollama 模型載入。</p>
+                <p>請從右上角的設定按鈕開始配置您的服務器。</p>
+              </div>
+              <div class="message-time">系統時間: <span id="system-time"></span></div>
+            </div>
+          </div>
+
+          <div class="chat-input-container">
+            <div class="input-wrapper">
+              <textarea id="messageInput" class="message-input" placeholder="輸入您的訊息..." rows="1"></textarea>
+              <div class="input-actions">
+                <button id="sendButton" class="send-button">
+                  <span>發送</span>
+                </button>
+                <button id="clearButton" class="secondary-button">
+                  <span>清除</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div class="settings-panel" id="settingsPanel">
+      <div class="settings-header">
+        <div class="settings-title">
+          <h2>⚙️ 設定</h2>
+          <button class="settings-close" id="settingsCloseBtn">×</button>
+        </div>
+      </div>
+
+      <div class="settings-content">
+        <!-- Model Selection -->
+        <div class="settings-section">
+          <h3 class="section-title">🤖 模型選擇</h3>
+          <div class="setting-row">
+            <label class="setting-label">AI 模型</label>
+            <select id="modelSelect" class="model-select">
+              <option value="opencode/glm-4.7-free">OpenCode GLM-4.7-Free</option>
+              <option value="opencode/big-pickle">OpenCode Big Pickle</option>
+              <option value="opencode/gpt-5-nano">OpenCode GPT-5-Nano</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Server Configuration -->
+        <div class="settings-section">
+          <h3 class="section-title">🌐 服務器配置</h3>
+
+          <div class="setting-row">
+            <label class="setting-label">OpenCode 服務器</label>
+            <input
+              type="url"
+              id="opencodeServerUrl"
+              class="setting-input"
+              value="http://localhost:3001"
+              placeholder="http://localhost:3001"
+            />
+            <div class="setting-description">OpenCode 後端服務器地址</div>
+          </div>
+
+          <div class="setting-row">
+            <label class="setting-label">Ollama 服務器</label>
+            <input
+              type="url"
+              id="ollamaServerUrl"
+              class="setting-input"
+              value="http://100.94.136.15:11434"
+              placeholder="Ollama 服務器 URL"
+            />
+            <div class="setting-description">遠端 Ollama 服務器地址</div>
+          </div>
+
+          <div class="setting-row">
+            <label class="setting-label">MCP 服務器</label>
+            <input
+              type="url"
+              id="mcpServerUrl"
+              class="setting-input"
+              value="ws://localhost:5000/ag-ui/ws"
+              placeholder="MCP WebSocket 服務器"
+            />
+            <div class="setting-description">MCP WebSocket 服務器地址</div>
+          </div>
+        </div>
+
+        <!-- Model Management -->
+        <div class="settings-section">
+          <h3 class="section-title">🔄 模型管理</h3>
+          <div class="setting-row">
+            <button id="reloadModelsBtn" class="btn">
+              <span>🔄 重新載入模型</span>
+            </button>
+          </div>
+          <div class="model-status-details" id="modelStatusDetails">
+            <p>模型載入狀態將顯示在這裡</p>
+          </div>
+        </div>
+
+        <!-- Diagnostics -->
+        <div class="settings-section">
+          <h3 class="section-title">🔍 診斷工具</h3>
+          <div class="setting-row">
+            <label class="setting-label">診斷狀態</label>
+            <div class="status-indicator">
+              <span class="status-dot online"></span>
+              <span class="status-text">運行中</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <button id="runDiagnosticsBtn" class="btn">
+              <span>🔍 運行完整診斷</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Application Info -->
+        <div class="settings-section">
+          <h3 class="section-title">ℹ️ 關於</h3>
+          <div class="app-info">
+            <p><strong>版本:</strong> v2.0.0</p>
+            <p><strong>後端:</strong> Node.js + Express</p>
+            <p><strong>前端:</strong> HTML5 + CSS3</p>
+            <p><strong>特性:</strong> 遠端模型載入、智慧診斷、MCP 整合</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none">
+      <div class="loading-content">
+        <div class="spinner"></div>
+        <p>載入中...</p>
+      </div>
+    </div>
+
+    <!-- Browser Diagnostics -->
+    <script src="/browser-diagnostics-injector.js"></script>
+
+    <!-- Main Application JavaScript -->
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>

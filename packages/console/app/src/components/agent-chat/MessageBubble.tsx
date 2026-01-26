@@ -1,5 +1,5 @@
 // packages/console/src/components/agent-chat/MessageBubble.tsx
-import { Show } from "solid-js"
+import { Show, For } from "solid-js"
 import type { AgentMessage } from "../../lib/ag-ui/types"
 
 interface MessageBubbleProps {
@@ -33,7 +33,7 @@ export function MessageBubble(props: MessageBubbleProps) {
         >
           <div style={{ "font-weight": "bold", "margin-bottom": "0.25rem" }}>Tool Usage:</div>
           <For each={props.message.toolCalls}>
-            {(toolCall) => (
+            {(toolCall: any) => (
               <div
                 style={{
                   display: "flex",

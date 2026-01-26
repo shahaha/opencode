@@ -12,10 +12,11 @@
     "allowJs": true,
     "strict": true,
     "noEmit": true,
-    "types": ["vite/client", "@webgpu/types"],
+    "types": ["vite/client", "@webgpu/types", "vitest/globals"],
     "isolatedModules": true,
     "paths": {
       "~/*": ["./src/*"]
     }
-  }
+  },
+  "exclude": ["**/*.test.ts", "**/*.test.tsx", "vitest.config.ts", "src/test/**"]
 }

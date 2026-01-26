@@ -7,13 +7,25 @@ import { fileURLToPath } from "url"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const PORT = 9100
-const HOST = "100.94.136.15"
-const HTML_FILE = path.join(__dirname, "production-agui-chat.html")
+const PORT = 8080
+const HOST = "0.0.0.0"
+const PUBLIC_DIR = path.join(__dirname, "public")
 
-if (!fs.existsSync(HTML_FILE)) {
-  console.error("Error: production-agui-chat.html not found")
+if (!fs.existsSync(PUBLIC_DIR)) {
+  console.error("Error: public directory not found")
   process.exit(1)
+}
+
+const mimeTypes = {
+  ".html": "text/html",
+  ".js": "text/javascript",
+  ".css": "text/css",
+  ".json": "application/json",
+  ".png": "image/png",
+  ".jpg": "image/jpg",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
 }
 
 const server = http.createServer((req, res) => {
@@ -29,43 +41,67 @@ const server = http.createServer((req, res) => {
     return
   }
 
+  if (req.url === "/diagnostics/report" && req.method === "POST") {
+    let body = ""
+    req.on("data", (chunk) => {
+      body += chunk.toString()
+    })
+    req.on("end", () => {
+      try {
+        const diagnostics = JSON.parse(body)
+        console.log("🔍 Received diagnostics:", {
+          errors: diagnostics.errors?.length || 0,
+          warnings: diagnostics.warnings?.length || 0,
+          networkFailures: diagnostics.networkFailures?.length || 0,
+        })
+        res.writeHead(200, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ success: true }))
+      } catch (error) {
+        console.error("Error parsing diagnostics:", error)
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "Invalid JSON" }))
+      }
+    })
+    return
+  }
+
   try {
-    let fileToServe = HTML_FILE
-    if (req.url === "/" || req.url === "/production-agui-chat.html") {
-      fileToServe = HTML_FILE
-    } else if (req.url.startsWith("/production-agui-chat.html")) {
-    } else {
-      res.writeHead(404, { "Content-Type": "text/plain" })
-      res.end("Not Found")
+    let filePath = path.join(PUBLIC_DIR, req.url === "/" ? "index.html" : req.url)
+
+    if (!fs.existsSync(filePath)) {
+      res.writeHead(404, { "Content-Type": "text/html" })
+      res.end("<h1>404 Not Found</h1><p>The requested file was not found.</p>")
       return
     }
 
-    const content = fs.readFileSync(fileToServe, "utf8")
+    const extname = String(path.extname(filePath)).toLowerCase()
+    const contentType = mimeTypes[extname] || "application/octet-stream"
+
+    const fileContent = fs.readFileSync(filePath, "utf8")
     res.writeHead(200, {
-      "Content-Type": "text/html; charset=utf-8",
+      "Content-Type": contentType,
       "Cache-Control": "no-cache",
     })
-    res.end(content)
+    res.end(fileContent)
   } catch (error) {
-    console.error("Error reading file:", error)
-    res.writeHead(500, { "Content-Type": "text/plain" })
-    res.end("Internal Server Error")
+    console.error("Error serving file:", error)
+    res.writeHead(500, { "Content-Type": "text/html" })
+    res.end("<h1>500 Server Error</h1><p>Sorry, there was an error processing your request.</p>")
   }
 })
 
-server.listen(PORT, HOST, () => {
-  console.log("🚀 Production AG-UI Chat server running at:")
-  console.log(`   Local: http://localhost:${PORT}/`)
-  console.log(`   External: http://${HOST}:${PORT}/`)
-  console.log(`   External File: http://${HOST}:${PORT}/production-agui-chat.html`)
+server.listen(PORT, () => {
+  console.log("🚀 AG-UI Production Server (Refactored Version) running at:")
+  console.log(`   Local:   http://localhost:${PORT}/`)
+  console.log(`   External: http://100.94.136.15:${PORT}/`)
   console.log("")
-  console.log("🎯 修復已應用！現在可以訪問:")
-  console.log("   http://100.94.136.15:9100/production-agui-chat.html")
+  console.log("📁 Serving from:", PUBLIC_DIR)
+  console.log("🎯 Modular AG-UI application is now live!")
   console.log("")
-  console.log("✅ 修復特性:")
-  console.log("   - CORS 錯誤已修復")
-  console.log("   - 重複渲染問題已解決")
-  console.log("   - WebSocket 支持已添加")
-  console.log("")
-  console.log("🛠️ 服務器日誌:")
+  console.log("✅ Features:")
+  console.log("   - Modular JavaScript architecture")
+  console.log("   - ES6 modules with proper imports/exports")
+  console.log("   - Separation of concerns (models, settings, diagnostics)")
+  console.log("   - Browser diagnostics collection")
+  console.log("   - Improved network binding (all interfaces)")
 })

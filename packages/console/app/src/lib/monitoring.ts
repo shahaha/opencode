@@ -153,7 +153,7 @@ class MonitoringService {
     }
   }
 
-  private getStats() {
+  getStats() {
     const now = Date.now()
     const lastHour = now - 60 * 60 * 1000
 
@@ -216,7 +216,8 @@ if (typeof PerformanceObserver !== "undefined") {
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
         if (entry.entryType === "navigation") {
-          monitoring.recordMetric("page_load_time", entry.loadEventEnd - entry.loadEventStart)
+          const nav = entry as PerformanceNavigationTiming
+          monitoring.recordMetric("page_load_time", nav.loadEventEnd - nav.loadEventStart)
         }
       }
     }).observe({ entryTypes: ["navigation"] })
@@ -225,7 +226,8 @@ if (typeof PerformanceObserver !== "undefined") {
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
         if (entry.entryType === "resource" && entry.name.includes("/ag-ui/")) {
-          monitoring.recordMetric("agui_resource_load", entry.responseEnd - entry.requestStart, {
+          const res = entry as PerformanceResourceTiming
+          monitoring.recordMetric("agui_resource_load", res.responseEnd - res.requestStart, {
             resource: entry.name.split("/").pop() || "unknown",
           })
         }

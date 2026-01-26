@@ -1,5 +1,5 @@
 // packages/console/src/components/agent-chat/MessageInput.tsx
-import { createSignal, createEffect } from "solid-js"
+import { createSignal, createEffect, Show } from "solid-js"
 
 interface MessageInputProps {
   onSend: (message: string) => void
