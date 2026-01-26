@@ -7,6 +7,7 @@ import { Instance } from "../project/instance"
 import { Truncate } from "../tool/truncation"
 import { Auth } from "../auth"
 import { ProviderTransform } from "../provider/transform"
+import { TelemetryProvider, TelemetryConfig } from "@/telemetry"
 
 import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
@@ -286,12 +287,17 @@ export namespace Agent {
     await Plugin.trigger("experimental.chat.system.transform", { model }, { system })
     const existing = await list()
 
+    const telemetryCfg = TelemetryConfig.normalize(cfg.experimental?.openTelemetry)
     const params = {
       experimental_telemetry: {
-        isEnabled: cfg.experimental?.openTelemetry,
+        isEnabled: telemetryCfg.enabled,
+        recordInputs: telemetryCfg.recordInputs,
+        recordOutputs: telemetryCfg.recordOutputs,
+        functionId: `agent.generate.${defaultModel.providerID}.${defaultModel.modelID}`,
         metadata: {
           userId: cfg.username ?? "unknown",
         },
+        tracer: TelemetryProvider.getTracer(),
       },
       temperature: 0.3,
       messages: [
