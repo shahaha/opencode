@@ -13,6 +13,7 @@ import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
+import PROMPT_DEBUG from "./prompt/debug.txt"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
@@ -101,6 +102,22 @@ export namespace Agent {
               [path.join(".opencode", "plans", "*.md")]: "allow",
               [path.relative(Instance.worktree, path.join(Global.Path.data, path.join("plans", "*.md")))]: "allow",
             },
+          }),
+          user,
+        ),
+        mode: "primary",
+        native: true,
+      },
+      debug: {
+        name: "debug",
+        description:
+          "Evidence-based debugging mode. Use this to generate hypotheses, add runtime instrumentation, analyze logs, and only then implement fixes.",
+        prompt: PROMPT_DEBUG,
+        options: {},
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            question: "allow",
           }),
           user,
         ),

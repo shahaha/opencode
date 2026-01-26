@@ -39,6 +39,8 @@ import { errors } from "./error"
 import { QuestionRoutes } from "./routes/question"
 import { PermissionRoutes } from "./routes/permission"
 import { GlobalRoutes } from "./routes/global"
+import { ReproductionStepsRoutes } from "./routes/reproduction-steps"
+import { DebugRoutes } from "./routes/debug"
 import { MDNS } from "./mdns"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
@@ -84,7 +86,7 @@ export namespace Server {
           return basicAuth({ username, password })(c, next)
         })
         .use(async (c, next) => {
-          const skipLogging = c.req.path === "/log"
+          const skipLogging = c.req.path === "/log" || c.req.path.startsWith("/ingest")
           if (!skipLogging) {
             log.info("request", {
               method: c.req.method,
@@ -137,6 +139,7 @@ export namespace Server {
             },
           })
         })
+        .route("/", DebugRoutes())
         .get(
           "/doc",
           openAPIRouteHandler(app, {
@@ -158,6 +161,7 @@ export namespace Server {
         .route("/session", SessionRoutes())
         .route("/permission", PermissionRoutes())
         .route("/question", QuestionRoutes())
+        .route("/reproduction-steps", ReproductionStepsRoutes())
         .route("/provider", ProviderRoutes())
         .route("/", FileRoutes())
         .route("/mcp", McpRoutes())
