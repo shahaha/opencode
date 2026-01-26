@@ -945,6 +945,11 @@ export type NotFoundError = {
   }
 }
 
+export type Instructions = {
+  files: Array<string>
+  urls: Array<string>
+}
+
 /**
  * Custom keybind configurations
  */
@@ -2296,6 +2301,24 @@ export type ProjectUpdateResponses = {
 }
 
 export type ProjectUpdateResponse = ProjectUpdateResponses[keyof ProjectUpdateResponses]
+
+export type InstructionsListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/instructions"
+}
+
+export type InstructionsListResponses = {
+  /**
+   * List of instruction sources
+   */
+  200: Instructions
+}
+
+export type InstructionsListResponse = InstructionsListResponses[keyof InstructionsListResponses]
 
 export type PtyListData = {
   body?: never

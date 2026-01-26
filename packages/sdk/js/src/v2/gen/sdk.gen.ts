@@ -38,6 +38,7 @@ import type {
   GlobalEventResponses,
   GlobalHealthResponses,
   InstanceDisposeResponses,
+  InstructionsListResponses,
   LspStatusResponses,
   McpAddErrors,
   McpAddResponses,
@@ -339,6 +340,27 @@ export class Project extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+}
+
+export class Instructions extends HeyApiClient {
+  /**
+   * List instructions
+   *
+   * Get a list of all instruction files loaded for the current session.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<InstructionsListResponses, unknown, ThrowOnError>({
+      url: "/instructions",
+      ...options,
+      ...params,
     })
   }
 }
@@ -3161,6 +3183,11 @@ export class OpencodeClient extends HeyApiClient {
   private _project?: Project
   get project(): Project {
     return (this._project ??= new Project({ client: this.client }))
+  }
+
+  private _instructions?: Instructions
+  get instructions(): Instructions {
+    return (this._instructions ??= new Instructions({ client: this.client }))
   }
 
   private _pty?: Pty
