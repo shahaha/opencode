@@ -278,6 +278,93 @@ app.get("/mcp/status", async (req, res) => {
 - Verify error handling completeness
 - Review data persistence logic
 
+### 🎯 MCP Status Loading Implementation
+
+#### Problem: Frontend "Loading MCP servers..." but never updates
+
+**Root Cause:**
+
+- HTML element ID mismatch: JavaScript uses `getElementById("mcp-server-list")` but HTML has `id="mcp-server-list"`
+- Missing MCP status loading function implementation
+
+**Solution Pattern:**
+
+```javascript
+// Load MCP servers on page load
+async function loadMcpServers() {
+  try {
+    const response = await fetch("/mcp/status", {
+      signal: AbortSignal.timeout(5000),
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      updateMcpServerList(data.servers || [])
+    } else {
+      showDefaultMcpServers()
+    }
+  } catch (error) {
+    showDefaultMcpServers()
+  }
+}
+
+// Update UI with server list
+function updateMcpServerList(servers) {
+  const serverListDiv = document.getElementById("mcp-server-list")
+  serverListDiv.innerHTML = ""
+
+  servers.forEach((server) => {
+    const serverItem = document.createElement("div")
+    serverItem.className = "mcp-server-item"
+
+    const statusDot = document.createElement("span")
+    statusDot.className = "status-dot"
+    statusDot.style.background = server.status === "connected" ? "#28a745" : "#6c757d"
+
+    const serverName = document.createElement("span")
+    serverName.textContent = `${server.name} (${server.status})`
+
+    serverItem.appendChild(statusDot)
+    serverItem.appendChild(serverName)
+    serverListDiv.appendChild(serverItem)
+  })
+}
+```
+
+### 🔄 Event-Based Repair Verification System
+
+#### Architecture: Real-time Repair Triggering
+
+**System Components:**
+
+1. **FileWatcher Integration** - Monitors file changes for frontend files
+2. **Bus Event System** - Publishes repair completion events
+3. **Browser Diagnostics Collection** - Automatic error monitoring via injector
+4. **Service Health Monitoring** - 30-second health checks with auto-restart
+5. **Production Server Proxy** - Handles `/mcp/status` and `/diagnostics/report` endpoints
+
+**Event Flow:**
+
+```
+File Change → FileWatcher.Event.Updated → AutoRepairVerification → Browser Diagnostics Check → Bus.Publish(RepairVerification.Event.Completed)
+```
+
+**Key Implementation Details:**
+
+- **Auto-verification.ts**: Core event-based repair system
+- **Server Health**: 30-second intervals for AG-UI server (port 9100), 60-second for OpenCode API (port 3001)
+- **Error Classification**: Frontend display errors vs network failures vs backend unavailability
+- **Auto-restart**: Service recovery with rate limiting (30-second cooldown)
+- **Browser Integration**: 5-second diagnostic data transmission intervals
+
+**Benefits Over Git Hooks:**
+
+- ✅ Real-time verification (no wait for commits)
+- ✅ Event-driven architecture (reactive to changes)
+- ✅ UI integration (Bus event notifications)
+- ✅ Service recovery (automatic restart)
+- ✅ Cross-platform compatibility (works on all file systems)
+
 ### 🎯 Key Lessons from AG-UI Chat Repair
 
 1. **Network Issues First** - ERR_CONNECTION_REFUSED usually means server/port problems
