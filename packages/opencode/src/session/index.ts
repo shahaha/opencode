@@ -340,7 +340,7 @@ export namespace Session {
       for (const child of await children(sessionID)) {
         await remove(child.id)
       }
-      await unshare(sessionID).catch(() => {})
+      await unshare(sessionID).catch(() => { })
       for (const msg of await Storage.list(["message", sessionID])) {
         for (const part of await Storage.list(["part", msg.at(-1)!])) {
           await Storage.remove(part)
@@ -426,7 +426,9 @@ export namespace Session {
       metadata: z.custom<ProviderMetadata>().optional(),
     }),
     (input) => {
-      const cachedInputTokens = input.usage.cachedInputTokens ?? 0
+      // Google returns cached token counts in usageMetadata.cachedContentTokenCount rather than the standard location
+      const cachedInputTokens =
+        input.usage.cachedInputTokens ?? (input.metadata?.["google"] as any)?.usageMetadata?.cachedContentTokenCount ?? 0
       const excludesCachedTokens = !!(input.metadata?.["anthropic"] || input.metadata?.["bedrock"])
       const adjustedInputTokens = excludesCachedTokens
         ? (input.usage.inputTokens ?? 0)
@@ -455,6 +457,7 @@ export namespace Session {
         input.model.cost?.experimentalOver200K && tokens.input + tokens.cache.read > 200_000
           ? input.model.cost.experimentalOver200K
           : input.model.cost
+
       return {
         cost: safe(
           new Decimal(0)
