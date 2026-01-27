@@ -1,4 +1,5 @@
 import type { Ghostty, Terminal as Term, FitAddon } from "ghostty-web"
+import ghosttyWasmUrl from "ghostty-web/ghostty-vt.wasm?url"
 import { ComponentProps, createEffect, createSignal, onCleanup, onMount, splitProps } from "solid-js"
 import { useSDK } from "@/context/sdk"
 import { monoFontFamily, useSettings } from "@/context/settings"
@@ -109,7 +110,7 @@ export const Terminal = (props: TerminalProps) => {
 
   onMount(async () => {
     const mod = await import("ghostty-web")
-    ghostty = await mod.Ghostty.load()
+    ghostty = await mod.Ghostty.load(ghosttyWasmUrl)
 
     const once = { value: false }
 
