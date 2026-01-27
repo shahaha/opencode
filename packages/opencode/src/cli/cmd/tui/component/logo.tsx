@@ -1,6 +1,7 @@
 import { TextAttributes, RGBA } from "@opentui/core"
-import { For, type JSX } from "solid-js"
+import { For, Show, type JSX } from "solid-js"
 import { useTheme, tint } from "@tui/context/theme"
+import { useAccessibility } from "@tui/util/accessibility"
 
 // Shadow markers (rendered chars in parens):
 // _ = full shadow cell (space with bg=shadow)
@@ -14,6 +15,7 @@ const LOGO_RIGHT = [`             ▄     `, `█▀▀▀ █▀▀█ █▀�
 
 export function Logo() {
   const { theme } = useTheme()
+  const accessibility = useAccessibility()
 
   const renderLine = (line: string, fg: RGBA, bold: boolean): JSX.Element[] => {
     const shadow = tint(theme.background, fg, 0.25)
@@ -75,14 +77,23 @@ export function Logo() {
 
   return (
     <box>
-      <For each={LOGO_LEFT}>
-        {(line, index) => (
-          <box flexDirection="row" gap={1}>
-            <box flexDirection="row">{renderLine(line, theme.textMuted, false)}</box>
-            <box flexDirection="row">{renderLine(LOGO_RIGHT[index()], theme.text, true)}</box>
-          </box>
-        )}
-      </For>
+      <Show
+        when={!accessibility()}
+        fallback={
+          <text fg={theme.text} attributes={TextAttributes.BOLD} selectable={false}>
+            OpenCode
+          </text>
+        }
+      >
+        <For each={LOGO_LEFT}>
+          {(line, index) => (
+            <box flexDirection="row" gap={1}>
+              <box flexDirection="row">{renderLine(line, theme.textMuted, false)}</box>
+              <box flexDirection="row">{renderLine(LOGO_RIGHT[index()], theme.text, true)}</box>
+            </box>
+          )}
+        </For>
+      </Show>
     </box>
   )
 }

@@ -6,7 +6,7 @@ import { useKeybind } from "../../context/keybind"
 import { useTheme, selectedForeground } from "../../context/theme"
 import type { PermissionRequest } from "@opencode-ai/sdk/v2"
 import { useSDK } from "../../context/sdk"
-import { SplitBorder } from "../../component/border"
+import { getSplitBorderChars } from "../../component/border"
 import { useSync } from "../../context/sync"
 import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import path from "path"
@@ -15,6 +15,9 @@ import { Keybind } from "@/util/keybind"
 import { Locale } from "@/util/locale"
 import { Global } from "@/global"
 import { useDialog } from "../../ui/dialog"
+import { useAccessibility } from "@tui/util/accessibility"
+import { useDialog } from "../../ui/dialog"
+import { useAccessibility } from "@tui/util/accessibility"
 
 type PermissionStage = "permission" | "always" | "reject"
 
@@ -49,6 +52,7 @@ function EditBody(props: { request: PermissionRequest }) {
   const theme = themeState.theme
   const syntax = themeState.syntax
   const sync = useSync()
+  const accessibility = useAccessibility()
   const dimensions = useTerminalDimensions()
 
   const filepath = createMemo(() => (props.request.metadata?.filepath as string) ?? "")
@@ -65,7 +69,9 @@ function EditBody(props: { request: PermissionRequest }) {
   return (
     <box flexDirection="column" gap={1}>
       <box flexDirection="row" gap={1} paddingLeft={1}>
-        <text fg={theme.textMuted}>{"→"}</text>
+        <Show when={!accessibility()}>
+          <text fg={theme.textMuted}>{"→"}</text>
+        </Show>
         <text fg={theme.textMuted}>Edit {normalizePath(filepath())}</text>
       </box>
       <Show when={diff()}>
@@ -97,10 +103,11 @@ function EditBody(props: { request: PermissionRequest }) {
 
 function TextBody(props: { title: string; description?: string; icon?: string }) {
   const { theme } = useTheme()
+  const accessibility = useAccessibility()
   return (
     <>
       <box flexDirection="row" gap={1} paddingLeft={1}>
-        <Show when={props.icon}>
+        <Show when={props.icon && !accessibility()}>
           <text fg={theme.textMuted} flexShrink={0}>
             {props.icon}
           </text>
@@ -119,6 +126,7 @@ function TextBody(props: { title: string; description?: string; icon?: string })
 export function PermissionPrompt(props: { request: PermissionRequest }) {
   const sdk = useSDK()
   const sync = useSync()
+  const accessibility = useAccessibility()
   const [store, setStore] = createStore({
     stage: "permission" as PermissionStage,
   })
@@ -225,7 +233,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                     <TextBody
                       icon="#"
                       title={`${Locale.titlecase((input().subagent_type as string) ?? "Unknown")} Task`}
-                      description={"◉ " + input().description}
+                      description={(accessibility() ? "" : "◉ ") + input().description}
                     />
                   </Match>
                   <Match when={props.request.permission === "webfetch"}>
@@ -306,6 +314,13 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
   const dimensions = useTerminalDimensions()
   const narrow = createMemo(() => dimensions().width < 80)
   const dialog = useDialog()
+  const accessibility = useAccessibility()
+  const warningIcon = () => (accessibility() ? "!" : "△")
+  const dimensions = useTerminalDimensions()
+  const narrow = createMemo(() => dimensions().width < 80)
+  const dialog = useDialog()
+  const accessibility = useAccessibility()
+  const warningIcon = () => (accessibility() ? "!" : "△")
 
   useKeyboard((evt) => {
     if (dialog.stack.length > 0) return
@@ -326,11 +341,11 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
       backgroundColor={theme.backgroundPanel}
       border={["left"]}
       borderColor={theme.error}
-      customBorderChars={SplitBorder.customBorderChars}
+      customBorderChars={getSplitBorderChars(accessibility())}
     >
       <box gap={1} paddingLeft={1} paddingRight={3} paddingTop={1} paddingBottom={1}>
         <box flexDirection="row" gap={1} paddingLeft={1}>
-          <text fg={theme.error}>{"△"}</text>
+          <text fg={theme.error}>{warningIcon()}</text>
           <text fg={theme.text}>Reject permission</text>
         </box>
         <box paddingLeft={1}>
@@ -381,6 +396,7 @@ function Prompt<const T extends Record<string, string>>(props: {
   const { theme } = useTheme()
   const keybind = useKeybind()
   const dimensions = useTerminalDimensions()
+  const accessibility = useAccessibility()
   const keys = Object.keys(props.options) as (keyof T)[]
   const [store, setStore] = createStore({
     selected: keys[0],
@@ -432,7 +448,7 @@ function Prompt<const T extends Record<string, string>>(props: {
       backgroundColor={theme.backgroundPanel}
       border={["left"]}
       borderColor={theme.warning}
-      customBorderChars={SplitBorder.customBorderChars}
+      customBorderChars={getSplitBorderChars(accessibility())}
       {...(store.expanded
         ? { top: dimensions().height * -1 + 1, bottom: 1, left: 2, right: 2, position: "absolute" }
         : {
@@ -446,7 +462,7 @@ function Prompt<const T extends Record<string, string>>(props: {
     >
       <box gap={1} paddingLeft={1} paddingRight={3} paddingTop={1} paddingBottom={1} flexGrow={1}>
         <box flexDirection="row" gap={1} paddingLeft={1} flexShrink={0}>
-          <text fg={theme.warning}>{"△"}</text>
+          <text fg={theme.warning}>{accessibility() ? "!" : "△"}</text>
           <text fg={theme.text}>{props.title}</text>
         </box>
         {props.body}
@@ -490,7 +506,7 @@ function Prompt<const T extends Record<string, string>>(props: {
             </text>
           </Show>
           <text fg={theme.text}>
-            {"⇆"} <span style={{ fg: theme.textMuted }}>select</span>
+            {accessibility() ? "left/right" : "⇆"} <span style={{ fg: theme.textMuted }}>select</span>
           </text>
           <text fg={theme.text}>
             enter <span style={{ fg: theme.textMuted }}>confirm</span>
