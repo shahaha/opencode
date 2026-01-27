@@ -12,6 +12,7 @@ import {
   useContext,
 } from "solid-js"
 import { Dynamic } from "solid-js/web"
+import open from "open"
 import path from "path"
 import { useRoute, useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
@@ -76,6 +77,14 @@ import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatTranscript } from "../../util/transcript"
 
 addDefaultParsers(parsers.parsers)
+
+/**
+ * Handle alt+click or ctrl+click on links in markdown content
+ * Opens URLs in the default browser
+ */
+function handleLinkClick(url: string) {
+  open(url).catch(() => {})
+}
 
 class CustomSpeedScroll implements ScrollAcceleration {
   constructor(private speed: number) {}
@@ -1326,6 +1335,7 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
           content={"_Thinking:_ " + content()}
           conceal={ctx.conceal()}
           fg={theme.textMuted}
+          onLinkClick={handleLinkClick}
         />
       </box>
     </Show>
@@ -1346,6 +1356,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
           content={props.part.text.trim()}
           conceal={ctx.conceal()}
           fg={theme.text}
+          onLinkClick={handleLinkClick}
         />
       </box>
     </Show>
@@ -1661,6 +1672,7 @@ function Write(props: ToolProps<typeof WriteTool>) {
               filetype={filetype(props.input.filePath!)}
               syntaxStyle={syntax()}
               content={code()}
+              onLinkClick={handleLinkClick}
             />
           </line_number>
           <Show when={diagnostics().length}>
