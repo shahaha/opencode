@@ -39,6 +39,13 @@ jobs:
       - name: Setup Nix
         uses: nixbuild/nix-quick-install-action@v34
 
+      - name: Test macOS terminal restoration
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          echo "Testing macOS terminal restoration..."
+          node ./script/macos-terminal-test.js
+
       - name: Build desktop via flake
         run: |
           set -euo pipefail
