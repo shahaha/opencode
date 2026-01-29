@@ -371,6 +371,7 @@ export namespace SessionPrompt {
           description: task.description,
           subagent_type: task.agent,
           command: task.command,
+          model: task.model,
         }
         await Plugin.trigger(
           "tool.execute.before",
@@ -389,7 +390,7 @@ export namespace SessionPrompt {
           sessionID: sessionID,
           abort,
           callID: part.callID,
-          extra: { bypassAgentCheck: true },
+          extra: { bypassAgentCheck: true, bypassModelCheck: task.model !== undefined },
           messages: msgs,
           async metadata(input) {
             await Session.updatePart({
@@ -559,6 +560,8 @@ export namespace SessionPrompt {
       // Check if user explicitly invoked an agent via @ in this turn
       const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
       const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
+      // Check if user explicitly included a model override in @agent:provider/model syntax
+      const bypassModelCheck = lastUserMsg?.parts.some((p) => p.type === "agent" && p.model !== undefined) ?? false
 
       const tools = await resolveTools({
         agent,
@@ -567,6 +570,7 @@ export namespace SessionPrompt {
         tools: lastUser.tools,
         processor,
         bypassAgentCheck,
+        bypassModelCheck,
         messages: msgs,
       })
 
@@ -657,6 +661,7 @@ export namespace SessionPrompt {
     tools?: Record<string, boolean>
     processor: SessionProcessor.Info
     bypassAgentCheck: boolean
+    bypassModelCheck: boolean
     messages: MessageV2.WithParts[]
   }) {
     using _ = log.time("resolveTools")
@@ -667,7 +672,7 @@ export namespace SessionPrompt {
       abort: options.abortSignal!,
       messageID: input.processor.message.id,
       callID: options.toolCallId,
-      extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck },
+      extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck, bypassModelCheck: input.bypassModelCheck },
       agent: input.agent.name,
       messages: input.messages,
       metadata: async (val: { title?: string; metadata?: any }) => {
