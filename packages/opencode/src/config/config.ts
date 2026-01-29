@@ -1093,6 +1093,7 @@ export namespace Config {
             .positive()
             .optional()
             .describe("Timeout in milliseconds for model context protocol (MCP) requests"),
+          browser: z.boolean().optional().describe("Enable browser automation tools"),
         })
         .optional(),
     })

@@ -29,6 +29,10 @@ export namespace Flag {
   export const OPENCODE_SERVER_PASSWORD = process.env["OPENCODE_SERVER_PASSWORD"]
   export const OPENCODE_SERVER_USERNAME = process.env["OPENCODE_SERVER_USERNAME"]
 
+  // Browser automation
+  export const OPENCODE_ENABLE_BROWSER = truthy("OPENCODE_ENABLE_BROWSER")
+  export const OPENCODE_BROWSER_PROFILE_PATH = process.env["OPENCODE_BROWSER_PROFILE_PATH"]
+
   // Experimental
   export const OPENCODE_EXPERIMENTAL = truthy("OPENCODE_EXPERIMENTAL")
   export const OPENCODE_EXPERIMENTAL_FILEWATCHER = truthy("OPENCODE_EXPERIMENTAL_FILEWATCHER")
