@@ -1088,6 +1088,14 @@ export namespace Config {
             .describe("Timeout in milliseconds for model context protocol (MCP) requests"),
         })
         .optional(),
+      skills: z
+        .object({
+          path: z
+            .array(z.string())
+            .optional()
+            .describe("Additional directories to scan for skills"),
+        })
+        .optional(),
     })
     .strict()
     .meta({
