@@ -33,6 +33,11 @@ export interface OpenaiCompatibleProviderSettings {
    * Custom fetch implementation.
    */
   fetch?: FetchFunction
+
+  /**
+   * User key for authenticating requests (added as query parameter).
+   */
+  userKey?: string
 }
 
 export interface OpenaiCompatibleProvider {
@@ -63,14 +68,70 @@ export function createOpenaiCompatible(options: OpenaiCompatibleProviderSettings
     ...options.headers,
   }
 
-  const getHeaders = () => withUserAgentSuffix(headers, `ai-sdk/openai-compatible/${VERSION}`)
+
+  // Create custom fetch that forces correct headers and filters unsupported params
+  const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const url = typeof input === "string" ? input : input.toString()
+    const headers = new Headers(init?.headers)
+    
+    // Force set Authorization header with Bearer prefix
+    if (options.apiKey) {
+      headers.set("Authorization", `Bearer ${options.apiKey}`)
+    }
+    headers.set("Content-Type", "application/json")
+    
+    // Filter out unsupported parameters for LiteLLM compatibility
+    let body = init?.body
+    if (body && typeof body === "string") {
+      try {
+        const parsed = JSON.parse(body)
+        // Remove parameters that LiteLLM might not support
+        delete parsed.reasoning_effort
+        delete parsed.tool_choice
+        delete parsed.parallel_tool_calls
+        body = JSON.stringify(parsed)
+      } catch (e) {
+        // Keep original body if parsing fails
+      }
+    }
+    
+    const res = await fetch(url, {
+      ...init,
+      headers,
+      body,
+    })
+    return res
+  }
+
+  const getHeaders = () => ({
+    ...(options.apiKey && { Authorization: `Bearer ${options.apiKey}` }),
+    ...options.headers,
+    "User-Agent": `ai-sdk/openai-compatible/${VERSION}`,
+  })
 
   const createChatModel = (modelId: OpenaiCompatibleModelId) => {
     return new OpenAICompatibleChatLanguageModel(modelId, {
       provider: `${options.name ?? "openai-compatible"}.chat`,
       headers: getHeaders,
-      url: ({ path }) => `${baseURL}${path}`,
-      fetch: options.fetch,
+      url: ({ path }) => {
+        const url = `${baseURL}${path}`
+        const finalUrl = (() => {
+          if (!options.userKey) return url
+          if (url.includes("?")) {
+            if (url.endsWith("?") || url.endsWith("&")) {
+              return `${url}user_key=${encodeURIComponent(options.userKey)}`
+            } else {
+              return `${url}&user_key=${encodeURIComponent(options.userKey)}`
+            }
+          } else {
+            return `${url}?user_key=${encodeURIComponent(options.userKey)}`
+          }
+        })()
+        return finalUrl
+      },
+      fetch: (async (input, init) => {
+        return customFetch(input, init)
+      }) as FetchFunction,
     })
   }
 
@@ -78,7 +139,21 @@ export function createOpenaiCompatible(options: OpenaiCompatibleProviderSettings
     return new OpenAIResponsesLanguageModel(modelId, {
       provider: `${options.name ?? "openai-compatible"}.responses`,
       headers: getHeaders,
-      url: ({ path }) => `${baseURL}${path}`,
+      url: ({ path }) => {
+        const url = `${baseURL}${path}`
+        if (!options.userKey) return url
+        // Check if URL already has query parameters
+        if (url.includes("?")) {
+          // Check if the URL ends with '?' or '&' to avoid double symbols
+          if (url.endsWith("?") || url.endsWith("&")) {
+            return `${url}user_key=${encodeURIComponent(options.userKey)}`
+          } else {
+            return `${url}&user_key=${encodeURIComponent(options.userKey)}`
+          }
+        } else {
+          return `${url}?user_key=${encodeURIComponent(options.userKey)}`
+        }
+      },
       fetch: options.fetch,
     })
   }
