@@ -8652,6 +8652,11 @@
             "default": "ctrl+t",
             "type": "string"
           },
+          "autocomplete_show_description": {
+            "description": "Show full description in autocomplete",
+            "default": "ctrl+m",
+            "type": "string"
+          },
           "input_clear": {
             "description": "Clear input field",
             "default": "ctrl+c",
