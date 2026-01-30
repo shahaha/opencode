@@ -618,6 +618,12 @@ export namespace Config {
         .describe("Maximum number of agentic iterations before forcing text-only response"),
       maxSteps: z.number().int().positive().optional().describe("@deprecated Use 'steps' field instead."),
       permission: Permission.optional(),
+      subagents: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "List of subagent names this agent can spawn via the Task tool. When set, only these subagents will appear in the task tool description. Supports glob patterns (e.g., 'explore', 'code-*'). If not set, all subagents are available.",
+        ),
     })
     .catchall(z.any())
     .transform((agent, ctx) => {
@@ -637,6 +643,7 @@ export namespace Config {
         "permission",
         "disable",
         "tools",
+        "subagents",
       ])
 
       // Extract unknown properties into options

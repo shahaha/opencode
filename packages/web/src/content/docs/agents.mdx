@@ -568,6 +568,37 @@ Users can always invoke any subagent directly via the `@` autocomplete menu, eve
 
 ---
 
+### Subagents
+
+Control which subagents appear in the Task tool description with the `subagents` option. This is useful for reducing token overhead when you have many subagents configured but only want specific ones available to a particular agent.
+
+```json title="opencode.json"
+{
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "subagents": ["explore", "general", "code-*"]
+    }
+  }
+}
+```
+
+When `subagents` is set, only the listed subagents will appear in the Task tool description. This reduces the token cost of the system prompt, which can be significant when you have many subagents configured.
+
+:::tip
+The `subagents` option supports glob patterns. Use `code-*` to match all subagents starting with `code-`, or `*-reviewer` to match all subagents ending with `-reviewer`.
+:::
+
+:::note
+If `subagents` is not set or is an empty array, all subagents are available (the default behavior).
+:::
+
+The `subagents` option works alongside `permission.task`:
+- `subagents` controls which subagents appear in the tool description (affects token usage)
+- `permission.task` controls runtime access (ask/allow/deny)
+
+---
+
 ### Additional
 
 Any other options you specify in your agent configuration will be **passed through directly** to the provider as model options. This allows you to use provider-specific features and parameters.
