@@ -406,6 +406,10 @@ export namespace Provider {
           },
         },
       }
+
+      const baseURL = url.endsWith("/v1") ? url : `${url}/v1`
+      log.info("ollama auto-loaded with models", { count: models.length })
+      return { autoload: true, options: { baseURL } }
     },
     gitlab: async (input) => {
       const instanceUrl = Env.get("GITLAB_INSTANCE_URL") || "https://gitlab.com"
@@ -808,6 +812,21 @@ export namespace Provider {
       database[providerID] = parsed
     }
 
+    // Ensure Ollama provider exists in database for auto-detection
+    if (!database["ollama"]) {
+      database["ollama"] = {
+        id: "ollama",
+        name: "Ollama (local)",
+        npm: "@ai-sdk/openai-compatible",
+        env: [],
+        models: {},
+      }
+    }
+    if (database["ollama"] && !database["ollama"].npm) {
+      database["ollama"].npm = "@ai-sdk/openai-compatible"
+    }
+
+    const disabled = await Config.get().then((cfg) => new Set(cfg.disabled_providers ?? []))
     // load env
     const env = Env.all()
     for (const [providerID, provider] of Object.entries(database)) {
