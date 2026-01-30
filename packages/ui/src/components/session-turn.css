@@ -31,6 +31,24 @@
     gap: 18px;
     overflow-anchor: none;
 
+    [data-slot="session-turn-header"] {
+      position: absolute;
+      right: 0;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding-left: 16px;
+      background: linear-gradient(to right, transparent, var(--background-stronger) 12px);
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      pointer-events: none;
+    }
+
+    &:hover [data-slot="session-turn-header"] {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
     [data-slot="session-turn-badge"] {
       display: inline-flex;
       align-items: center;
@@ -93,6 +111,7 @@
     align-items: center;
     align-self: stretch;
     height: 32px;
+    gap: 8px;
   }
 
   [data-slot="session-turn-message-content"] {
@@ -194,6 +213,16 @@
     white-space: nowrap;
     font-size: inherit;
     font-weight: inherit;
+  }
+
+  [data-slot="session-turn-message-actions"] {
+    display: flex;
+    gap: 4px;
+  }
+
+  [data-slot="session-turn-user-badges"] {
+    display: flex;
+    gap: 6px;
   }
 
   [data-slot="session-turn-typewriter"] {
