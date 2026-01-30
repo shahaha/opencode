@@ -1,34 +1,21 @@
+import { BusEvent } from "@/bus/bus-event"
+import { Bus } from "@/bus"
 import { type IPty } from "bun-pty"
 import z from "zod"
 import { Identifier } from "../id/id"
 import { Log } from "../util/log"
-import { Bus } from "../bus"
 import type { WSContext } from "hono/ws"
 import { Instance } from "../project/instance"
-import { shell } from "@opencode-ai/util/shell"
 import { lazy } from "@opencode-ai/util/lazy"
-import {} from "process"
+import { Shell } from "@/shell/shell"
 
 export namespace Pty {
   const log = Log.create({ service: "pty" })
 
+  const BUFFER_LIMIT = 1024 * 1024 * 2
+  const BUFFER_CHUNK = 64 * 1024
+
   const pty = lazy(async () => {
-    const path = require(
-      `bun-pty/rust-pty/target/release/${
-        process.platform === "win32"
-          ? "rust_pty.dll"
-          : process.platform === "linux" && process.arch === "x64"
-            ? "librust_pty.so"
-            : process.platform === "darwin" && process.arch === "x64"
-              ? "librust_pty.dylib"
-              : process.platform === "darwin" && process.arch === "arm64"
-                ? "librust_pty_arm64.dylib"
-                : process.platform === "linux" && process.arch === "arm64"
-                  ? "librust_pty_arm64.so"
-                  : ""
-      }`,
-    )
-    process.env.BUN_PTY_LIB = path
     const { spawn } = await import("bun-pty")
     return spawn
   })
@@ -70,10 +57,10 @@ export namespace Pty {
   export type UpdateInput = z.infer<typeof UpdateInput>
 
   export const Event = {
-    Created: Bus.event("pty.created", z.object({ info: Info })),
-    Updated: Bus.event("pty.updated", z.object({ info: Info })),
-    Exited: Bus.event("pty.exited", z.object({ id: Identifier.schema("pty"), exitCode: z.number() })),
-    Deleted: Bus.event("pty.deleted", z.object({ id: Identifier.schema("pty") })),
+    Created: BusEvent.define("pty.created", z.object({ info: Info })),
+    Updated: BusEvent.define("pty.updated", z.object({ info: Info })),
+    Exited: BusEvent.define("pty.exited", z.object({ id: Identifier.schema("pty"), exitCode: z.number() })),
+    Deleted: BusEvent.define("pty.deleted", z.object({ id: Identifier.schema("pty") })),
   }
 
   interface ActiveSession {
@@ -108,10 +95,19 @@ export namespace Pty {
 
   export async function create(input: CreateInput) {
     const id = Identifier.create("pty", false)
-    const command = input.command || shell()
+    const command = input.command || Shell.preferred()
     const args = input.args || []
+    if (command.endsWith("sh")) {
+      args.push("-l")
+    }
+
     const cwd = input.cwd || Instance.directory
-    const env = { ...process.env, ...input.env } as Record<string, string>
+    const env = {
+      ...process.env,
+      ...input.env,
+      TERM: "xterm-256color",
+      OPENCODE_TERMINAL: "1",
+    } as Record<string, string>
     log.info("creating session", { id, cmd: command, args, cwd })
 
     const spawn = await pty()
@@ -120,6 +116,7 @@ export namespace Pty {
       cwd,
       env,
     })
+
     const info = {
       id,
       title: input.title || `Terminal ${id.slice(-4)}`,
@@ -137,20 +134,31 @@ export namespace Pty {
     }
     state().set(id, session)
     ptyProcess.onData((data) => {
-      if (session.subscribers.size === 0) {
-        session.buffer += data
-        return
-      }
+      let open = false
       for (const ws of session.subscribers) {
-        if (ws.readyState === 1) {
-          ws.send(data)
+        if (ws.readyState !== 1) {
+          session.subscribers.delete(ws)
+          continue
         }
+        open = true
+        ws.send(data)
       }
+      if (open) return
+      session.buffer += data
+      if (session.buffer.length <= BUFFER_LIMIT) return
+      session.buffer = session.buffer.slice(-BUFFER_LIMIT)
     })
     ptyProcess.onExit(({ exitCode }) => {
       log.info("session exited", { id, exitCode })
       session.info.status = "exited"
+      for (const ws of session.subscribers) {
+        ws.close()
+      }
+      session.subscribers.clear()
       Bus.publish(Event.Exited, { id, exitCode })
+      for (const ws of session.subscribers) {
+        ws.close()
+      }
       state().delete(id)
     })
     Bus.publish(Event.Created, { info })
@@ -207,8 +215,18 @@ export namespace Pty {
     log.info("client connected to session", { id })
     session.subscribers.add(ws)
     if (session.buffer) {
-      ws.send(session.buffer)
+      const buffer = session.buffer.length <= BUFFER_LIMIT ? session.buffer : session.buffer.slice(-BUFFER_LIMIT)
       session.buffer = ""
+      try {
+        for (let i = 0; i < buffer.length; i += BUFFER_CHUNK) {
+          ws.send(buffer.slice(i, i + BUFFER_CHUNK))
+        }
+      } catch {
+        session.subscribers.delete(ws)
+        session.buffer = buffer
+        ws.close()
+        return
+      }
     }
     return {
       onMessage: (message: string | ArrayBuffer) => {
