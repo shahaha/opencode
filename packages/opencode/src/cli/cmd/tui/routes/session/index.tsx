@@ -491,6 +491,40 @@ export function Session() {
       },
     },
     {
+      title: "Pin/Unpin last message",
+      value: "session.message.pin",
+      category: "Session",
+      onSelect: async (dialog) => {
+        const revertID = session()?.revert?.messageID
+        const lastUserMessage = messages().findLast((msg) => msg.role === "user" && (!revertID || msg.id < revertID))
+        if (!lastUserMessage) {
+          toast.show({ message: "No user messages found", variant: "error" })
+          dialog.clear()
+          return
+        }
+
+        const wasPinned = (lastUserMessage as UserMessage).pinned
+
+        sdk.client.session.message2
+          .pin({
+            sessionID: route.sessionID,
+            messageID: lastUserMessage.id,
+            pinned: !wasPinned,
+          })
+          .then(() => {
+            toast.show({
+              message: wasPinned ? "Message unpinned" : "Message pinned",
+              variant: "success",
+            })
+          })
+          .catch(() => {
+            toast.show({ message: "Failed to pin message", variant: "error" })
+          })
+
+        dialog.clear()
+      },
+    },
+    {
       title: sidebarVisible() ? "Hide sidebar" : "Show sidebar",
       value: "session.sidebar.toggle",
       keybind: "sidebar_toggle",
@@ -1136,7 +1170,7 @@ function UserMessage(props: {
   const [hover, setHover] = createSignal(false)
   const queued = createMemo(() => props.pending && props.message.id > props.pending)
   const color = createMemo(() => (queued() ? theme.accent : local.agent.color(props.message.agent)))
-  const metadataVisible = createMemo(() => queued() || ctx.showTimestamps())
+  const metadataVisible = createMemo(() => queued() || ctx.showTimestamps() || props.message.pinned)
 
   const compaction = createMemo(() => props.parts.find((x) => x.type === "compaction"))
 
@@ -1187,13 +1221,20 @@ function UserMessage(props: {
             <Show
               when={queued()}
               fallback={
-                <Show when={ctx.showTimestamps()}>
-                  <text fg={theme.textMuted}>
-                    <span style={{ fg: theme.textMuted }}>
-                      {Locale.todayTimeOrDateTime(props.message.time.created)}
-                    </span>
-                  </text>
-                </Show>
+                <>
+                  <Show when={props.message.pinned}>
+                    <text fg={theme.textMuted}>
+                      <span style={{ bg: theme.primary, fg: theme.background, bold: true }}> PINNED </span>
+                    </text>
+                  </Show>
+                  <Show when={!props.message.pinned && ctx.showTimestamps()}>
+                    <text fg={theme.textMuted}>
+                      <span style={{ fg: theme.textMuted }}>
+                        {Locale.todayTimeOrDateTime(props.message.time.created)}
+                      </span>
+                    </text>
+                  </Show>
+                </>
               }
             >
               <text fg={theme.textMuted}>

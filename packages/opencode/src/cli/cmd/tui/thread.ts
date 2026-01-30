@@ -71,6 +71,10 @@ export const TuiThreadCommand = cmd({
       .option("agent", {
         type: "string",
         describe: "agent to use",
+      })
+      .option("pin", {
+        type: "boolean",
+        describe: "pin the first message (used with --prompt)",
       }),
   handler: async (args) => {
     // Resolve relative paths against PWD to preserve behavior when using --cwd flag
@@ -150,6 +154,7 @@ export const TuiThreadCommand = cmd({
         agent: args.agent,
         model: args.model,
         prompt,
+        pin: args.pin,
       },
       onExit: async () => {
         await client.call("shutdown", undefined)

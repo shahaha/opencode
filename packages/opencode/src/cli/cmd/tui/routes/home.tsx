@@ -1,5 +1,5 @@
 import { Prompt, type PromptRef } from "@tui/component/prompt"
-import { createMemo, Match, onMount, Show, Switch } from "solid-js"
+import { createMemo, createSignal, Match, onMount, Show, Switch } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { useKeybind } from "@tui/context/keybind"
 import { Logo } from "../component/logo"
@@ -76,6 +76,8 @@ export function Home() {
 
   let prompt: PromptRef
   const args = useArgs()
+  const [shouldPinNext, setShouldPinNext] = createSignal(false)
+
   onMount(() => {
     if (once) return
     if (route.initialPrompt) {
@@ -84,6 +86,10 @@ export function Home() {
     } else if (args.prompt) {
       prompt.set({ input: args.prompt, parts: [] })
       once = true
+      // Only pin this first message if --pin flag was provided
+      if (args.pin) {
+        setShouldPinNext(true)
+      }
       prompt.submit()
     }
   })
@@ -103,6 +109,11 @@ export function Home() {
               promptRef.set(r)
             }}
             hint={Hint}
+            pinned={shouldPinNext()}
+            onSubmit={() => {
+              // Clear the pin flag after the first submit
+              setShouldPinNext(false)
+            }}
           />
         </box>
         <box height={3} width="100%" maxWidth={75} alignItems="center" paddingTop={2}>

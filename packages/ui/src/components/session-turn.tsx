@@ -6,6 +6,7 @@ import {
   type PermissionRequest,
   TextPart,
   ToolPart,
+  UserMessage,
 } from "@opencode-ai/sdk/v2/client"
 import { type FileDiff } from "@opencode-ai/sdk/v2"
 import { useData } from "../context"
@@ -33,6 +34,9 @@ import { createStore } from "solid-js/store"
 import { DateTime, DurationUnit, Interval } from "luxon"
 import { createAutoScroll } from "../hooks"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
+import { Typewriter } from "./typewriter"
+import { ProviderIcon } from "./provider-icon"
+import type { IconName } from "./provider-icons/types"
 
 type Translator = (key: UiI18nKey, params?: UiI18nParams) => string
 
@@ -540,6 +544,16 @@ export function SessionTurn(
                       </div>
                     </Show>
                     <div data-slot="session-turn-sticky" ref={setStickyRef}>
+                      {/* User Message Header with Pinned Badge */}
+                      <Show when={(msg() as UserMessage).pinned}>
+                        <div data-slot="session-turn-message-header">
+                          <div data-slot="session-turn-user-badges">
+                            <Tooltip value="This message is pinned and will be preserved during compaction">
+                              <span data-slot="session-turn-badge">Pinned</span>
+                            </Tooltip>
+                          </div>
+                        </div>
+                      </Show>
                       {/* User Message */}
                       <div data-slot="session-turn-message-content" aria-live="off">
                         <Message message={msg()} parts={stickyParts()} />

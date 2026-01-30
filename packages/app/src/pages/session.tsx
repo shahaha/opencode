@@ -940,6 +940,52 @@ export default function Page() {
       disabled: !params.id || visibleUserMessages().length === 0,
       onSelect: () => dialog.show(() => <DialogFork />),
     },
+    {
+      id: "session.pin",
+      get title() {
+        const lastMessage = visibleUserMessages().at(-1)
+        if (!lastMessage) return "Pin last message"
+        return lastMessage.pinned ? "Unpin last message" : "Pin last message"
+      },
+      get description() {
+        const lastMessage = visibleUserMessages().at(-1)
+        if (!lastMessage) return "Pin the last message to preserve it during compaction"
+        return lastMessage.pinned
+          ? "Unpin the last message to allow compaction"
+          : "Pin the last message to preserve it during compaction"
+      },
+      category: "Session",
+      slash: "pin",
+      disabled: !params.id || visibleUserMessages().length === 0,
+      onSelect: async () => {
+        if (!params.id) return
+
+        const lastMessage = visibleUserMessages().at(-1)
+        if (!lastMessage) return
+
+        const wasPinned = lastMessage.pinned
+
+        try {
+          await sdk.client.session.message2.pin({
+            sessionID: params.id,
+            messageID: lastMessage.id,
+            pinned: !wasPinned,
+          })
+          showToast({
+            title: wasPinned ? "Message unpinned" : "Message pinned",
+            description: wasPinned
+              ? "Message will be subject to compaction"
+              : "Message will be preserved during compaction",
+          })
+        } catch (error) {
+          showToast({
+            title: "Failed to pin message",
+            description: error instanceof Error ? error.message : "Unknown error",
+            variant: "error",
+          })
+        }
+      },
+    },
     ...(sync.data.config.share !== "disabled"
       ? [
           {
