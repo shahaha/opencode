@@ -47,5 +47,6 @@
     "inputAgentInfoPaddingTop": 1, // Padding above agent info line
     "inputBoxPaddingTop": 1, // Blank lines above cursor in input box
     "inputBoxPaddingBottom": 0, // Blank lines below cursor in input box
+    "inputAreaRightContent": "keybinds", // What to show on right: "keybinds" or "status"
   },
 }

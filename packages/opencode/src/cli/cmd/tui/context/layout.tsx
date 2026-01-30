@@ -34,6 +34,7 @@ export type LayoutConfig = {
   inputAgentInfoPaddingTop: number
   inputBoxPaddingTop: number
   inputBoxPaddingBottom: number
+  inputAreaRightContent: "keybinds" | "status"
 }
 
 type LayoutInfo = {

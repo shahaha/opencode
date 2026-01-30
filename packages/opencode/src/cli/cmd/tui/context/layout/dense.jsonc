@@ -47,5 +47,6 @@
     "inputAgentInfoPaddingTop": 0, // No padding (not shown anyway)
     "inputBoxPaddingTop": 1, // One blank line above cursor
     "inputBoxPaddingBottom": 1, // One blank line below cursor
+    "inputAreaRightContent": "status", // Show LSP/MCP status instead of keybind hints
   },
 }

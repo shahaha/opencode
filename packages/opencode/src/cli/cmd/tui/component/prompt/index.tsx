@@ -76,6 +76,11 @@ export function Prompt(props: PromptProps) {
   const layout = useLayout()
   const kv = useKV()
 
+  // LSP/MCP status data (for status display option)
+  const mcp = createMemo(() => Object.values(sync.data.mcp).filter((x) => x.status === "connected").length)
+  const mcpError = createMemo(() => Object.values(sync.data.mcp).some((x) => x.status === "failed"))
+  const lsp = createMemo(() => Object.keys(sync.data.lsp))
+
   function promptModelWarning() {
     toast.show({
       variant: "warning",
@@ -1005,7 +1010,20 @@ export function Prompt(props: PromptProps) {
           </box>
         </Show>
         <box flexDirection="row" justifyContent="space-between">
-          <Show when={status().type !== "idle"} fallback={<text />}>
+          <Show
+            when={status().type !== "idle"}
+            fallback={
+              <Show when={!layout.current.showInputAgentInfo}>
+                <box flexDirection="row" gap={1}>
+                  <text fg={local.agent.color(local.agent.current().name)}>
+                    {Locale.titlecase(local.agent.current().name)}
+                  </text>
+                  <text fg={theme.text}>{local.model.parsed().model}</text>
+                  <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
+                </box>
+              </Show>
+            }
+          >
             <box
               flexDirection="row"
               gap={1}
@@ -1086,28 +1104,52 @@ export function Prompt(props: PromptProps) {
             </box>
           </Show>
           <Show when={status().type !== "retry"}>
-            <box gap={2} flexDirection="row">
-              <Switch>
-                <Match when={store.mode === "normal"}>
-                  <Show when={local.model.variant.list().length > 0}>
+            <Switch>
+              <Match when={layout.current.inputAreaRightContent === "keybinds"}>
+                <box gap={2} flexDirection="row">
+                  <Switch>
+                    <Match when={store.mode === "normal"}>
+                      <Show when={local.model.variant.list().length > 0}>
+                        <text fg={theme.text}>
+                          {keybind.print("variant_cycle")} <span style={{ fg: theme.textMuted }}>variants</span>
+                        </text>
+                      </Show>
+                      <text fg={theme.text}>
+                        {keybind.print("agent_cycle")} <span style={{ fg: theme.textMuted }}>agents</span>
+                      </text>
+                      <text fg={theme.text}>
+                        {keybind.print("command_list")} <span style={{ fg: theme.textMuted }}>commands</span>
+                      </text>
+                    </Match>
+                    <Match when={store.mode === "shell"}>
+                      <text fg={theme.text}>
+                        esc <span style={{ fg: theme.textMuted }}>exit shell mode</span>
+                      </text>
+                    </Match>
+                  </Switch>
+                </box>
+              </Match>
+              <Match when={layout.current.inputAreaRightContent === "status"}>
+                <box gap={2} flexDirection="row">
+                  <text fg={theme.text}>
+                    <span style={{ fg: lsp().length > 0 ? theme.success : theme.textMuted }}>•</span> {lsp().length} LSP
+                  </text>
+                  <Show when={mcp()}>
                     <text fg={theme.text}>
-                      {keybind.print("variant_cycle")} <span style={{ fg: theme.textMuted }}>variants</span>
+                      <Switch>
+                        <Match when={mcpError()}>
+                          <span style={{ fg: theme.error }}>⊙ </span>
+                        </Match>
+                        <Match when={true}>
+                          <span style={{ fg: theme.success }}>⊙ </span>
+                        </Match>
+                      </Switch>
+                      {mcp()} MCP
                     </text>
                   </Show>
-                  <text fg={theme.text}>
-                    {keybind.print("agent_cycle")} <span style={{ fg: theme.textMuted }}>agents</span>
-                  </text>
-                  <text fg={theme.text}>
-                    {keybind.print("command_list")} <span style={{ fg: theme.textMuted }}>commands</span>
-                  </text>
-                </Match>
-                <Match when={store.mode === "shell"}>
-                  <text fg={theme.text}>
-                    esc <span style={{ fg: theme.textMuted }}>exit shell mode</span>
-                  </text>
-                </Match>
-              </Switch>
-            </box>
+                </box>
+              </Match>
+            </Switch>
           </Show>
         </box>
       </box>
