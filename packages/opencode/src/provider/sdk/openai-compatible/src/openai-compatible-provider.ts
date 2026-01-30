@@ -2,6 +2,7 @@ import type { LanguageModelV2 } from "@ai-sdk/provider"
 import { OpenAICompatibleChatLanguageModel } from "@ai-sdk/openai-compatible"
 import { type FetchFunction, withoutTrailingSlash, withUserAgentSuffix } from "@ai-sdk/provider-utils"
 import { OpenAIResponsesLanguageModel } from "./responses/openai-responses-language-model"
+import { createFilteredFetch, filterEmptyToolCalls } from "./openai-compatible-middleware"
 
 // Import the version or define it
 const VERSION = "0.1.0"
@@ -66,12 +67,27 @@ export function createOpenaiCompatible(options: OpenaiCompatibleProviderSettings
   const getHeaders = () => withUserAgentSuffix(headers, `ai-sdk/openai-compatible/${VERSION}`)
 
   const createChatModel = (modelId: OpenaiCompatibleModelId) => {
-    return new OpenAICompatibleChatLanguageModel(modelId, {
+    const originalFetch = options.fetch ?? fetch
+    
+    // Only apply empty tool_calls filtering for LM Studio
+    // Detect LM Studio by checking baseURL (localhost) or provider name
+    const isLMStudio = 
+      baseURL.includes("localhost") || 
+      baseURL.includes("127.0.0.1") ||
+      options.name?.toLowerCase().includes("lm-studio") ||
+      options.name?.toLowerCase().includes("lmstudio")
+    
+    const fetchToUse = isLMStudio ? createFilteredFetch(originalFetch) : originalFetch
+    
+    const baseModel = new OpenAICompatibleChatLanguageModel(modelId, {
       provider: `${options.name ?? "openai-compatible"}.chat`,
       headers: getHeaders,
       url: ({ path }) => `${baseURL}${path}`,
-      fetch: options.fetch,
+      fetch: fetchToUse,
     })
+    
+    // Only wrap with middleware for LM Studio
+    return isLMStudio ? filterEmptyToolCalls(baseModel) : baseModel
   }
 
   const createResponsesModel = (modelId: OpenaiCompatibleModelId) => {
