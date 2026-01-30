@@ -9,12 +9,13 @@ import { Bus } from "@/bus"
 import { SessionRetry } from "./retry"
 import { SessionStatus } from "./status"
 import { Plugin } from "@/plugin"
-import type { Provider } from "@/provider/provider"
+import { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
 import { Config } from "@/config/config"
 import { SessionCompaction } from "./compaction"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
+import { SessionFallback } from "./fallback"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
@@ -46,6 +47,8 @@ export namespace SessionProcessor {
         log.info("process")
         needsCompaction = false
         const shouldBreak = (await Config.get()).experimental?.continue_loop_on_deny !== true
+
+        const attemptedFallbacks = new Set<string>()
         while (true) {
           try {
             let currentText: MessageV2.TextPart | undefined
@@ -343,6 +346,19 @@ export namespace SessionProcessor {
             })
             const error = MessageV2.fromError(e, { providerID: input.model.providerID })
             const retry = SessionRetry.retryable(error)
+
+            // Try fallback model from global config
+            const fallback = await SessionFallback.getFallback(
+              input.model.providerID,
+              input.model.id,
+              attemptedFallbacks,
+            )
+            if (fallback) {
+              streamInput.model = fallback.model
+              attempt = 0
+              continue
+            }
+
             if (retry !== undefined) {
               attempt++
               const delay = SessionRetry.delay(attempt, error.name === "APIError" ? error : undefined)

@@ -913,6 +913,27 @@ export namespace Config {
     })
   export type Provider = z.infer<typeof Provider>
 
+  export const Fallbacks = z
+    .object({
+      provider: z
+        .record(z.string(), z.array(z.string()))
+        .optional()
+        .describe(
+          "Provider-level fallbacks: { 'anthropic': ['openai', 'google'] }. If any model from a provider fails, try providers in order.",
+        ),
+      models: z
+        .record(z.string(), z.array(z.string()))
+        .optional()
+        .describe(
+          "Model-specific fallbacks: { 'anthropic/claude-3-opus': ['openai/gpt-4o'] }. If this specific model fails, try these alternatives.",
+        ),
+    })
+    .strict()
+    .meta({
+      ref: "FallbacksConfig",
+    })
+  export type Fallbacks = z.infer<typeof Fallbacks>
+
   export const Info = z
     .object({
       $schema: z.string().optional().describe("JSON schema reference for configuration validation"),
@@ -997,6 +1018,9 @@ export namespace Config {
         .record(z.string(), Provider)
         .optional()
         .describe("Custom provider configurations and model overrides"),
+      fallbacks: Fallbacks.optional().describe(
+        "Global fallback configuration for provider outages and credit depletion",
+      ),
       mcp: z
         .record(
           z.string(),
