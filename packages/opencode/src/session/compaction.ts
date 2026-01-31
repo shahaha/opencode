@@ -14,6 +14,9 @@ import { fn } from "@/util/fn"
 import { Agent } from "@/agent/agent"
 import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
+import { Flag } from "../flag/flag"
+import { SystemPrompt } from "./system"
+import { InstructionPrompt } from "./instruction"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -97,7 +100,8 @@ export namespace SessionCompaction {
     auto: boolean
   }) {
     const userMessage = input.messages.findLast((m) => m.info.id === input.parentID)!.info as MessageV2.User
-    const agent = await Agent.get("compaction")
+    const usePrefixCache = Flag.OPENCODE_EXPERIMENTAL_COMPACTION_PRESERVE_PREFIX
+    const agent = usePrefixCache ? await Agent.get(userMessage.agent) : await Agent.get("compaction")
     const model = agent.model
       ? await Provider.getModel(agent.model.providerID, agent.model.modelID)
       : await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)
@@ -132,6 +136,21 @@ export namespace SessionCompaction {
       model,
       abort: input.abort,
     })
+    const session = usePrefixCache ? await Session.get(input.sessionID) : undefined
+    let tools = {}
+    let system: string[] = []
+    if (usePrefixCache && session) {
+      tools = await SessionPrompt.resolveTools({
+        agent,
+        model,
+        session,
+        tools: userMessage.tools,
+        processor,
+        bypassAgentCheck: false,
+        messages: input.messages,
+      })
+      system = [...(await SystemPrompt.environment(model)), ...(await InstructionPrompt.system())]
+    }
     // Allow plugins to inject context or replace compaction prompt
     const compacting = await Plugin.trigger(
       "experimental.session.compacting",
@@ -139,15 +158,27 @@ export namespace SessionCompaction {
       { context: [], prompt: undefined },
     )
     const defaultPrompt =
-      "Provide a detailed prompt for continuing our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next considering new session will not have access to our conversation."
+      Flag.OPENCODE_EXPERIMENTAL_COMPACTION_PROMPT ??
+      `
+Summarize this development session to continue work seamlessly. Include:
+
+1. **Current state**: Which files are open/being edited (full paths)
+2. **Recent changes**: Code modifications made (additions/deletions per file)
+3. **Work context**: Current directory, git branch, any build/test status
+4. **Issues encountered**: Errors faced and how they were resolved
+5. **Next steps**: Specific actions planned, tools needed, remaining tasks
+6. **Critical decisions**: Architectural choices or implementation details to preserve
+
+The summary must enable another developer to continue exactly where we left off.
+`
     const promptText = compacting.prompt ?? [defaultPrompt, ...compacting.context].join("\n\n")
     const result = await processor.process({
       user: userMessage,
       agent,
       abort: input.abort,
       sessionID: input.sessionID,
-      tools: {},
-      system: [],
+      tools,
+      system,
       messages: [
         ...MessageV2.toModelMessages(input.messages, model),
         {
