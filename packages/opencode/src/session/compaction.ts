@@ -111,7 +111,7 @@ export namespace SessionCompaction {
       parentID: input.parentID,
       sessionID: input.sessionID,
       mode: "compaction",
-      agent: "compaction",
+      agent: usePrefixCache ? userMessage.agent : "compaction",
       summary: true,
       path: {
         cwd: Instance.directory,
@@ -157,9 +157,10 @@ export namespace SessionCompaction {
       { sessionID: input.sessionID },
       { context: [], prompt: undefined },
     )
-    const defaultPrompt = Flag.OPENCODE_EXPERIMENTAL_COMPACTION_PROMPT ??
+    const defaultPrompt =
+      Flag.OPENCODE_EXPERIMENTAL_COMPACTION_PROMPT ??
       "Provide a detailed prompt for continuing our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next considering new session will not have access to our conversation."
-      
+
     const promptText = compacting.prompt ?? [defaultPrompt, ...compacting.context].join("\n\n")
     const result = await processor.process({
       user: userMessage,
