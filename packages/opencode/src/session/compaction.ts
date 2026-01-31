@@ -157,20 +157,9 @@ export namespace SessionCompaction {
       { sessionID: input.sessionID },
       { context: [], prompt: undefined },
     )
-    const defaultPrompt =
-      Flag.OPENCODE_EXPERIMENTAL_COMPACTION_PROMPT ??
-      `
-Summarize this development session to continue work seamlessly. Include:
-
-1. **Current state**: Which files are open/being edited (full paths)
-2. **Recent changes**: Code modifications made (additions/deletions per file)
-3. **Work context**: Current directory, git branch, any build/test status
-4. **Issues encountered**: Errors faced and how they were resolved
-5. **Next steps**: Specific actions planned, tools needed, remaining tasks
-6. **Critical decisions**: Architectural choices or implementation details to preserve
-
-The summary must enable another developer to continue exactly where we left off.
-`
+    const defaultPrompt = Flag.OPENCODE_EXPERIMENTAL_COMPACTION_PROMPT ??
+      "Provide a detailed prompt for continuing our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next considering new session will not have access to our conversation."
+      
     const promptText = compacting.prompt ?? [defaultPrompt, ...compacting.context].join("\n\n")
     const result = await processor.process({
       user: userMessage,
