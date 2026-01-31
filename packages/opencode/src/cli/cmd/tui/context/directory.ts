@@ -1,6 +1,7 @@
-import { createMemo } from "solid-js"
+import { createMemo, createSignal } from "solid-js"
 import { useSync } from "./sync"
 import { Global } from "@/global"
+import { createSimpleContext } from "./helper"
 
 export function useDirectory() {
   const sync = useSync()
@@ -11,3 +12,24 @@ export function useDirectory() {
     return result
   })
 }
+
+export const { use: useProjectState, provider: ProjectProvider } = createSimpleContext({
+  name: "ProjectState",
+  init: (props: { project?: string; onSwitch?: (project: string) => Promise<void> }) => {
+    const [current, setCurrent] = createSignal(props.project ?? process.cwd())
+
+    const switchTo = async (project: string) => {
+      if (project === current()) return true
+      await props.onSwitch?.(project)
+      setCurrent(project)
+      return true
+    }
+
+    return {
+      get current() {
+        return current()
+      },
+      switchTo,
+    }
+  },
+})

@@ -10,6 +10,7 @@ import { DialogProvider as DialogProviderList } from "@tui/component/dialog-prov
 import { SDKProvider, useSDK } from "@tui/context/sdk"
 import { SyncProvider, useSync } from "@tui/context/sync"
 import { LocalProvider, useLocal } from "@tui/context/local"
+import { ProjectProvider, useProjectState } from "@tui/context/directory"
 import { DialogModel, useConnected } from "@tui/component/dialog-model"
 import { DialogMcp } from "@tui/component/dialog-mcp"
 import { DialogStatus } from "@tui/component/dialog-status"
@@ -106,6 +107,7 @@ export function tui(input: {
   fetch?: typeof fetch
   events?: EventSource
   onExit?: () => Promise<void>
+  switchProject?: (project: string) => Promise<void>
 }) {
   // promise to prevent immediate exit
   return new Promise<void>(async (resolve) => {
@@ -126,34 +128,9 @@ export function tui(input: {
                 <KVProvider>
                   <ToastProvider>
                     <RouteProvider>
-                      <SDKProvider
-                        url={input.url}
-                        directory={input.directory}
-                        fetch={input.fetch}
-                        events={input.events}
-                      >
-                        <SyncProvider>
-                          <ThemeProvider mode={mode}>
-                            <LocalProvider>
-                              <KeybindProvider>
-                                <PromptStashProvider>
-                                  <DialogProvider>
-                                    <CommandProvider>
-                                      <FrecencyProvider>
-                                        <PromptHistoryProvider>
-                                          <PromptRefProvider>
-                                            <App />
-                                          </PromptRefProvider>
-                                        </PromptHistoryProvider>
-                                      </FrecencyProvider>
-                                    </CommandProvider>
-                                  </DialogProvider>
-                                </PromptStashProvider>
-                              </KeybindProvider>
-                            </LocalProvider>
-                          </ThemeProvider>
-                        </SyncProvider>
-                      </SDKProvider>
+                      <ProjectProvider project={input.directory} onSwitch={input.switchProject}>
+                        <ProjectShell url={input.url} fetch={input.fetch} events={input.events} mode={mode} />
+                      </ProjectProvider>
                     </RouteProvider>
                   </ToastProvider>
                 </KVProvider>
@@ -178,6 +155,36 @@ export function tui(input: {
       },
     )
   })
+}
+
+function ProjectShell(props: { url: string; fetch?: typeof fetch; events?: EventSource; mode: "dark" | "light" }) {
+  const projectState = useProjectState()
+
+  return (
+    <SDKProvider url={props.url} directory={projectState.current} fetch={props.fetch} events={props.events}>
+      <SyncProvider>
+        <ThemeProvider mode={props.mode}>
+          <LocalProvider>
+            <KeybindProvider>
+              <PromptStashProvider>
+                <DialogProvider>
+                  <CommandProvider>
+                    <FrecencyProvider>
+                      <PromptHistoryProvider>
+                        <PromptRefProvider>
+                          <App />
+                        </PromptRefProvider>
+                      </PromptHistoryProvider>
+                    </FrecencyProvider>
+                  </CommandProvider>
+                </DialogProvider>
+              </PromptStashProvider>
+            </KeybindProvider>
+          </LocalProvider>
+        </ThemeProvider>
+      </SyncProvider>
+    </SDKProvider>
+  )
 }
 
 function App() {

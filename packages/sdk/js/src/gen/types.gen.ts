@@ -815,6 +815,14 @@ export type KeybindsConfig = {
    */
   session_list?: string
   /**
+   * Open session project selector
+   */
+  session_project?: string
+  /**
+   * Refresh session project list
+   */
+  session_project_refresh?: string
+  /**
    * Show session timeline
    */
   session_timeline?: string
