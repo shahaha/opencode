@@ -38,6 +38,7 @@ export function DialogSessionList() {
 
   const options = createMemo(() => {
     const today = new Date().toDateString()
+    const timeFormat = sync.data.config.tui?.time_format ?? "12h"
     return sessions()
       .filter((x) => x.parentID === undefined)
       .toSorted((a, b) => b.time.updated - a.time.updated)
@@ -55,7 +56,7 @@ export function DialogSessionList() {
           bg: isDeleting ? theme.error : undefined,
           value: x.id,
           category,
-          footer: Locale.time(x.time.updated),
+          footer: Locale.time(x.time.updated, timeFormat),
           gutter: isWorking ? (
             <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
               <spinner frames={spinnerFrames} interval={80} color={theme.primary} />
