@@ -1,6 +1,6 @@
 import { cmd } from "../cmd"
 import { tui } from "./app"
-import { getAuthorizationHeader } from "../../../flag/auth"
+import { getAuthorizationHeader } from "@/flag/auth"
 
 export const AttachCommand = cmd({
   command: "attach <url>",
