@@ -111,7 +111,7 @@ export namespace SessionCompaction {
       parentID: input.parentID,
       sessionID: input.sessionID,
       mode: "compaction",
-      agent: usePrefixCache ? userMessage.agent : "compaction",
+      agent: "compaction",
       summary: true,
       path: {
         cwd: Instance.directory,
@@ -157,12 +157,11 @@ export namespace SessionCompaction {
       { sessionID: input.sessionID },
       { context: [], prompt: undefined },
     )
-    const defaultPrompt =
-      Flag.OPENCODE_EXPERIMENTAL_COMPACTION_PROMPT ??
+    const defaultPrompt = Flag.OPENCODE_EXPERIMENTAL_COMPACTION_PROMPT ??
       "Provide a detailed prompt for continuing our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next considering new session will not have access to our conversation."
-
+      
     const promptText = compacting.prompt ?? [defaultPrompt, ...compacting.context].join("\n\n")
-    const result = await processor.process({
+    let result = await processor.process({
       user: userMessage,
       agent,
       abort: input.abort,
@@ -183,15 +182,12 @@ export namespace SessionCompaction {
       ],
       model,
     })
-    console.log(result + "  " + input.auto)
 
-    // Handle continue case with overflow check
+    // ignore compact-flag for usePrefixCache 
+    // needsCompact is currently set before context recalc and we don't utilize remove-tools-trick
+    result = usePrefixCache && result == "compact" ? "continue" : result
+      
     if (result === "continue" && input.auto) {
-      const finalTokens = processor.message.tokens
-      if (await SessionCompaction.isOverflow({ tokens: finalTokens, model })) {
-        return "compact" // Need another compaction round
-      }
-
       const continueMsg = await Session.updateMessage({
         id: Identifier.ascending("message"),
         role: "user",
@@ -215,12 +211,6 @@ export namespace SessionCompaction {
         },
       })
     }
-
-    // If processor returned compact (overflow during processing), propagate it
-    if (result === "compact") {
-      return "compact"
-    }
-
     if (processor.message.error) return "stop"
     Bus.publish(Event.Compacted, { sessionID: input.sessionID })
     return "continue"
