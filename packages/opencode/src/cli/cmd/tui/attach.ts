@@ -36,7 +36,7 @@ export const AttachCommand = cmd({
         // If the directory doesn't exist locally (remote attach), pass it through.
         return args.dir
       }
-    }
+    })()
 
     // If server requires authentication, create a custom fetch that includes the auth header
     const authHeader = getAuthorizationHeader()
