@@ -59,7 +59,7 @@ const listenForDeepLinks = async () => {
   await onOpenUrl((urls) => emitDeepLinks(urls)).catch(() => undefined)
 }
 
-const createPlatform = (password: Accessor<string | null>): Platform => ({
+const createPlatform = (password: Accessor<string | null>, serverUrl: Accessor<string | null>): Platform => ({
   platform: "desktop",
   os: (() => {
     const type = ostype()
@@ -316,17 +316,30 @@ const createPlatform = (password: Accessor<string | null>): Platform => ({
   // @ts-expect-error
   fetch: (input, init) => {
     const pw = password()
+    const base = serverUrl()
+
+    const matchesSidecar = (target: string | null) => {
+      if (!target) return false
+      if (!base) return false
+      try {
+        return new URL(target).origin === new URL(base).origin
+      } catch {
+        return false
+      }
+    }
 
     const addHeader = (headers: Headers, password: string) => {
-      headers.append("Authorization", `Basic ${btoa(`opencode:${password}`)}`)
+      if (headers.has("Authorization")) return
+      headers.set("Authorization", `Basic ${btoa(`opencode:${password}`)}`)
     }
 
     if (input instanceof Request) {
-      if (pw) addHeader(input.headers, pw)
+      if (pw && matchesSidecar(input.url)) addHeader(input.headers, pw)
       return tauriFetch(input)
     } else {
       const headers = new Headers(init?.headers)
-      if (pw) addHeader(headers, pw)
+      const url = input instanceof URL ? input.toString() : input
+      if (pw && matchesSidecar(url)) addHeader(headers, pw)
       return tauriFetch(input, {
         ...(init as any),
         headers: headers,
@@ -346,6 +359,20 @@ const createPlatform = (password: Accessor<string | null>): Platform => ({
   parseMarkdown: async (markdown: string) => {
     return invoke<string>("parse_markdown_command", { markdown })
   },
+
+  storeServerCredentials: async (url: string, username: string, password: string) => {
+    await invoke("store_server_credentials", { url, username, password })
+  },
+
+  getServerCredentials: async (url: string) => {
+    const result = await invoke<[string, string] | null>("get_server_credentials", { url })
+    if (!result) return null
+    return { username: result[0], password: result[1] }
+  },
+
+  removeServerCredentials: async (url: string) => {
+    await invoke("remove_server_credentials", { url })
+  },
 })
 
 createMenu()
@@ -353,7 +380,11 @@ void listenForDeepLinks()
 
 render(() => {
   const [serverPassword, setServerPassword] = createSignal<string | null>(null)
-  const platform = createPlatform(() => serverPassword())
+  const [serverUrl, setServerUrl] = createSignal<string | null>(null)
+  const platform = createPlatform(
+    () => serverPassword(),
+    () => serverUrl(),
+  )
 
   function handleClick(e: MouseEvent) {
     const link = (e.target as HTMLElement).closest("a.external-link") as HTMLAnchorElement | null
@@ -376,8 +407,10 @@ render(() => {
         <ServerGate>
           {(data) => {
             setServerPassword(data().password)
+            setServerUrl(data().url)
             window.__OPENCODE__ ??= {}
             window.__OPENCODE__.serverPassword = data().password ?? undefined
+            window.__OPENCODE__.serverUrl = data().url
 
             return <AppInterface defaultUrl={data().url} />
           }}
