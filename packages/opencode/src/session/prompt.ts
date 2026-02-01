@@ -146,6 +146,7 @@ export namespace SessionPrompt {
           }),
       ]),
     ),
+    renderAsAssistant: z.boolean().optional().describe("Render this user message with assistant styling in the UI"),
   })
   export type PromptInput = z.infer<typeof PromptInput>
 
@@ -839,6 +840,7 @@ export namespace SessionPrompt {
       model: input.model ?? agent.model ?? (await lastModel(input.sessionID)),
       system: input.system,
       variant: input.variant,
+      renderAsAssistant: input.renderAsAssistant,
     }
     using _ = defer(() => InstructionPrompt.clear(info.id))
 

@@ -1476,6 +1476,7 @@ export class Session extends HeyApiClient {
       system?: string
       variant?: string
       parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+      renderAsAssistant?: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1494,6 +1495,7 @@ export class Session extends HeyApiClient {
             { in: "body", key: "system" },
             { in: "body", key: "variant" },
             { in: "body", key: "parts" },
+            { in: "body", key: "renderAsAssistant" },
           ],
         },
       ],
@@ -1564,6 +1566,7 @@ export class Session extends HeyApiClient {
       system?: string
       variant?: string
       parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+      renderAsAssistant?: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1582,6 +1585,7 @@ export class Session extends HeyApiClient {
             { in: "body", key: "system" },
             { in: "body", key: "variant" },
             { in: "body", key: "parts" },
+            { in: "body", key: "renderAsAssistant" },
           ],
         },
       ],
