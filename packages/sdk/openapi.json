@@ -10576,7 +10576,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "const": "text"
+            "enum": ["text", "binary"]
           },
           "content": {
             "type": "string"
