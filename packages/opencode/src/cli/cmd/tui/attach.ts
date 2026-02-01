@@ -39,7 +39,7 @@ export const AttachCommand = cmd({
     })()
 
     // If server requires authentication, create a custom fetch that includes the auth header
-    const authHeader = getAuthorizationHeader()
+    const authHeader = getAuthorizationHeader({ passwordFromCli: args.password })
     const customFetch = authHeader
       ? ((async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
           const request = new Request(input, init)
