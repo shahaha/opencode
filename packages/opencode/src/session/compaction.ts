@@ -101,9 +101,11 @@ export namespace SessionCompaction {
   }) {
     const userMessage = input.messages.findLast((m) => m.info.id === input.parentID)!.info as MessageV2.User
     const usePrefixCache = Flag.OPENCODE_EXPERIMENTAL_COMPACTION_PRESERVE_PREFIX
-    const agent = usePrefixCache ? await Agent.get(userMessage.agent) : await Agent.get("compaction")
-    const model = agent.model
-      ? await Provider.getModel(agent.model.providerID, agent.model.modelID)
+    const compactionAgent = await Agent.get("compaction")
+    const originalAgent = usePrefixCache ? await Agent.get(userMessage.agent) : undefined
+    const agent = compactionAgent
+    const model = compactionAgent.model
+      ? await Provider.getModel(compactionAgent.model.providerID, compactionAgent.model.modelID)
       : await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)
     const msg = (await Session.updateMessage({
       id: Identifier.ascending("message"),
@@ -139,9 +141,9 @@ export namespace SessionCompaction {
     const session = usePrefixCache ? await Session.get(input.sessionID) : undefined
     let tools = {}
     let system: string[] = []
-    if (usePrefixCache && session) {
+    if (usePrefixCache && session && originalAgent) {
       tools = await SessionPrompt.resolveTools({
-        agent,
+        agent: originalAgent,
         model,
         session,
         tools: userMessage.tools,
@@ -183,8 +185,8 @@ export namespace SessionCompaction {
       ],
       model,
     })
-
-    if (result === "continue" && input.auto) {
+    console.log(result + "  " + input.auto)
+    if ((result === "continue" || result === "compact") && input.auto) {
       const continueMsg = await Session.updateMessage({
         id: Identifier.ascending("message"),
         role: "user",
