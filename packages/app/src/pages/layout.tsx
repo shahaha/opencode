@@ -576,6 +576,7 @@ export default function Layout(props: ParentProps) {
     const project = currentProject()
     if (!project) return [] as Session[]
     const now = Date.now()
+    const dynamic = server.dynamicSort.enabled()
     if (workspaceSetting()) {
       const dirs = workspaceIds(project)
       const activeDir = currentDir()
@@ -585,13 +586,13 @@ export default function Layout(props: ParentProps) {
         const active = dir === activeDir
         if (!expanded && !active) continue
         const [dirStore] = globalSync.child(dir, { bootstrap: true })
-        const dirSessions = sortedRootSessions(dirStore, now)
+        const dirSessions = sortedRootSessions(dirStore, now, dynamic)
         result.push(...dirSessions)
       }
       return result
     }
     const [projectStore] = globalSync.child(project.worktree)
-    return sortedRootSessions(projectStore, now)
+    return sortedRootSessions(projectStore, now, dynamic)
   })
 
   type PrefetchQueue = {
