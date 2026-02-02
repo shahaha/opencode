@@ -1,5 +1,6 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
+import { GlobalBus } from "@/bus/global"
 import { Log } from "../util/log"
 import { describeRoute, generateSpecs, validator, resolver, openAPIRouteHandler } from "hono-openapi"
 import { Hono } from "hono"
@@ -500,14 +501,22 @@ export namespace Server {
                   properties: {},
                 }),
               })
-              const unsub = Bus.subscribeAll(async (event) => {
-                await stream.writeSSE({
-                  data: JSON.stringify(event),
+              // Use GlobalBus instead of instance-scoped Bus.subscribeAll() so the SSE
+              // connection survives instance disposal during config reload
+              const handler = (event: { directory?: string; payload: any }) => {
+                stream.writeSSE({
+                  data: JSON.stringify(event.payload),
                 })
-                if (event.type === Bus.InstanceDisposed.type) {
+                // Close stream on instance disposal, but NOT during config reload
+                // During reload, the stream stays open to receive events from the new instance
+                if (
+                  event.payload.type === Bus.InstanceDisposed.type &&
+                  event.payload.properties?.reason !== "config-reload"
+                ) {
                   stream.close()
                 }
-              })
+              }
+              GlobalBus.on("event", handler)
 
               // Send heartbeat every 30s to prevent WKWebView timeout (60s default)
               const heartbeat = setInterval(() => {
@@ -522,7 +531,7 @@ export namespace Server {
               await new Promise<void>((resolve) => {
                 stream.onAbort(() => {
                   clearInterval(heartbeat)
-                  unsub()
+                  GlobalBus.off("event", handler)
                   resolve()
                   log.info("event disconnected")
                 })

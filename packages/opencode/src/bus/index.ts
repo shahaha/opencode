@@ -12,7 +12,8 @@ export namespace Bus {
     "server.instance.disposed",
     z.object({
       directory: z.string(),
-    }),
+      reason: z.string().optional(),
+    })
   )
 
   const state = Instance.state(
@@ -35,12 +36,12 @@ export namespace Bus {
       for (const sub of [...wildcard]) {
         sub(event)
       }
-    },
+    }
   )
 
   export async function publish<Definition extends BusEvent.Definition>(
     def: Definition,
-    properties: z.output<Definition["properties"]>,
+    properties: z.output<Definition["properties"]>
   ) {
     const payload = {
       type: def.type,
@@ -65,17 +66,14 @@ export namespace Bus {
 
   export function subscribe<Definition extends BusEvent.Definition>(
     def: Definition,
-    callback: (event: { type: Definition["type"]; properties: z.infer<Definition["properties"]> }) => void,
+    callback: (event: { type: Definition["type"]; properties: z.infer<Definition["properties"]> }) => void
   ) {
     return raw(def.type, callback)
   }
 
   export function once<Definition extends BusEvent.Definition>(
     def: Definition,
-    callback: (event: {
-      type: Definition["type"]
-      properties: z.infer<Definition["properties"]>
-    }) => "done" | undefined,
+    callback: (event: { type: Definition["type"]; properties: z.infer<Definition["properties"]> }) => "done" | undefined
   ) {
     const unsub = subscribe(def, (event) => {
       if (callback(event)) unsub()

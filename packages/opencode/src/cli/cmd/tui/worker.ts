@@ -144,7 +144,7 @@ export const rpc = {
     // Wait for all aborted loops to finish saving their messages
     await SessionPrompt.flush()
     Config.global.reset()
-    await Instance.disposeAll()
+    await Instance.disposeAll("config-reload")
     // Drain incomplete messages AFTER dispose to catch any that arrived during reload
     await Session.drainIncomplete(MessageV2.ABORT_REASON.CONFIG_RELOAD)
   },

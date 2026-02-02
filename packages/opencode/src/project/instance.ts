@@ -66,8 +66,8 @@ export const Instance = {
   state<S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>): () => S {
     return State.create(() => Instance.directory, init, dispose)
   },
-  async dispose() {
-    Log.Default.info("disposing instance", { directory: Instance.directory })
+  async dispose(reason?: string) {
+    Log.Default.info("disposing instance", { directory: Instance.directory, reason })
     await State.dispose(Instance.directory)
     cache.delete(Instance.directory)
     GlobalBus.emit("event", {
@@ -76,11 +76,12 @@ export const Instance = {
         type: "server.instance.disposed",
         properties: {
           directory: Instance.directory,
+          reason,
         },
       },
     })
   },
-  async disposeAll() {
+  async disposeAll(reason?: string) {
     if (disposal.all) return disposal.all
 
     disposal.all = iife(async () => {
@@ -102,7 +103,7 @@ export const Instance = {
         if (cache.get(key) !== value) continue
 
         await context.provide(ctx, async () => {
-          await Instance.dispose()
+          await Instance.dispose(reason)
         })
       }
     }).finally(() => {

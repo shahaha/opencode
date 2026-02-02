@@ -123,7 +123,7 @@ export const ConfigRoutes = lazy(() =>
         // Wait for all aborted loops to finish saving their messages
         await SessionPrompt.flush()
         Config.global.reset()
-        await Instance.disposeAll()
+        await Instance.disposeAll("config-reload")
         // Drain incomplete messages AFTER dispose to catch any that arrived during reload.
         // Without this, messages sent during reload appear as "QUEUED" in the TUI
         // because the pending memo finds an old assistant message with time.completed undefined.
