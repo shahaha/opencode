@@ -466,6 +466,10 @@ function App() {
     {
       title: "Switch layout",
       value: "layout.switch",
+      slash: {
+        name: "layout",
+        aliases: ["layouts"],
+      },
       onSelect: () => {
         dialog.replace(() => <DialogLayoutList />)
       },
