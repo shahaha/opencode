@@ -587,6 +587,7 @@ export function Prompt(props: PromptProps) {
 
       // Handle reload command specially - it doesn't need a session
       if (commandName === "reload") {
+        toast.show({ variant: "info", message: "Configuration reloading..." })
         sdk.client.config
           .reload()
           .then(() => toast.show({ variant: "info", message: "Configuration reloaded" }))

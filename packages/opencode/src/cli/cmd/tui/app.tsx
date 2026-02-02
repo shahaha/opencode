@@ -590,6 +590,7 @@ function App() {
         name: "reload",
       },
       onSelect: (dialog) => {
+        toast.show({ variant: "info", message: "Configuration reloading..." })
         sdk.client.config
           .reload()
           .then(() =>
