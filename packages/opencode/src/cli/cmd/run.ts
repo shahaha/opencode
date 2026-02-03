@@ -6,7 +6,7 @@ import { Flag } from "../../flag/flag"
 import { bootstrap } from "../bootstrap"
 import { Command } from "../../command"
 import { EOL } from "os"
-import { select } from "@clack/prompts"
+import * as prompts from "@clack/prompts"
 import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/v2"
 import { Server } from "../../server/server"
 import { Provider } from "../../provider/provider"
@@ -91,6 +91,11 @@ export const RunCommand = cmd({
         type: "string",
         describe: "model variant (provider-specific reasoning effort, e.g., high, max, minimal)",
       })
+      .option("quiet", {
+        alias: ["q"],
+        type: "boolean",
+        describe: "only output the final text response, suppressing tool call details",
+      })
   },
   handler: async (args) => {
     let message = [...args.message, ...(args["--"] || [])]
@@ -154,6 +159,15 @@ export const RunCommand = cmd({
       const events = await sdk.event.subscribe()
       let errorMsg: string | undefined
 
+      let quietTextBuffer: string | undefined
+      let quietSpinner: ReturnType<typeof prompts.spinner> | null = null
+
+      if (args.quiet && process.stdout.isTTY) {
+        await Bun.sleep(10) // clack apparently needs a moment to settle before the spinner can initialize properly
+        quietSpinner = prompts.spinner()
+        quietSpinner.start("Working...")
+      }
+
       const eventProcessor = (async () => {
         for await (const event of events.stream) {
           if (event.type === "message.part.updated") {
@@ -162,14 +176,16 @@ export const RunCommand = cmd({
 
             if (part.type === "tool" && part.state.status === "completed") {
               if (outputJsonEvent("tool_use", { part })) continue
-              const [tool, color] = TOOL[part.tool] ?? [part.tool, UI.Style.TEXT_INFO_BOLD]
-              const title =
-                part.state.title ||
-                (Object.keys(part.state.input).length > 0 ? JSON.stringify(part.state.input) : "Unknown")
-              printEvent(color, tool, title)
-              if (part.tool === "bash" && part.state.output?.trim()) {
-                UI.println()
-                UI.println(part.state.output)
+              if (!args.quiet) {
+                const [tool, color] = TOOL[part.tool] ?? [part.tool, UI.Style.TEXT_INFO_BOLD]
+                const title =
+                  part.state.title ||
+                  (Object.keys(part.state.input).length > 0 ? JSON.stringify(part.state.input) : "Unknown")
+                printEvent(color, tool, title)
+                if (part.tool === "bash" && part.state.output?.trim()) {
+                  UI.println()
+                  UI.println(part.state.output)
+                }
               }
             }
 
@@ -183,10 +199,14 @@ export const RunCommand = cmd({
 
             if (part.type === "text" && part.time?.end) {
               if (outputJsonEvent("text", { part })) continue
-              const isPiped = !process.stdout.isTTY
-              if (!isPiped) UI.println()
-              process.stdout.write((isPiped ? part.text : UI.markdown(part.text)) + EOL)
-              if (!isPiped) UI.println()
+              if (args.quiet) {
+                quietTextBuffer = part.text
+              } else {
+                const isPiped = !process.stdout.isTTY
+                if (!isPiped) UI.println()
+                process.stdout.write((isPiped ? part.text : UI.markdown(part.text)) + EOL)
+                if (!isPiped) UI.println()
+              }
             }
           }
 
@@ -198,18 +218,26 @@ export const RunCommand = cmd({
               err = String(props.error.data.message)
             }
             errorMsg = errorMsg ? errorMsg + EOL + err : err
+            if (quietSpinner) quietSpinner.stop("Failed", 1)
             if (outputJsonEvent("error", { error: props.error })) continue
             UI.error(err)
           }
 
           if (event.type === "session.idle" && event.properties.sessionID === sessionID) {
+            if (quietSpinner) quietSpinner.stop("Done")
+            if (args.quiet && quietTextBuffer) {
+              const isPiped = !process.stdout.isTTY
+              if (!isPiped) UI.println()
+              process.stdout.write((isPiped ? quietTextBuffer : UI.markdown(quietTextBuffer)) + EOL)
+              if (!isPiped) UI.println()
+            }
             break
           }
 
           if (event.type === "permission.asked") {
             const permission = event.properties
             if (permission.sessionID !== sessionID) continue
-            const result = await select({
+            const result = await prompts.select({
               message: `Permission required: ${permission.permission} (${permission.patterns.join(", ")})`,
               options: [
                 { value: "once", label: "Allow once" },
