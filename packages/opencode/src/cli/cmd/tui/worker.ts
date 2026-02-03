@@ -10,6 +10,7 @@ import { GlobalBus } from "@/bus/global"
 import { createOpencodeClient, type Event } from "@opencode-ai/sdk/v2"
 import type { BunWebSocketData } from "hono/bun"
 import { Flag } from "@/flag/flag"
+import { TaskManager, type TaskInfo } from "@/task"
 
 await Log.init({
   print: process.argv.includes("--print-logs"),
@@ -22,13 +23,15 @@ await Log.init({
 
 process.on("unhandledRejection", (e) => {
   Log.Default.error("rejection", {
-    e: e instanceof Error ? e.message : e,
+    message: e instanceof Error ? e.message : String(e),
+    stack: e instanceof Error ? e.stack : undefined,
   })
 })
 
 process.on("uncaughtException", (e) => {
   Log.Default.error("exception", {
-    e: e instanceof Error ? e.message : e,
+    message: e instanceof Error ? e.message : String(e),
+    stack: e instanceof Error ? e.stack : undefined,
   })
 })
 
@@ -65,22 +68,39 @@ const startEventStream = (directory: string) => {
 
   ;(async () => {
     while (!signal.aborted) {
-      const events = await Promise.resolve(
-        sdk.event.subscribe(
-          {},
-          {
-            signal,
-          },
-        ),
-      ).catch(() => undefined)
+      let events: AsyncIterable<Event> | undefined
+      try {
+        // Attempt to subscribe to server-side events; log any error
+        events = await Promise.resolve(
+          sdk.event.subscribe({}, { signal }),
+        )
+      } catch (err) {
+        Log.Default.error("event subscribe failed", {
+          directory,
+          error: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+        })
+        // Wait a bit before retrying
+        await Bun.sleep(500)
+        continue
+      }
 
       if (!events) {
+        Log.Default.debug("no events from subscribe, retrying", { directory })
         await Bun.sleep(250)
         continue
       }
 
-      for await (const event of events.stream) {
-        Rpc.emit("event", event as Event)
+      try {
+        for await (const event of (events as any).stream ?? events) {
+          Rpc.emit("event", event as Event)
+        }
+      } catch (err) {
+        Log.Default.error("error while reading event stream", {
+          directory,
+          error: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+        })
       }
 
       if (!signal.aborted) {
@@ -88,8 +108,10 @@ const startEventStream = (directory: string) => {
       }
     }
   })().catch((error) => {
-    Log.Default.error("event stream error", {
-      error: error instanceof Error ? error.message : error,
+    Log.Default.error("event stream fatal", {
+      directory,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     })
   })
 }
@@ -108,8 +130,30 @@ export const rpc = {
       headers,
       body: input.body,
     })
-    const response = await Server.App().fetch(request)
+
+    let response: Response
+    try {
+      response = await Server.App().fetch(request)
+    } catch (err) {
+      Log.Default.error("rpc.fetch network error", {
+        url: input.url,
+        method: input.method,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      })
+      throw err
+    }
+
     const body = await response.text()
+
+    if (!response.ok) {
+      Log.Default.error("rpc.fetch bad response", {
+        url: input.url,
+        status: response.status,
+        body: body.slice(0, 2000),
+      })
+    }
+
     return {
       status: response.status,
       headers: Object.fromEntries(response.headers.entries()),
@@ -139,6 +183,71 @@ export const rpc = {
     if (eventStream.abort) eventStream.abort.abort()
     await Instance.disposeAll()
     if (server) server.stop(true)
+  },
+
+  // Task management RPC handlers
+  async taskList(input: { directory: string }): Promise<TaskInfo[]> {
+    return Instance.provide({
+      directory: input.directory,
+      init: InstanceBootstrap,
+      fn: () => TaskManager.list(),
+    })
+  },
+
+  async taskGet(input: { directory: string; taskId: string }): Promise<TaskInfo | undefined> {
+    return Instance.provide({
+      directory: input.directory,
+      init: InstanceBootstrap,
+      fn: () => TaskManager.get(input.taskId),
+    })
+  },
+
+  async taskKill(input: { directory: string; taskId: string }): Promise<boolean> {
+    return Instance.provide({
+      directory: input.directory,
+      init: InstanceBootstrap,
+      fn: () => TaskManager.kill(input.taskId),
+    })
+  },
+
+  async taskRead(input: { directory: string; taskId: string }): Promise<string> {
+    return Instance.provide({
+      directory: input.directory,
+      init: InstanceBootstrap,
+      fn: () => TaskManager.read(input.taskId),
+    })
+  },
+
+  async taskTail(input: { directory: string; taskId: string; lines?: number }): Promise<string> {
+    return Instance.provide({
+      directory: input.directory,
+      init: InstanceBootstrap,
+      fn: () => TaskManager.tail(input.taskId, input.lines ?? 50),
+    })
+  },
+
+  async taskInput(input: { directory: string; taskId: string; data: string }): Promise<boolean> {
+    return Instance.provide({
+      directory: input.directory,
+      init: InstanceBootstrap,
+      fn: () => TaskManager.input(input.taskId, input.data),
+    })
+  },
+
+  async taskCleanup(input: { directory: string; maxAge?: number }): Promise<number> {
+    return Instance.provide({
+      directory: input.directory,
+      init: InstanceBootstrap,
+      fn: () => TaskManager.cleanup(input.maxAge),
+    })
+  },
+
+  async taskRemove(input: { directory: string; taskId: string }): Promise<boolean> {
+    return Instance.provide({
+      directory: input.directory,
+      init: InstanceBootstrap,
+      fn: () => TaskManager.remove(input.taskId),
+    })
   },
 }
 

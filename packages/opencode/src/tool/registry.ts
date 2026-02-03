@@ -26,6 +26,7 @@ import { Log } from "@/util/log"
 import { LspTool } from "./lsp"
 import { Truncate } from "./truncation"
 import { PlanExitTool, PlanEnterTool } from "./plan"
+import { ProcessQueryTool } from "./process-query"
 import { ApplyPatchTool } from "./apply_patch"
 
 export namespace ToolRegistry {
@@ -108,6 +109,7 @@ export namespace ToolRegistry {
       EditTool,
       WriteTool,
       TaskTool,
+      ProcessQueryTool,
       WebFetchTool,
       TodoWriteTool,
       // TodoReadTool,
