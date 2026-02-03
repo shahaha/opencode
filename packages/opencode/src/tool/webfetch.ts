@@ -2,6 +2,8 @@ import z from "zod"
 import { Tool } from "./tool"
 import TurndownService from "turndown"
 import DESCRIPTION from "./webfetch.txt"
+import stripAnsi from "strip-ansi"
+import { Identifier } from "../id/id"
 
 const MAX_RESPONSE_SIZE = 5 * 1024 * 1024 // 5MB
 const DEFAULT_TIMEOUT = 30 * 1000 // 30 seconds
@@ -89,16 +91,46 @@ export const WebFetchTool = Tool.define("webfetch", {
       throw new Error("Response too large (exceeds 5MB limit)")
     }
 
-    const content = new TextDecoder().decode(arrayBuffer)
     const contentType = response.headers.get("content-type") || ""
+    const type = contentType.split(";")[0].trim().toLowerCase()
+    const bytes = new Uint8Array(arrayBuffer)
+    const title = `${params.url} (${contentType || "unknown"})`
 
-    const title = `${params.url} (${contentType})`
+    const attachment = createAttachment({
+      sessionID: ctx.sessionID,
+      messageID: ctx.messageID,
+      url: params.url,
+      type,
+      arrayBuffer,
+    })
+    if (attachment) {
+      return {
+        output: attachment.mime === "application/pdf" ? "PDF fetched successfully" : "Image fetched successfully",
+        title,
+        metadata: {},
+        attachments: [attachment],
+      }
+    }
+
+    if (isBinaryContentType(type) || (!isTextContentType(type) && !looksLikeText(bytes))) {
+      return {
+        output: formatBinarySummary({
+          url: params.url,
+          contentType,
+          byteLength: bytes.byteLength,
+        }),
+        title,
+        metadata: {},
+      }
+    }
+
+    const content = sanitizeText(new TextDecoder().decode(arrayBuffer))
 
     // Handle content based on requested format and actual content type
     switch (params.format) {
       case "markdown":
         if (contentType.includes("text/html")) {
-          const markdown = convertHTMLToMarkdown(content)
+          const markdown = sanitizeText(convertHTMLToMarkdown(content))
           return {
             output: markdown,
             title,
@@ -113,7 +145,7 @@ export const WebFetchTool = Tool.define("webfetch", {
 
       case "text":
         if (contentType.includes("text/html")) {
-          const text = await extractTextFromHTML(content)
+          const text = sanitizeText(await extractTextFromHTML(content))
           return {
             output: text,
             title,
@@ -185,4 +217,128 @@ function convertHTMLToMarkdown(html: string): string {
   })
   turndownService.remove(["script", "style", "meta", "link"])
   return turndownService.turndown(html)
+}
+
+function isBinaryContentType(type?: string) {
+  if (!type) return false
+  if (type.startsWith("audio/")) return true
+  if (type.startsWith("video/")) return true
+  if (type.startsWith("font/")) return true
+
+  return [
+    "application/pdf",
+    "application/zip",
+    "application/gzip",
+    "application/x-gzip",
+    "application/x-7z-compressed",
+    "application/x-rar-compressed",
+  ].includes(type)
+}
+
+function isTextContentType(type?: string) {
+  if (!type) return false
+  if (type.startsWith("text/")) return true
+
+  return [
+    "application/json",
+    "application/xml",
+    "application/xhtml+xml",
+    "application/javascript",
+    "application/x-javascript",
+    "application/yaml",
+    "application/x-yaml",
+    "application/toml",
+    "application/ld+json",
+    "application/problem+json",
+  ].includes(type)
+}
+
+function looksLikeText(bytes: Uint8Array) {
+  const sample = bytes.subarray(0, Math.min(bytes.length, 1024))
+  const stats = { controls: 0, zeros: 0 }
+
+  for (const byte of sample) {
+    if (byte === 0) stats.zeros++
+    if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) stats.controls++
+    if (byte === 127) stats.controls++
+  }
+
+  if (stats.zeros > 0) return false
+  return stats.controls / Math.max(sample.length, 1) <= 0.1
+}
+
+function sanitizeText(text: string) {
+  return stripAnsi(text)
+    .replaceAll("\r", "")
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+    .replace(/[\u0080-\u009F]/g, "")
+}
+
+function formatBinarySummary(input: { url: string; contentType: string; byteLength: number }) {
+  const type = input.contentType || "unknown"
+  const size = input.byteLength.toLocaleString()
+  return [
+    "Binary response omitted to protect the TUI and keep context small.",
+    "",
+    `- url: ${input.url}`,
+    `- content-type: ${type}`,
+    `- bytes: ${size}`,
+  ].join("\n")
+}
+
+function createAttachment(input: {
+  sessionID: string
+  messageID: string
+  url: string
+  type: string
+  arrayBuffer: ArrayBuffer
+}) {
+  if (input.type === "image/svg+xml") return
+  if (!input.type.startsWith("image/") && input.type !== "application/pdf") return
+
+  const b64 = Buffer.from(input.arrayBuffer).toString("base64")
+  return {
+    id: Identifier.ascending("part"),
+    sessionID: input.sessionID,
+    messageID: input.messageID,
+    type: "file" as const,
+    mime: input.type,
+    filename: filenameFromUrl(input.url, input.type),
+    url: `data:${input.type};base64,${b64}`,
+  }
+}
+
+function filenameFromUrl(raw: string, mime: string) {
+  const base = safeFilenameFromUrl(raw)
+  if (base.includes(".")) return base
+  return `${base}.${extensionFromMime(mime)}`
+}
+
+function safeFilenameFromUrl(raw: string) {
+  const fallback = "webfetch"
+  if (!URL.canParse(raw)) return fallback
+
+  const url = new URL(raw)
+  const parts = url.pathname.split("/").filter(Boolean)
+  const last = parts.at(-1)
+  if (!last) return fallback
+  const cleaned = last.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 128)
+  return cleaned || fallback
+}
+
+function extensionFromMime(mime: string) {
+  switch (mime) {
+    case "image/jpeg":
+      return "jpg"
+    case "image/png":
+      return "png"
+    case "image/webp":
+      return "webp"
+    case "image/gif":
+      return "gif"
+    case "application/pdf":
+      return "pdf"
+    default:
+      return "bin"
+  }
 }
