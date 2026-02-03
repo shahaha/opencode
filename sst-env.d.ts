@@ -144,11 +144,22 @@ declare module "sst" {
       "type": "sst.cloudflare.StaticSite"
       "url": string
     }
-    "ZEN_BLACK": {
+    "ZEN_BLACK_LIMITS": {
       "type": "sst.sst.Secret"
       "value": string
     }
+    "ZEN_BLACK_PRICE": {
+      "plan100": string
+      "plan20": string
+      "plan200": string
+      "product": string
+      "type": "sst.sst.Linkable"
+    }
     "ZEN_MODELS1": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
+    "ZEN_MODELS10": {
       "type": "sst.sst.Secret"
       "value": string
     }
@@ -177,6 +188,10 @@ declare module "sst" {
       "value": string
     }
     "ZEN_MODELS8": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
+    "ZEN_MODELS9": {
       "type": "sst.sst.Secret"
       "value": string
     }
