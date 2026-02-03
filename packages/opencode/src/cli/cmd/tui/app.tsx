@@ -2,7 +2,7 @@ import { render, useKeyboard, useRenderer, useTerminalDimensions } from "@opentu
 import { Clipboard } from "@tui/util/clipboard"
 import { TextAttributes } from "@opentui/core"
 import { RouteProvider, useRoute } from "@tui/context/route"
-import { Switch, Match, createEffect, untrack, ErrorBoundary, createSignal, onMount, batch, Show, on } from "solid-js"
+import { Switch, Match, createEffect, untrack, ErrorBoundary, createSignal, onMount, batch, on } from "solid-js"
 import { Installation } from "@/installation"
 import { Flag } from "@/flag/flag"
 import { DialogProvider, useDialog } from "@tui/ui/dialog"
@@ -195,7 +195,7 @@ function App() {
   const command = useCommandDialog()
   const sdk = useSDK()
   const toast = useToast()
-  const { theme, mode, setMode } = useTheme()
+  const { theme, mode, setMode, transparent, setTransparent } = useTheme()
   const sync = useSync()
   const exit = useExit()
   const promptRef = usePromptRef()
@@ -468,6 +468,15 @@ function App() {
       value: "theme.switch_mode",
       onSelect: (dialog) => {
         setMode(mode() === "dark" ? "light" : "dark")
+        dialog.clear()
+      },
+      category: "System",
+    },
+    {
+      title: transparent() ? "Disable transparency" : "Enable transparency",
+      value: "theme.transparency",
+      onSelect: (dialog) => {
+        setTransparent(!transparent())
         dialog.clear()
       },
       category: "System",
