@@ -15,6 +15,17 @@ function mimeToModality(mime: string): Modality | undefined {
   return undefined
 }
 
+/**
+ * Validates if a thinking block signature is a valid Claude/Anthropic signature.
+ * Claude signatures typically start with 'ErUB' (base64 encoded protobuf).
+ * Other models like GLM, MiniMax produce incompatible signatures.
+ */
+function isValidClaudeSignature(signature: string | undefined): boolean {
+  if (!signature) return false
+  // Claude thinking signatures are base64-encoded protobuf that starts with 'ErUB'
+  return signature.startsWith('ErUB')
+}
+
 export namespace ProviderTransform {
   // Maps npm package to the key the AI SDK expects for providerOptions
   function sdkKey(npm: string): string | undefined {
@@ -38,6 +49,103 @@ export namespace ProviderTransform {
         return "openrouter"
     }
     return undefined
+  }
+
+  /**
+   * Normalizes thinking blocks for Claude when switching from other models.
+   * 
+   * Problem: When switching from models like GLM 4.7 or MiniMax to Claude with
+   * extended thinking enabled, users get API errors because other models produce
+   * thinking blocks with signatures that are incompatible with Claude's validation.
+   * 
+   * Solution: Convert incompatible thinking/reasoning blocks to wrapped text,
+   * preserving the content while removing invalid signatures.
+   * 
+   * @see https://github.com/anomalyco/opencode/issues/6418
+   */
+  function normalizeClaudeThinkingBlocks(
+    msgs: ModelMessage[],
+    options: Record<string, unknown>,
+  ): ModelMessage[] {
+    const thinkingEnabled = (options as { thinking?: { type?: string } })?.thinking?.type === "enabled"
+    const convertedThinkingMsgIndices = new Set<number>()
+
+    msgs = msgs
+      .map((msg, msgIdx) => {
+        if ((msg.role === "assistant" || msg.role === "tool") && Array.isArray(msg.content)) {
+          let hadThinkingBlock = false
+          
+          const newContent = msg.content
+            .map((part) => {
+              const partAny = part as { type: string; thinking?: string; text?: string; signature?: string; toolCallId?: string }
+              
+              // Convert thinking blocks with INVALID signatures to wrapped text
+              // Valid Claude signatures (starting with 'ErUB') are preserved
+              if (partAny.type === "thinking" && partAny.signature && !isValidClaudeSignature(partAny.signature)) {
+                const text = partAny.thinking || partAny.text || ""
+                hadThinkingBlock = true
+                if (!text) return null
+                return {
+                  type: "text" as const,
+                  text: `<assistant_thinking>${text}</assistant_thinking>`,
+                }
+              }
+              
+              // Convert reasoning parts to wrapped text (reasoning has no signature concept)
+              if (partAny.type === "reasoning") {
+                const text = partAny.text || ""
+                if (!text) return null
+                return {
+                  type: "text" as const,
+                  text: `<assistant_reasoning>${text}</assistant_reasoning>`,
+                }
+              }
+              
+              // Normalize tool call IDs for Claude compatibility
+              if ((partAny.type === "tool-call" || partAny.type === "tool-result") && "toolCallId" in partAny) {
+                return {
+                  ...part,
+                  toolCallId: partAny.toolCallId!.replace(/[^a-zA-Z0-9_-]/g, "_"),
+                }
+              }
+              
+              return part
+            })
+            .filter((part): part is NonNullable<typeof part> => part !== null)
+          
+          if (hadThinkingBlock) convertedThinkingMsgIndices.add(msgIdx)
+          
+          // Filter out messages with empty content after processing
+          if (newContent.length === 0) return undefined
+          
+          return { ...msg, content: newContent }
+        }
+        return msg
+      })
+      .filter((msg): msg is ModelMessage => msg !== undefined)
+
+    // When thinking is enabled, Claude requires the last assistant message to start
+    // with a valid thinking block. If it doesn't (and has no tool calls or converted
+    // thinking), remove it to let Claude generate fresh thinking.
+    if (thinkingEnabled) {
+      const lastAssistantIdx = msgs.findLastIndex((m) => m.role === "assistant")
+      if (lastAssistantIdx >= 0) {
+        const lastAssistant = msgs[lastAssistantIdx]
+        const hadConvertedThinking = convertedThinkingMsgIndices.has(lastAssistantIdx)
+        
+        if (Array.isArray(lastAssistant.content) && lastAssistant.content.length > 0 && !hadConvertedThinking) {
+          const firstPart = lastAssistant.content[0] as { type: string }
+          const startsWithValidThinking = firstPart.type === "thinking" || firstPart.type === "redacted_thinking"
+          const hasToolCall = lastAssistant.content.some((p) => (p as { type: string }).type === "tool-call")
+          
+          if (!startsWithValidThinking && !hasToolCall) {
+            msgs = msgs.filter((_, i) => i !== lastAssistantIdx)
+          }
+        }
+      }
+    }
+
+    return msgs
   }
 
   function normalizeMessages(
@@ -68,20 +176,7 @@ export namespace ProviderTransform {
     }
 
     if (model.api.id.includes("claude")) {
-      return msgs.map((msg) => {
-        if ((msg.role === "assistant" || msg.role === "tool") && Array.isArray(msg.content)) {
-          msg.content = msg.content.map((part) => {
-            if ((part.type === "tool-call" || part.type === "tool-result") && "toolCallId" in part) {
-              return {
-                ...part,
-                toolCallId: part.toolCallId.replace(/[^a-zA-Z0-9_-]/g, "_"),
-              }
-            }
-            return part
-          })
-        }
-        return msg
-      })
+      return normalizeClaudeThinkingBlocks(msgs, options)
     }
     if (
       model.providerID === "mistral" ||
