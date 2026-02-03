@@ -16,6 +16,7 @@ import type {
   CommandListResponses,
   Config as Config3,
   ConfigGetResponses,
+  ConfigLogoResponses,
   ConfigProvidersResponses,
   ConfigUpdateErrors,
   ConfigUpdateResponses,
@@ -695,6 +696,25 @@ export class Config2 extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * Get custom logo
+   *
+   * Get the custom logo content if configured, or null to use the default logo.
+   */
+  public logo<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ConfigLogoResponses, unknown, ThrowOnError>({
+      url: "/config/logo",
+      ...options,
+      ...params,
     })
   }
 
