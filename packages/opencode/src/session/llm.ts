@@ -3,6 +3,7 @@ import { Provider } from "@/provider/provider"
 import { Log } from "@/util/log"
 import {
   streamText,
+  generateObject,
   wrapLanguageModel,
   type ModelMessage,
   type StreamTextResult,
@@ -285,5 +286,31 @@ export namespace LLM {
       }
     }
     return false
+  }
+
+  export type ObjectInput = {
+    model?: string
+    prompt: string
+    schema: Record<string, any>
+    abort: AbortSignal
+  }
+
+  export type ObjectOutput = { object: unknown }
+
+  export async function object(input: ObjectInput): Promise<ObjectOutput> {
+    log.info("object", { prompt: input.prompt.slice(0, 100) })
+
+    const modelSpec = input.model ? Provider.parseModel(input.model) : await Provider.defaultModel()
+    const model = await Provider.getModel(modelSpec.providerID, modelSpec.modelID)
+    const language = await Provider.getLanguage(model)
+
+    const result = await generateObject({
+      model: language,
+      schema: jsonSchema(input.schema),
+      prompt: input.prompt,
+      abortSignal: input.abort,
+    })
+
+    return { object: result.object }
   }
 }

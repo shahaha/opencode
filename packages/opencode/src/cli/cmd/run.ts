@@ -11,6 +11,7 @@ import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/v2"
 import { Server } from "../../server/server"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
+import { LLM } from "../../session/llm"
 
 const TOOL: Record<string, [string, string]> = {
   todowrite: ["Todo", UI.Style.TEXT_WARNING_BOLD],
@@ -91,6 +92,10 @@ export const RunCommand = cmd({
         type: "string",
         describe: "model variant (provider-specific reasoning effort, e.g., high, max, minimal)",
       })
+      .option("json", {
+        type: "string",
+        describe: "JSON schema to constrain the output format (structured output)",
+      })
   },
   handler: async (args) => {
     let message = [...args.message, ...(args["--"] || [])]
@@ -133,6 +138,21 @@ export const RunCommand = cmd({
       process.exit(1)
     }
 
+    // Parse JSON schema if provided
+    let outputSchema: Record<string, any> | undefined
+    if (args.json) {
+      if (args.format === "json") {
+        UI.error("Cannot use --json with --format json. Use --format default (or omit --format) with --json.")
+        process.exit(1)
+      }
+      try {
+        outputSchema = JSON.parse(args.json)
+      } catch (e) {
+        UI.error("Invalid JSON schema: " + (e as Error).message)
+        process.exit(1)
+      }
+    }
+
     const execute = async (sdk: OpencodeClient, sessionID: string) => {
       const printEvent = (color: string, type: string, title: string) => {
         UI.println(
@@ -153,6 +173,7 @@ export const RunCommand = cmd({
 
       const events = await sdk.event.subscribe()
       let errorMsg: string | undefined
+      let finalText: string | undefined
 
       const eventProcessor = (async () => {
         for await (const event of events.stream) {
@@ -183,10 +204,14 @@ export const RunCommand = cmd({
 
             if (part.type === "text" && part.time?.end) {
               if (outputJsonEvent("text", { part })) continue
-              const isPiped = !process.stdout.isTTY
-              if (!isPiped) UI.println()
-              process.stdout.write((isPiped ? part.text : UI.markdown(part.text)) + EOL)
-              if (!isPiped) UI.println()
+              finalText = part.text
+              // If --json is provided, don't output text now - we'll transform it after
+              if (!outputSchema) {
+                const isPiped = !process.stdout.isTTY
+                if (!isPiped) UI.println()
+                process.stdout.write((isPiped ? part.text : UI.markdown(part.text)) + EOL)
+                if (!isPiped) UI.println()
+              }
             }
           }
 
@@ -272,6 +297,23 @@ export const RunCommand = cmd({
       }
 
       await eventProcessor
+
+      // Transform final text to JSON schema if --json was provided
+      if (outputSchema && finalText && !errorMsg) {
+        try {
+          const result = await LLM.object({
+            model: args.model,
+            prompt: `Transform the following text into the requested JSON format:\n\n${finalText}`,
+            schema: outputSchema,
+            abort: new AbortController().signal,
+          })
+          process.stdout.write(JSON.stringify(result.object, null, 2) + EOL)
+        } catch (e) {
+          UI.error("Failed to transform output to JSON: " + (e as Error).message)
+          process.exit(1)
+        }
+      }
+
       if (errorMsg) process.exit(1)
     }
 
