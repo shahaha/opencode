@@ -5,6 +5,7 @@ import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import type { PermissionNext } from "../../src/permission/next"
 import { Truncate } from "../../src/tool/truncation"
+import { Session } from "../../src/session"
 
 const ctx = {
   sessionID: "test",
@@ -34,6 +35,54 @@ describe("tool.bash", () => {
         )
         expect(result.metadata.exit).toBe(0)
         expect(result.metadata.output).toContain("test")
+      },
+    })
+  })
+
+  test("exposes OPENCODE_SESSION_ID environment variable", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const sessionID = "session_abc123"
+        const testCtx = {
+          ...ctx,
+          sessionID,
+        }
+        const result = await bash.execute(
+          {
+            command: process.platform === "win32" ? "echo %OPENCODE_SESSION_ID%" : "echo $OPENCODE_SESSION_ID",
+            description: "Print session ID env var",
+          },
+          testCtx,
+        )
+        expect(result.metadata.exit).toBe(0)
+        expect(result.metadata.output.trim()).toBe(sessionID)
+      },
+    })
+  })
+
+  test("exposes OPENCODE_SESSION_TITLE environment variable", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const title = "My Custom Session Title"
+        const session = await Session.create({ title })
+        const bash = await BashTool.init()
+        const testCtx = {
+          ...ctx,
+          sessionID: session.id,
+        }
+        const result = await bash.execute(
+          {
+            command: process.platform === "win32" ? "echo %OPENCODE_SESSION_TITLE%" : "echo $OPENCODE_SESSION_TITLE",
+            description: "Print session title env var",
+          },
+          testCtx,
+        )
+        expect(result.metadata.exit).toBe(0)
+        expect(result.metadata.output.trim()).toBe(title)
+        await Session.remove(session.id)
       },
     })
   })
