@@ -590,17 +590,13 @@ function App() {
         name: "reload",
       },
       onSelect: (dialog) => {
-        toast.show({ variant: "info", message: "Configuration reloading..." })
+        dialog.clear()
+        dialog.startReload()
         sdk.client.config
           .reload()
-          .then(() =>
-            toast.show({
-              variant: "info",
-              message: "Configuration reloaded",
-            }),
-          )
+          .then(() => toast.show({ variant: "info", message: "Reloaded configuration" }))
           .catch(() => toast.error("Failed to reload configuration"))
-        dialog.clear()
+          .finally(() => dialog.endReload())
       },
       category: "System",
     },

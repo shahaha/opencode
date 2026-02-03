@@ -54,9 +54,17 @@ function init() {
       onClose?: () => void
     }[],
     size: "medium" as "medium" | "large",
+    reloading: false,
   })
 
   useKeyboard((evt) => {
+    // Block ALL keyboard input during reload
+    if (store.reloading) {
+      evt.preventDefault()
+      evt.stopPropagation()
+      return
+    }
+
     if (evt.name === "escape" && store.stack.length > 0) {
       const current = store.stack.at(-1)!
       current.onClose?.()
@@ -122,6 +130,16 @@ function init() {
     setSize(size: "medium" | "large") {
       setStore("size", size)
     },
+    // Reload state management
+    startReload() {
+      setStore("reloading", true)
+    },
+    endReload() {
+      setStore("reloading", false)
+    },
+    get isReloading() {
+      return store.reloading
+    },
   }
 }
 
@@ -133,6 +151,9 @@ export function DialogProvider(props: ParentProps) {
   const value = init()
   const renderer = useRenderer()
   const toast = useToast()
+  const dimensions = useTerminalDimensions()
+  const { theme } = useTheme()
+
   return (
     <ctx.Provider value={value}>
       {props.children}
@@ -154,6 +175,29 @@ export function DialogProvider(props: ParentProps) {
           </Dialog>
         </Show>
       </box>
+      {/* Reload modal - renders above everything when reloading */}
+      <Show when={value.isReloading}>
+        <box
+          width={dimensions().width}
+          height={dimensions().height}
+          backgroundColor={RGBA.fromInts(0, 0, 0, 150)}
+          position="absolute"
+          left={0}
+          top={0}
+          alignItems="center"
+          justifyContent="center"
+        >
+          <box
+            backgroundColor={theme.backgroundPanel}
+            paddingLeft={4}
+            paddingRight={4}
+            paddingTop={2}
+            paddingBottom={2}
+          >
+            <text fg={theme.text}> Reloading configuration... </text>
+          </box>
+        </box>
+      </Show>
     </ctx.Provider>
   )
 }

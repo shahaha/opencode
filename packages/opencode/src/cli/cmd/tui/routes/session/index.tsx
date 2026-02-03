@@ -1077,7 +1077,7 @@ export function Session() {
                     r.set(route.initialPrompt)
                   }
                 }}
-                disabled={permissions().length > 0 || questions().length > 0}
+                disabled={permissions().length > 0 || questions().length > 0 || dialog.isReloading}
                 onSubmit={() => {
                   toBottom()
                 }}
