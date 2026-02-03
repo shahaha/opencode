@@ -6,14 +6,15 @@ import { semver } from "bun"
 
 export async function upgrade() {
   const config = await Config.global()
+  if (config.autoupdate === false || Flag.OPENCODE_DISABLE_AUTOUPDATE) {
+    return
+  }
+
   const method = await Installation.method()
   const latest = await Installation.latest(method).catch(() => {})
   if (!latest) return
   if (semver.order(Installation.VERSION, latest) >= 0) return
 
-  if (config.autoupdate === false || Flag.OPENCODE_DISABLE_AUTOUPDATE) {
-    return
-  }
   if (config.autoupdate === "notify") {
     await Bus.publish(Installation.Event.UpdateAvailable, { version: latest })
     return
