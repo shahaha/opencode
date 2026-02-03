@@ -743,6 +743,442 @@ describe("ProviderTransform.message - empty image handling", () => {
   })
 })
 
+describe("ProviderTransform.message - databricks empty content filtering", () => {
+  // Test with Databricks Claude (Anthropic model via OpenAI-compatible API)
+  const databricksClaudeModel = {
+    id: "databricks-claude-sonnet-4",
+    providerID: "databricks",
+    api: {
+      id: "databricks-claude-sonnet-4",
+      url: "https://my-workspace.cloud.databricks.com/serving-endpoints",
+      npm: "@ai-sdk/openai-compatible",
+    },
+    name: "Claude Sonnet 4 (Databricks)",
+    capabilities: {
+      temperature: true,
+      reasoning: false,
+      attachment: true,
+      toolcall: true,
+      input: { text: true, audio: false, image: true, video: false, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+      interleaved: false,
+    },
+    cost: {
+      input: 3,
+      output: 15,
+      cache: { read: 0.3, write: 0 },
+    },
+    limit: {
+      context: 200000,
+      output: 64000,
+    },
+    status: "active",
+    options: {},
+    headers: {},
+  } as any
+
+  // Test with Databricks GPT-5 (OpenAI model via OpenAI-compatible API)
+  const databricksGptModel = {
+    id: "databricks-gpt-5",
+    providerID: "databricks",
+    api: {
+      id: "databricks-gpt-5",
+      url: "https://my-workspace.cloud.databricks.com/serving-endpoints",
+      npm: "@ai-sdk/openai-compatible",
+    },
+    name: "GPT-5 (Databricks)",
+    capabilities: {
+      temperature: true,
+      reasoning: true,
+      attachment: true,
+      toolcall: true,
+      input: { text: true, audio: false, image: true, video: false, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+      interleaved: false,
+    },
+    cost: {
+      input: 1.25,
+      output: 10,
+      cache: { read: 0.125, write: 0 },
+    },
+    limit: {
+      context: 400000,
+      output: 128000,
+    },
+    status: "active",
+    options: {},
+    headers: {},
+  } as any
+
+  // Test with Databricks Gemini (Google model via OpenAI-compatible API)
+  const databricksGeminiModel = {
+    id: "databricks-gemini-3-pro",
+    providerID: "databricks",
+    api: {
+      id: "databricks-gemini-3-pro",
+      url: "https://my-workspace.cloud.databricks.com/serving-endpoints",
+      npm: "@ai-sdk/openai-compatible",
+    },
+    name: "Gemini 3 Pro (Databricks)",
+    capabilities: {
+      temperature: true,
+      reasoning: true,
+      attachment: true,
+      toolcall: true,
+      input: { text: true, audio: true, image: true, video: true, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+      interleaved: false,
+    },
+    cost: {
+      input: 2,
+      output: 12,
+      cache: { read: 0.2, write: 0 },
+    },
+    limit: {
+      context: 1000000,
+      output: 65536,
+    },
+    status: "active",
+    options: {},
+    headers: {},
+  } as any
+
+  // Use databricksClaudeModel as the default for existing tests
+  const databricksModel = databricksClaudeModel
+
+  test("filters out messages with empty string content", () => {
+    const msgs = [
+      { role: "user", content: "Hello" },
+      { role: "assistant", content: "" },
+      { role: "user", content: "World" },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, databricksModel, {})
+
+    expect(result).toHaveLength(2)
+    expect(result[0].content).toBe("Hello")
+    expect(result[1].content).toBe("World")
+  })
+
+  test("filters out empty text parts from array content", () => {
+    const msgs = [
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "" },
+          { type: "text", text: "Hello" },
+          { type: "text", text: "" },
+        ],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, databricksModel, {})
+
+    expect(result).toHaveLength(1)
+    expect(result[0].content).toHaveLength(1)
+    expect(result[0].content[0]).toMatchObject({ type: "text", text: "Hello" })
+  })
+
+  test("keeps tool-call parts when text parts are empty", () => {
+    const msgs = [
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "" },
+          { type: "tool-call", toolCallId: "123", toolName: "bash", input: { command: "ls" } },
+        ],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, databricksModel, {})
+
+    expect(result).toHaveLength(1)
+    expect(result[0].content).toHaveLength(1)
+    expect(result[0].content[0]).toMatchObject({
+      type: "tool-call",
+      toolCallId: "123",
+      toolName: "bash",
+      input: { command: "ls" },
+    })
+  })
+
+  test("keeps tool-result parts when text parts are empty", () => {
+    const msgs = [
+      {
+        role: "tool",
+        content: [{ type: "tool-result", toolCallId: "123", toolName: "bash", result: "output" }],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, databricksModel, {})
+
+    expect(result).toHaveLength(1)
+    expect(result[0].content).toHaveLength(1)
+  })
+
+  test("removes entire message when all parts are empty", () => {
+    const msgs = [
+      { role: "user", content: "Hello" },
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "" },
+          { type: "reasoning", text: "" },
+        ],
+      },
+      { role: "user", content: "World" },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, databricksModel, {})
+
+    expect(result).toHaveLength(2)
+    expect(result[0].content).toBe("Hello")
+    expect(result[1].content).toBe("World")
+  })
+
+  test("handles assistant message with only tool call (no text)", () => {
+    const msgs = [
+      { role: "user", content: "Run a command" },
+      {
+        role: "assistant",
+        content: [{ type: "tool-call", toolCallId: "call_123", toolName: "bash", input: { command: "ls" } }],
+      },
+      {
+        role: "tool",
+        content: [{ type: "tool-result", toolCallId: "call_123", toolName: "bash", result: "file1.txt" }],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, databricksModel, {})
+
+    expect(result).toHaveLength(3)
+    // Assistant message should just have tool call, no text
+    expect(result[1].content).toHaveLength(1)
+    expect(result[1].content[0]).toMatchObject({ type: "tool-call", toolCallId: "call_123" })
+    // Tool result should be preserved
+    expect(result[2].content).toHaveLength(1)
+    expect(result[2].content[0]).toMatchObject({ type: "tool-result", toolCallId: "call_123" })
+  })
+
+  test("handles empty text alongside tool call (empty text should be filtered)", () => {
+    const msgs = [
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "" },
+          { type: "tool-call", toolCallId: "call_123", toolName: "bash", input: { command: "ls" } },
+          { type: "text", text: "" },
+        ],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, databricksModel, {})
+
+    expect(result).toHaveLength(1)
+    // Empty text parts should be filtered, only tool call remains
+    expect(result[0].content).toHaveLength(1)
+    expect(result[0].content[0]).toMatchObject({ type: "tool-call" })
+  })
+
+  // Explicit tool calling tests for each Databricks model type
+
+  describe("Databricks Claude (Anthropic) - tool calling", () => {
+    test("filters empty text and keeps tool calls", () => {
+      const msgs = [
+        { role: "user", content: "Run a command" },
+        {
+          role: "assistant",
+          content: [
+            { type: "text", text: "" },
+            { type: "tool-call", toolCallId: "claude_call_1", toolName: "bash", input: { command: "echo hello" } },
+          ],
+        },
+        {
+          role: "tool",
+          content: [{ type: "tool-result", toolCallId: "claude_call_1", toolName: "bash", result: "hello" }],
+        },
+      ] as any[]
+
+      const result = ProviderTransform.message(msgs, databricksClaudeModel, {})
+
+      expect(result).toHaveLength(3)
+      // Assistant message: empty text filtered, tool call preserved
+      expect(result[1].content).toHaveLength(1)
+      expect(result[1].content[0]).toMatchObject({
+        type: "tool-call",
+        toolCallId: "claude_call_1",
+        toolName: "bash",
+      })
+      // Tool result preserved
+      expect(result[2].content[0]).toMatchObject({
+        type: "tool-result",
+        toolCallId: "claude_call_1",
+      })
+    })
+
+    test("handles multiple tool calls with empty text", () => {
+      const msgs = [
+        {
+          role: "assistant",
+          content: [
+            { type: "text", text: "" },
+            { type: "tool-call", toolCallId: "call_1", toolName: "read", input: { file: "foo.ts" } },
+            { type: "text", text: "" },
+            { type: "tool-call", toolCallId: "call_2", toolName: "edit", input: { file: "bar.ts" } },
+            { type: "text", text: "" },
+          ],
+        },
+      ] as any[]
+
+      const result = ProviderTransform.message(msgs, databricksClaudeModel, {})
+
+      expect(result).toHaveLength(1)
+      // All empty text parts filtered, both tool calls preserved
+      expect(result[0].content).toHaveLength(2)
+      expect(result[0].content[0]).toMatchObject({ type: "tool-call", toolCallId: "call_1" })
+      expect(result[0].content[1]).toMatchObject({ type: "tool-call", toolCallId: "call_2" })
+    })
+  })
+
+  describe("Databricks GPT-5 (OpenAI) - tool calling", () => {
+    test("filters empty text and keeps tool calls", () => {
+      const msgs = [
+        { role: "user", content: "List files" },
+        {
+          role: "assistant",
+          content: [
+            { type: "text", text: "" },
+            { type: "tool-call", toolCallId: "gpt_call_1", toolName: "bash", input: { command: "ls -la" } },
+          ],
+        },
+        {
+          role: "tool",
+          content: [{ type: "tool-result", toolCallId: "gpt_call_1", toolName: "bash", result: "total 0\ndrwxr-xr-x" }],
+        },
+      ] as any[]
+
+      const result = ProviderTransform.message(msgs, databricksGptModel, {})
+
+      expect(result).toHaveLength(3)
+      // Assistant message: empty text filtered, tool call preserved
+      expect(result[1].content).toHaveLength(1)
+      expect(result[1].content[0]).toMatchObject({
+        type: "tool-call",
+        toolCallId: "gpt_call_1",
+        toolName: "bash",
+      })
+      // Tool result preserved
+      expect(result[2].content[0]).toMatchObject({
+        type: "tool-result",
+        toolCallId: "gpt_call_1",
+      })
+    })
+
+    test("handles reasoning with tool calls (empty reasoning filtered)", () => {
+      const msgs = [
+        {
+          role: "assistant",
+          content: [
+            { type: "reasoning", text: "" },
+            { type: "tool-call", toolCallId: "gpt_reason_call", toolName: "read", input: { file: "config.json" } },
+          ],
+        },
+      ] as any[]
+
+      const result = ProviderTransform.message(msgs, databricksGptModel, {})
+
+      expect(result).toHaveLength(1)
+      // Empty reasoning filtered, tool call preserved
+      expect(result[0].content).toHaveLength(1)
+      expect(result[0].content[0]).toMatchObject({ type: "tool-call", toolCallId: "gpt_reason_call" })
+    })
+  })
+
+  describe("Databricks Gemini (Google) - tool calling", () => {
+    test("filters empty text and keeps tool calls", () => {
+      const msgs = [
+        { role: "user", content: "Search for files" },
+        {
+          role: "assistant",
+          content: [
+            { type: "text", text: "" },
+            { type: "tool-call", toolCallId: "gemini_call_1", toolName: "glob", input: { pattern: "**/*.ts" } },
+          ],
+        },
+        {
+          role: "tool",
+          content: [
+            { type: "tool-result", toolCallId: "gemini_call_1", toolName: "glob", result: "src/index.ts\nsrc/app.ts" },
+          ],
+        },
+      ] as any[]
+
+      const result = ProviderTransform.message(msgs, databricksGeminiModel, {})
+
+      expect(result).toHaveLength(3)
+      // Assistant message: empty text filtered, tool call preserved
+      expect(result[1].content).toHaveLength(1)
+      expect(result[1].content[0]).toMatchObject({
+        type: "tool-call",
+        toolCallId: "gemini_call_1",
+        toolName: "glob",
+      })
+      // Tool result preserved
+      expect(result[2].content[0]).toMatchObject({
+        type: "tool-result",
+        toolCallId: "gemini_call_1",
+      })
+    })
+
+    test("handles multi-turn conversation with tools", () => {
+      const msgs = [
+        { role: "user", content: "Read the config" },
+        {
+          role: "assistant",
+          content: [
+            { type: "text", text: "" },
+            { type: "tool-call", toolCallId: "gem_1", toolName: "read", input: { file: "config.json" } },
+          ],
+        },
+        {
+          role: "tool",
+          content: [{ type: "tool-result", toolCallId: "gem_1", toolName: "read", result: '{"debug": true}' }],
+        },
+        {
+          role: "assistant",
+          content: [
+            { type: "text", text: "The config has debug enabled. Let me update it." },
+            {
+              type: "tool-call",
+              toolCallId: "gem_2",
+              toolName: "edit",
+              input: { file: "config.json", content: '{"debug": false}' },
+            },
+          ],
+        },
+        {
+          role: "tool",
+          content: [{ type: "tool-result", toolCallId: "gem_2", toolName: "edit", result: "File updated" }],
+        },
+      ] as any[]
+
+      const result = ProviderTransform.message(msgs, databricksGeminiModel, {})
+
+      expect(result).toHaveLength(5)
+      // First assistant: only tool call (empty text filtered)
+      expect(result[1].content).toHaveLength(1)
+      expect(result[1].content[0]).toMatchObject({ type: "tool-call" })
+      // Second assistant: text + tool call preserved
+      expect(result[3].content).toHaveLength(2)
+      expect(result[3].content[0]).toMatchObject({
+        type: "text",
+        text: "The config has debug enabled. Let me update it.",
+      })
+      expect(result[3].content[1]).toMatchObject({ type: "tool-call" })
+    })
+  })
+})
+
 describe("ProviderTransform.message - anthropic empty content filtering", () => {
   const anthropicModel = {
     id: "anthropic/claude-3-5-sonnet",
@@ -2018,5 +2454,214 @@ describe("ProviderTransform.variants", () => {
       const result = ProviderTransform.variants(model)
       expect(result).toEqual({})
     })
+  })
+})
+
+describe("ProviderTransform.message - Databricks prompt caching", () => {
+  const databricksGptModel = {
+    id: "databricks-gpt-5",
+    providerID: "databricks",
+    api: {
+      id: "databricks-gpt-5",
+      url: "https://my-workspace.cloud.databricks.com/serving-endpoints",
+      npm: "@ai-sdk/openai-compatible",
+    },
+    name: "GPT-5 (Databricks)",
+    capabilities: {
+      temperature: true,
+      reasoning: true,
+      attachment: true,
+      toolcall: true,
+      input: { text: true, audio: false, image: true, video: false, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+      interleaved: false,
+    },
+    cost: {
+      input: 1.25,
+      output: 10,
+      cache: { read: 0.125, write: 0 },
+    },
+    limit: {
+      context: 400000,
+      output: 128000,
+    },
+    status: "active",
+    options: {},
+    headers: {},
+  } as any
+
+  const databricksClaudeModel = {
+    id: "databricks-claude-sonnet-4",
+    providerID: "databricks",
+    api: {
+      id: "databricks-claude-sonnet-4",
+      url: "https://my-workspace.cloud.databricks.com/serving-endpoints",
+      npm: "@ai-sdk/openai-compatible",
+    },
+    name: "Claude Sonnet 4 (Databricks)",
+    capabilities: {
+      temperature: true,
+      reasoning: false,
+      attachment: true,
+      toolcall: true,
+      input: { text: true, audio: false, image: true, video: false, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+      interleaved: false,
+    },
+    cost: {
+      input: 3,
+      output: 15,
+      cache: { read: 0.3, write: 0 },
+    },
+    limit: {
+      context: 200000,
+      output: 64000,
+    },
+    status: "active",
+    options: {},
+    headers: {},
+  } as any
+
+  const databricksNoCacheModel = {
+    id: "databricks-no-cache-model",
+    providerID: "databricks",
+    api: {
+      id: "databricks-no-cache-model",
+      url: "https://my-workspace.cloud.databricks.com/serving-endpoints",
+      npm: "@ai-sdk/openai-compatible",
+    },
+    name: "No Cache Model (Databricks)",
+    capabilities: {
+      temperature: true,
+      reasoning: false,
+      attachment: false,
+      toolcall: true,
+      input: { text: true, audio: false, image: false, video: false, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+      interleaved: false,
+    },
+    cost: {
+      input: 1,
+      output: 2,
+      cache: { read: 0, write: 0 }, // No cache support
+    },
+    limit: {
+      context: 100000,
+      output: 10000,
+    },
+    status: "active",
+    options: {},
+    headers: {},
+  } as any
+
+  test("applies cache_control to system messages for Databricks GPT model", () => {
+    const msgs = [
+      { role: "system", content: "You are a helpful assistant." },
+      { role: "user", content: "Hello" },
+      { role: "assistant", content: "Hi there!" },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, databricksGptModel, {}) as any[]
+
+    // System message should have cache control
+    const systemMsg = result.find((m) => m.role === "system")
+    expect(systemMsg).toBeDefined()
+    expect(systemMsg!.providerOptions).toBeDefined()
+    expect(systemMsg!.providerOptions.openaiCompatible).toEqual({ cache_control: { type: "ephemeral" } })
+  })
+
+  test("applies cache_control to system messages for Databricks Claude model", () => {
+    const msgs = [
+      { role: "system", content: "You are a coding assistant." },
+      { role: "user", content: "Write code" },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, databricksClaudeModel, {}) as any[]
+
+    const systemMsg = result.find((m) => m.role === "system")
+    expect(systemMsg).toBeDefined()
+    expect(systemMsg!.providerOptions).toBeDefined()
+    expect(systemMsg!.providerOptions.openaiCompatible).toEqual({ cache_control: { type: "ephemeral" } })
+  })
+
+  test("applies cache_control to last messages in conversation", () => {
+    const msgs = [
+      { role: "system", content: "System prompt" },
+      { role: "user", content: "First message" },
+      { role: "assistant", content: "First response" },
+      { role: "user", content: "Second message" },
+      { role: "assistant", content: "Second response" },
+      { role: "user", content: "Third message" },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, databricksGptModel, {}) as any[]
+
+    // Last 2 non-system messages should have cache control
+    const lastTwo = result.filter((m) => m.role !== "system").slice(-2)
+    expect(lastTwo).toHaveLength(2)
+
+    for (const msg of lastTwo) {
+      expect(msg.providerOptions).toBeDefined()
+      expect(msg.providerOptions!.openaiCompatible).toEqual({ cache_control: { type: "ephemeral" } })
+    }
+  })
+
+  test("does not apply caching for Databricks model without cache cost", () => {
+    const msgs = [
+      { role: "system", content: "You are a helpful assistant." },
+      { role: "user", content: "Hello" },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, databricksNoCacheModel, {}) as any[]
+
+    // No cache control should be applied when cache.read is 0
+    const systemMsg = result.find((m) => m.role === "system")
+    expect(systemMsg).toBeDefined()
+    expect(systemMsg!.providerOptions?.openaiCompatible?.cache_control).toBeUndefined()
+  })
+
+  test("applies cache_control to array content for Databricks models", () => {
+    const msgs = [
+      { role: "system", content: "System prompt" },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Hello" },
+          { type: "text", text: "World" },
+        ],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, databricksGptModel, {}) as any[]
+
+    // User message with array content should have cache control on last content part
+    const userMsg = result.find((m) => m.role === "user")
+    expect(userMsg).toBeDefined()
+    expect(userMsg!.content).toHaveLength(2)
+
+    // Last content part should have providerOptions with cache_control
+    const lastPart = userMsg!.content[userMsg!.content.length - 1]
+    expect(lastPart.providerOptions).toBeDefined()
+    expect(lastPart.providerOptions.openaiCompatible).toEqual({ cache_control: { type: "ephemeral" } })
+  })
+
+  test("caching is applied to first 2 system messages", () => {
+    const msgs = [
+      { role: "system", content: "First system message" },
+      { role: "system", content: "Second system message" },
+      { role: "system", content: "Third system message" },
+      { role: "user", content: "Hello" },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, databricksGptModel, {}) as any[]
+
+    const systemMsgs = result.filter((m) => m.role === "system")
+
+    // First two system messages should have cache control
+    expect(systemMsgs[0].providerOptions?.openaiCompatible).toEqual({ cache_control: { type: "ephemeral" } })
+    expect(systemMsgs[1].providerOptions?.openaiCompatible).toEqual({ cache_control: { type: "ephemeral" } })
+
+    // Third system message should NOT have cache control
+    expect(systemMsgs[2].providerOptions?.openaiCompatible?.cache_control).toBeUndefined()
   })
 })

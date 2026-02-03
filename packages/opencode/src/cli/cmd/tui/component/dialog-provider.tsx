@@ -1,4 +1,4 @@
-import { createMemo, createSignal, onMount, Show } from "solid-js"
+import { createMemo, createSignal, onMount, Show, createEffect } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { map, pipe, sortBy } from "remeda"
 import { DialogSelect } from "@tui/ui/dialog-select"
@@ -97,6 +97,10 @@ export function createDialogProviderOptions() {
               }
             }
             if (method.type === "api") {
+              // Databricks requires both host and API key
+              if (provider.id === "databricks") {
+                return dialog.replace(() => <DatabricksApiMethod providerID={provider.id} title={method.label} />)
+              }
               return dialog.replace(() => <ApiMethod providerID={provider.id} title={method.label} />)
             }
           },
@@ -208,6 +212,119 @@ function CodeMethod(props: CodeMethodProps) {
           </Show>
         </box>
       )}
+    />
+  )
+}
+
+interface DatabricksApiMethodProps {
+  providerID: string
+  title: string
+}
+function DatabricksApiMethod(props: DatabricksApiMethodProps) {
+  const { theme } = useTheme()
+  const dialog = useDialog()
+  const sdk = useSDK()
+  const sync = useSync()
+  // Get host from environment variable
+  const envHost = typeof process !== "undefined" ? process.env["DATABRICKS_HOST"] : undefined
+
+  // Check if we have a valid token in the CLI cache for this host
+  onMount(async () => {
+    if (!envHost) return
+
+    const normalizedHost = envHost.replace(/\/$/, "")
+    const homedir = typeof process !== "undefined" ? (process.env["HOME"] ?? process.env["USERPROFILE"]) : undefined
+    if (!homedir) return
+
+    try {
+      const tokenCachePath = `${homedir}/.databricks/token-cache.json`
+      const file = Bun.file(tokenCachePath)
+      if (!(await file.exists())) return
+
+      const cache = (await file.json()) as {
+        tokens: Record<string, { access_token: string; expiry: string; refresh_token?: string }>
+      }
+
+      const tokenEntry = cache.tokens[normalizedHost]
+      if (!tokenEntry) return
+
+      // Check if token is valid or can be refreshed
+      const expiry = new Date(tokenEntry.expiry)
+      const hasValidToken = expiry.getTime() - 5 * 60 * 1000 > Date.now()
+      const canRefresh = Boolean(tokenEntry.refresh_token)
+
+      if (hasValidToken || canRefresh) {
+        // We have CLI auth available, skip prompts and go straight to model selection
+        // Dispose and bootstrap to pick up the CLI token
+        await sdk.client.instance.dispose()
+        await sync.bootstrap()
+        dialog.replace(() => <DialogModel providerID={props.providerID} />)
+      }
+    } catch {
+      // Token cache not available or invalid, continue with normal flow
+    }
+  })
+
+  return (
+    <DialogPrompt
+      title="Databricks Host URL"
+      placeholder="https://your-workspace.cloud.databricks.com"
+      value={envHost ? envHost.replace(/\/$/, "") : undefined}
+      description={() => (
+        <box gap={1}>
+          <text fg={theme.textMuted}>Enter your Databricks workspace URL</text>
+          <text fg={theme.textMuted}>Examples:</text>
+          <text fg={theme.textMuted}>  • https://dbc-xxx.cloud.databricks.com (AWS/GCP)</text>
+          <text fg={theme.textMuted}>  • https://adb-xxx.azuredatabricks.net (Azure)</text>
+        </box>
+      )}
+      onConfirm={(value) => {
+        if (!value) return
+        // Remove trailing slash if present
+        const cleanHost = value.replace(/\/$/, "")
+        dialog.replace(() => (
+          <DatabricksApiKeyMethod providerID={props.providerID} title={props.title} host={cleanHost} />
+        ))
+      }}
+    />
+  )
+}
+
+interface DatabricksApiKeyMethodProps {
+  providerID: string
+  title: string
+  host: string
+}
+function DatabricksApiKeyMethod(props: DatabricksApiKeyMethodProps) {
+  const dialog = useDialog()
+  const sdk = useSDK()
+  const sync = useSync()
+  const { theme } = useTheme()
+
+  return (
+    <DialogPrompt
+      title={props.title}
+      placeholder="API key (Personal Access Token)"
+      description={
+        <box gap={1}>
+          <text fg={theme.textMuted}>Enter your Databricks Personal Access Token</text>
+          <text fg={theme.textMuted}>Create at: Workspace → Settings → Developer → Access tokens</text>
+        </box>
+      }
+      onConfirm={async (value) => {
+        if (!value) return
+        sdk.client.auth.set({
+          providerID: props.providerID,
+          auth: {
+            type: "api",
+            key: value,
+            host: props.host,
+          },
+        })
+        await sdk.client.instance.dispose()
+        await sync.bootstrap()
+        dialog.replace(() => <DialogModel providerID={props.providerID} />)
+      }}
     />
   )
 }

@@ -441,7 +441,8 @@ export namespace MessageV2 {
 
     const toModelOutput = (output: unknown) => {
       if (typeof output === "string") {
-        return { type: "text", value: output }
+        // Ensure non-empty text for APIs that reject empty content (Databricks, Anthropic)
+        return { type: "text", value: output || "[No output]" }
       }
 
       if (typeof output === "object") {
@@ -456,7 +457,8 @@ export namespace MessageV2 {
         return {
           type: "content",
           value: [
-            { type: "text", text: outputObject.text },
+            // Ensure non-empty text for APIs that reject empty content
+            { type: "text", text: outputObject.text || "[No output]" },
             ...attachments.map((attachment) => ({
               type: "media",
               mediaType: attachment.mime,
@@ -483,7 +485,8 @@ export namespace MessageV2 {
         }
         result.push(userMessage)
         for (const part of msg.parts) {
-          if (part.type === "text" && !part.ignored)
+          // Skip empty or ignored text parts - some APIs reject empty text content blocks
+          if (part.type === "text" && !part.ignored && part.text)
             userMessage.parts.push({
               type: "text",
               text: part.text,
@@ -530,7 +533,8 @@ export namespace MessageV2 {
           parts: [],
         }
         for (const part of msg.parts) {
-          if (part.type === "text")
+          // Skip empty text parts - some APIs (Databricks, Anthropic) reject empty text content blocks
+          if (part.type === "text" && part.text)
             assistantMessage.parts.push({
               type: "text",
               text: part.text,
@@ -543,7 +547,10 @@ export namespace MessageV2 {
           if (part.type === "tool") {
             toolNames.add(part.tool)
             if (part.state.status === "completed") {
-              const outputText = part.state.time.compacted ? "[Old tool result content cleared]" : part.state.output
+              // Ensure non-empty output text - some APIs reject empty text content blocks
+              const outputText = part.state.time.compacted
+                ? "[Old tool result content cleared]"
+                : (part.state.output || "[No output]")
               const attachments = part.state.time.compacted ? [] : (part.state.attachments ?? [])
               const output =
                 attachments.length > 0
@@ -583,7 +590,8 @@ export namespace MessageV2 {
                 ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
               })
           }
-          if (part.type === "reasoning") {
+          // Skip empty reasoning parts - some APIs reject empty text content blocks
+          if (part.type === "reasoning" && part.text) {
             assistantMessage.parts.push({
               type: "reasoning",
               text: part.text,

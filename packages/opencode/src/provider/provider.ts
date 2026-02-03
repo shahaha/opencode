@@ -519,6 +519,867 @@ export namespace Provider {
         },
       }
     },
+    databricks: async (input) => {
+      // Azure Databricks resource ID for OAuth/AAD authentication
+      // This is the official Azure AD application ID for Azure Databricks
+      // See: https://learn.microsoft.com/en-us/azure/databricks/dev-tools/auth/oauth-m2m
+      const AZURE_DATABRICKS_RESOURCE_ID = "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d"
+
+      const config = await Config.get()
+      const providerConfig = config.provider?.["databricks"]
+      const auth = await Auth.get("databricks")
+
+      // Helper to read host from ~/.databrickscfg profile
+      const getHostFromProfile = async (profileName: string): Promise<string | undefined> => {
+        try {
+          const homedir = Env.get("HOME") ?? Env.get("USERPROFILE")
+          if (!homedir) return undefined
+          const configPath = Env.get("DATABRICKS_CONFIG_FILE") ?? `${homedir}/.databrickscfg`
+          const file = Bun.file(configPath)
+          if (!(await file.exists())) return undefined
+
+          const content = await file.text()
+          const lines = content.split("\n")
+
+          let currentSection = ""
+          for (const line of lines) {
+            const trimmed = line.trim()
+            // Check for section header [profile-name]
+            const sectionMatch = trimmed.match(/^\[(.+)\]$/)
+            if (sectionMatch) {
+              currentSection = sectionMatch[1]
+              continue
+            }
+            // Check for host = value in the target section
+            if (currentSection === profileName) {
+              const hostMatch = trimmed.match(/^host\s*=\s*(.+)$/)
+              if (hostMatch) {
+                return hostMatch[1].trim().replace(/\/$/, "")
+              }
+            }
+          }
+          return undefined
+        } catch {
+          return undefined
+        }
+      }
+
+      // Host resolution: 1) stored auth, 2) config file, 3) env var, 4) profile from ~/.databrickscfg
+      const authHost = auth?.type === "api" ? auth.host : undefined
+      const configHost = providerConfig?.options?.baseURL ?? providerConfig?.options?.host
+      const envHost = Env.get("DATABRICKS_HOST")
+      const profileName = Env.get("DATABRICKS_CONFIG_PROFILE") ?? providerConfig?.options?.profile ?? "DEFAULT"
+      const profileHost = await getHostFromProfile(profileName)
+      const host = authHost ?? configHost ?? envHost ?? profileHost
+
+      if (!host) return { autoload: false }
+
+      // Authentication precedence:
+      // 1. PAT token (DATABRICKS_TOKEN or stored auth)
+      // 2. OAuth M2M (DATABRICKS_CLIENT_ID + DATABRICKS_CLIENT_SECRET) for Azure
+      // 3. Azure AD Service Principal (azure_client_id + azure_client_secret + azure_tenant_id)
+      const token = Env.get("DATABRICKS_TOKEN") ?? (auth?.type === "api" ? auth.key : undefined)
+
+      // OAuth M2M credentials for Azure Databricks
+      // Note: Standard OAuth auth type doesn't include clientId/clientSecret fields,
+      // so we use type assertion. In practice, these come from env vars or config.
+      const clientId =
+        Env.get("DATABRICKS_CLIENT_ID") ??
+        providerConfig?.options?.clientId ??
+        (auth?.type === "oauth" ? (auth as any).clientId : undefined)
+      const clientSecret =
+        Env.get("DATABRICKS_CLIENT_SECRET") ??
+        providerConfig?.options?.clientSecret ??
+        (auth?.type === "oauth" ? (auth as any).clientSecret : undefined)
+
+      // Azure AD Service Principal credentials
+      const azureClientId = Env.get("ARM_CLIENT_ID") ?? providerConfig?.options?.azureClientId
+      const azureClientSecret = Env.get("ARM_CLIENT_SECRET") ?? providerConfig?.options?.azureClientSecret
+      const azureTenantId = Env.get("ARM_TENANT_ID") ?? providerConfig?.options?.azureTenantId
+
+      // Determine which auth method to use
+      const hasOAuthM2M = clientId && clientSecret
+      const hasAzureAD = azureClientId && azureClientSecret && azureTenantId
+      const hasPAT = Boolean(token)
+      // Check if Azure CLI is available for Azure Databricks workspaces
+      const isAzureDatabricks = host.includes("azuredatabricks.net")
+
+      // Check for Databricks CLI token cache
+      const hasDatabricksCLI = await (async () => {
+        try {
+          const homedir = Env.get("HOME") ?? Env.get("USERPROFILE")
+          if (!homedir) return false
+          const tokenCachePath = `${homedir}/.databricks/token-cache.json`
+          const file = Bun.file(tokenCachePath)
+          return await file.exists()
+        } catch {
+          return false
+        }
+      })()
+
+      if (!hasPAT && !hasOAuthM2M && !hasAzureAD && !isAzureDatabricks && !hasDatabricksCLI) return { autoload: false }
+
+      // Databricks Foundation Model APIs use OpenAI-compatible endpoints
+      // The base URL format is: https://<workspace-url>/serving-endpoints
+      // If baseURL is already a full path (includes /serving-endpoints), use it as-is
+      const baseURL = host.includes("/serving-endpoints")
+        ? host.replace(/\/$/, "")
+        : host.replace(/\/$/, "") + "/serving-endpoints"
+
+      // For OAuth M2M, we need to fetch an access token
+      let accessToken: string | undefined = token
+      if (!accessToken && hasOAuthM2M) {
+        // Fetch OAuth token from Databricks OIDC endpoint
+        const tokenEndpoint = `${host.replace(/\/$/, "")}/oidc/v1/token`
+        try {
+          const response = await fetch(tokenEndpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+            },
+            body: "grant_type=client_credentials&scope=all-apis",
+          })
+          if (response.ok) {
+            const data = (await response.json()) as { access_token: string }
+            accessToken = data.access_token
+          } else {
+            log.debug("Failed to fetch Databricks OAuth token", {
+              status: response.status,
+              statusText: response.statusText,
+            })
+          }
+        } catch (e) {
+          log.debug("Failed to fetch Databricks OAuth token", {
+            error: e instanceof Error ? e.message : "Unknown error",
+          })
+        }
+      }
+
+      // For Azure AD Service Principal, we need to fetch an Azure AD token first
+      if (!accessToken && hasAzureAD) {
+        try {
+          // Get Azure AD token for Databricks resource
+          const aadTokenEndpoint = `https://login.microsoftonline.com/${azureTenantId}/oauth2/v2.0/token`
+          const response = await fetch(aadTokenEndpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              grant_type: "client_credentials",
+              client_id: azureClientId,
+              client_secret: azureClientSecret,
+              scope: `${AZURE_DATABRICKS_RESOURCE_ID}/.default`,
+            }).toString(),
+          })
+          if (response.ok) {
+            const data = (await response.json()) as { access_token: string }
+            accessToken = data.access_token
+          } else {
+            log.debug("Failed to fetch Azure AD token for Databricks", {
+              status: response.status,
+              statusText: response.statusText,
+            })
+          }
+        } catch (e) {
+          log.debug("Failed to fetch Azure AD token for Databricks", {
+            error: e instanceof Error ? e.message : "Unknown error",
+          })
+        }
+      }
+
+      // Try Databricks CLI token cache (from `databricks auth login`)
+      if (!accessToken) {
+        try {
+          const homedir = Env.get("HOME") ?? Env.get("USERPROFILE")
+          if (homedir) {
+            const tokenCachePath = `${homedir}/.databricks/token-cache.json`
+            const file = Bun.file(tokenCachePath)
+            if (await file.exists()) {
+              const cacheContent = await file.text()
+              const cache = JSON.parse(cacheContent) as {
+                version: number
+                tokens: Record<
+                  string,
+                  {
+                    access_token: string
+                    token_type: string
+                    refresh_token: string
+                    expiry: string
+                    expires_in?: number
+                  }
+                >
+              }
+
+              // Normalize host for lookup (remove trailing slash)
+              const normalizedHost = host.replace(/\/$/, "")
+
+              // Find token for this host
+              const tokenEntry = cache.tokens[normalizedHost]
+              if (tokenEntry) {
+                const expiry = new Date(tokenEntry.expiry)
+                const now = new Date()
+
+                // Check if token is still valid (with 5 minute buffer)
+                if (expiry.getTime() - 5 * 60 * 1000 > now.getTime()) {
+                  accessToken = tokenEntry.access_token
+                  log.info("Using Databricks CLI token cache for authentication")
+                } else if (tokenEntry.refresh_token) {
+                  // Token expired, try to refresh it
+                  log.debug("Databricks CLI token expired, attempting refresh")
+                  const tokenEndpoint = `${normalizedHost}/oidc/v1/token`
+                  try {
+                    const response = await fetch(tokenEndpoint, {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                      },
+                      body: new URLSearchParams({
+                        grant_type: "refresh_token",
+                        refresh_token: tokenEntry.refresh_token,
+                        client_id: "databricks-cli",
+                      }).toString(),
+                    })
+                    if (response.ok) {
+                      const data = (await response.json()) as {
+                        access_token: string
+                        refresh_token?: string
+                        expires_in?: number
+                      }
+                      accessToken = data.access_token
+                      log.info("Refreshed Databricks CLI token successfully")
+
+                      // Update the token cache with new tokens
+                      cache.tokens[normalizedHost] = {
+                        ...tokenEntry,
+                        access_token: data.access_token,
+                        refresh_token: data.refresh_token ?? tokenEntry.refresh_token,
+                        expiry: new Date(Date.now() + (data.expires_in ?? 3600) * 1000).toISOString(),
+                        expires_in: data.expires_in ?? 3600,
+                      }
+                      await Bun.write(tokenCachePath, JSON.stringify(cache, null, 2))
+                    } else {
+                      log.debug("Failed to refresh Databricks CLI token", {
+                        status: response.status,
+                        statusText: response.statusText,
+                      })
+                    }
+                  } catch (refreshError) {
+                    log.debug("Failed to refresh Databricks CLI token", {
+                      error: refreshError instanceof Error ? refreshError.message : "Unknown error",
+                    })
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          log.debug("Failed to read Databricks CLI token cache", {
+            error: e instanceof Error ? e.message : "Unknown error",
+          })
+        }
+      }
+
+      // For Azure Databricks, try Azure CLI as a fallback
+      if (!accessToken && isAzureDatabricks) {
+        try {
+          // Try to get token from Azure CLI
+          const proc = Bun.spawn(
+            ["az", "account", "get-access-token", "--resource", AZURE_DATABRICKS_RESOURCE_ID, "-o", "json"],
+            { stdout: "pipe", stderr: "pipe" },
+          )
+          const output = await new Response(proc.stdout).text()
+          const exitCode = await proc.exited
+          if (exitCode === 0) {
+            try {
+              const data = JSON.parse(output) as { accessToken: string }
+              accessToken = data.accessToken
+              log.info("Using Azure CLI token for Databricks authentication")
+            } catch (parseError) {
+              log.debug("Failed to parse Azure CLI token response", {
+                error: parseError instanceof Error ? parseError.message : "Unknown error",
+              })
+            }
+          } else {
+            log.debug("Azure CLI returned non-zero exit code", { exitCode })
+          }
+        } catch (e) {
+          log.debug("Azure CLI not available for Databricks auth", {
+            error: e instanceof Error ? e.message : "Unknown error",
+          })
+        }
+      }
+
+      if (!accessToken) return { autoload: false }
+
+      // Store normalized host for token lookups
+      const normalizedHost = host.replace(/\/$/, "")
+
+      // Function to get fresh token from Databricks CLI token cache
+      const getFreshToken = async (): Promise<string> => {
+        try {
+          const homedir = Env.get("HOME") ?? Env.get("USERPROFILE")
+          if (homedir) {
+            const tokenCachePath = `${homedir}/.databricks/token-cache.json`
+            const file = Bun.file(tokenCachePath)
+            if (await file.exists()) {
+              const cacheContent = await file.text()
+              const cache = JSON.parse(cacheContent) as {
+                version: number
+                tokens: Record<
+                  string,
+                  {
+                    access_token: string
+                    refresh_token?: string
+                    expiry: string
+                    expires_in?: number
+                  }
+                >
+              }
+
+              const tokenEntry = cache.tokens[normalizedHost]
+              if (tokenEntry) {
+                const expiry = new Date(tokenEntry.expiry)
+                const now = new Date()
+
+                // Check if cached token is still valid (with 5 minute buffer)
+                if (expiry.getTime() - 5 * 60 * 1000 > now.getTime()) {
+                  return tokenEntry.access_token
+                }
+
+                // Token expired, try to refresh it if we have a refresh_token
+                if (tokenEntry.refresh_token) {
+                  log.debug("Databricks CLI token expired during session, attempting refresh")
+                  const tokenEndpoint = `${normalizedHost}/oidc/v1/token`
+                  try {
+                    const response = await fetch(tokenEndpoint, {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                      },
+                      body: new URLSearchParams({
+                        grant_type: "refresh_token",
+                        refresh_token: tokenEntry.refresh_token,
+                        client_id: "databricks-cli",
+                      }).toString(),
+                    })
+                    if (response.ok) {
+                      const data = (await response.json()) as {
+                        access_token: string
+                        refresh_token?: string
+                        expires_in?: number
+                      }
+                      log.info("Refreshed Databricks CLI token successfully during session")
+
+                      // Update the token cache with new tokens
+                      cache.tokens[normalizedHost] = {
+                        ...tokenEntry,
+                        access_token: data.access_token,
+                        refresh_token: data.refresh_token ?? tokenEntry.refresh_token,
+                        expiry: new Date(Date.now() + (data.expires_in ?? 3600) * 1000).toISOString(),
+                        expires_in: data.expires_in ?? 3600,
+                      }
+                      await Bun.write(tokenCachePath, JSON.stringify(cache, null, 2))
+
+                      return data.access_token
+                    } else {
+                      log.debug("Failed to refresh Databricks CLI token during session", {
+                        status: response.status,
+                        statusText: response.statusText,
+                      })
+                    }
+                  } catch (refreshError) {
+                    log.debug("Failed to refresh Databricks CLI token during session", {
+                      error: refreshError instanceof Error ? refreshError.message : "Unknown error",
+                    })
+                  }
+                }
+
+                // Token expired and refresh failed or no refresh token available
+                log.warn("Databricks CLI token expired. Run `databricks auth login --profile <profile>` to refresh.")
+              }
+            }
+          }
+        } catch (e) {
+          log.debug("Failed to read Databricks CLI token cache", {
+            error: e instanceof Error ? e.message : "Unknown error",
+          })
+        }
+
+        // Fall back to the token we got at initialization
+        return accessToken
+      }
+
+      // Define default Databricks Foundation Model API endpoints
+      // These are the pay-per-token endpoints available in most workspaces
+      // Users can override or add more models in their opencode.json config
+      const defaultModels: Record<string, ModelsDev.Model> = {
+        // OpenAI GPT Models
+        "databricks-gpt-5-2": {
+          id: "databricks-gpt-5-2",
+          name: "GPT-5.2 (Databricks)",
+          family: "gpt-5",
+          attachment: true,
+          reasoning: true,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-12-17",
+          modalities: { input: ["text", "image"], output: ["text"] },
+          cost: { input: 1.25, output: 10, cache_read: 0.125 },
+          limit: { context: 400000, output: 128000 },
+          options: {},
+        },
+        "databricks-gpt-5-1": {
+          id: "databricks-gpt-5-1",
+          name: "GPT-5.1 (Databricks)",
+          family: "gpt-5",
+          attachment: true,
+          reasoning: true,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-10-10",
+          modalities: { input: ["text", "image"], output: ["text"] },
+          cost: { input: 1.25, output: 10, cache_read: 0.125 },
+          limit: { context: 400000, output: 128000 },
+          options: {},
+        },
+        "databricks-gpt-5-1-codex-max": {
+          id: "databricks-gpt-5-1-codex-max",
+          name: "GPT-5.1 Codex Max (Databricks)",
+          family: "gpt-5-codex",
+          attachment: true,
+          reasoning: true,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-10-10",
+          modalities: { input: ["text", "image"], output: ["text"] },
+          cost: { input: 2.5, output: 20, cache_read: 0.25 },
+          limit: { context: 400000, output: 128000 },
+          options: {},
+        },
+        "databricks-gpt-5": {
+          id: "databricks-gpt-5",
+          name: "GPT-5 (Databricks)",
+          family: "gpt-5",
+          attachment: true,
+          reasoning: true,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-06-12",
+          modalities: { input: ["text", "image"], output: ["text"] },
+          cost: { input: 1.25, output: 10, cache_read: 0.125 },
+          limit: { context: 400000, output: 128000 },
+          options: {},
+        },
+        "databricks-gpt-5-mini": {
+          id: "databricks-gpt-5-mini",
+          name: "GPT-5 mini (Databricks)",
+          family: "gpt-5-mini",
+          attachment: true,
+          reasoning: true,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-06-12",
+          modalities: { input: ["text", "image"], output: ["text"] },
+          cost: { input: 0.15, output: 0.6, cache_read: 0.015 },
+          limit: { context: 400000, output: 128000 },
+          options: {},
+        },
+        "databricks-gpt-5-nano": {
+          id: "databricks-gpt-5-nano",
+          name: "GPT-5 nano (Databricks)",
+          family: "gpt-5-nano",
+          attachment: true,
+          reasoning: false,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-06-12",
+          modalities: { input: ["text", "image"], output: ["text"] },
+          cost: { input: 0.05, output: 0.2, cache_read: 0.005 },
+          limit: { context: 400000, output: 128000 },
+          options: {},
+        },
+        "databricks-gpt-5-1-codex-mini": {
+          id: "databricks-gpt-5-1-codex-mini",
+          name: "GPT-5.1 Codex Mini (Databricks)",
+          family: "gpt-5.1-codex",
+          attachment: true,
+          reasoning: true,
+          tool_call: false, // Only supports Responses API, not Chat Completions API
+          temperature: true,
+          release_date: "2025-09-15",
+          modalities: { input: ["text", "image"], output: ["text"] },
+          cost: { input: 0.15, output: 0.6, cache_read: 0.015 },
+          limit: { context: 400000, output: 128000 },
+          options: {},
+        },
+        "databricks-gpt-oss-120b": {
+          id: "databricks-gpt-oss-120b",
+          name: "GPT OSS 120B (Databricks)",
+          family: "gpt-oss",
+          attachment: false,
+          reasoning: true,
+          tool_call: false, // OSS models don't support full JSON Schema (e.g., maxLength) for tool parameters
+          temperature: true,
+          release_date: "2025-11-01",
+          modalities: { input: ["text"], output: ["text"] },
+          cost: { input: 0.5, output: 1.5 },
+          limit: { context: 128000, output: 32000 },
+          options: {},
+        },
+        "databricks-gpt-oss-20b": {
+          id: "databricks-gpt-oss-20b",
+          name: "GPT OSS 20B (Databricks)",
+          family: "gpt-oss",
+          attachment: false,
+          reasoning: true,
+          tool_call: false, // OSS models don't support full JSON Schema (e.g., maxLength) for tool parameters
+          temperature: true,
+          release_date: "2025-11-01",
+          modalities: { input: ["text"], output: ["text"] },
+          cost: { input: 0.1, output: 0.3 },
+          limit: { context: 128000, output: 32000 },
+          options: {},
+        },
+        // Google Gemini Models
+        "databricks-gemini-3-pro": {
+          id: "databricks-gemini-3-pro",
+          name: "Gemini 3 Pro (Databricks)",
+          family: "gemini-3",
+          attachment: true,
+          reasoning: true,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-11-20",
+          modalities: { input: ["text", "image", "audio", "video"], output: ["text"] },
+          cost: { input: 2, output: 12, cache_read: 0.2 },
+          limit: { context: 1000000, output: 65536 },
+          options: {},
+        },
+        "databricks-gemini-3-flash": {
+          id: "databricks-gemini-3-flash",
+          name: "Gemini 3 Flash (Databricks)",
+          family: "gemini-3",
+          attachment: true,
+          reasoning: false,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-11-20",
+          modalities: { input: ["text", "image", "audio", "video"], output: ["text"] },
+          cost: { input: 0.5, output: 3, cache_read: 0.05 },
+          limit: { context: 1000000, output: 65536 },
+          options: {},
+        },
+        "databricks-gemini-2-5-pro": {
+          id: "databricks-gemini-2-5-pro",
+          name: "Gemini 2.5 Pro (Databricks)",
+          family: "gemini-2.5",
+          attachment: true,
+          reasoning: true,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-04-10",
+          modalities: { input: ["text", "image", "audio", "video"], output: ["text", "audio"] },
+          cost: { input: 1.25, output: 10, cache_read: 0.125 },
+          limit: { context: 1000000, output: 65536 },
+          options: {},
+        },
+        "databricks-gemini-2-5-flash": {
+          id: "databricks-gemini-2-5-flash",
+          name: "Gemini 2.5 Flash (Databricks)",
+          family: "gemini-2.5",
+          attachment: true,
+          reasoning: true,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-04-10",
+          modalities: { input: ["text", "image", "audio", "video"], output: ["text"] },
+          cost: { input: 0.15, output: 0.6, cache_read: 0.015 },
+          limit: { context: 1000000, output: 65536 },
+          options: {},
+        },
+        "databricks-gemma-3-12b": {
+          id: "databricks-gemma-3-12b",
+          name: "Gemma 3 12B (Databricks)",
+          family: "gemma-3",
+          attachment: true,
+          reasoning: false,
+          tool_call: false, // Smaller model with limited tool support
+          temperature: true,
+          release_date: "2025-11-01",
+          modalities: { input: ["text", "image"], output: ["text"] },
+          cost: { input: 0.1, output: 0.3 },
+          limit: { context: 128000, output: 8192 },
+          options: {},
+        },
+        // Anthropic Claude Models
+        "databricks-claude-sonnet-4": {
+          id: "databricks-claude-sonnet-4",
+          name: "Claude Sonnet 4 (Databricks)",
+          family: "claude-sonnet",
+          attachment: true,
+          reasoning: false,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-05-22",
+          modalities: { input: ["text", "image"], output: ["text"] },
+          cost: { input: 3, output: 15, cache_read: 0.3 },
+          limit: { context: 200000, output: 64000 },
+          options: {},
+        },
+        "databricks-claude-sonnet-4-5": {
+          id: "databricks-claude-sonnet-4-5",
+          name: "Claude Sonnet 4.5 (Databricks)",
+          family: "claude-sonnet",
+          attachment: true,
+          reasoning: true,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-10-22",
+          modalities: { input: ["text", "image"], output: ["text"] },
+          cost: { input: 3, output: 15, cache_read: 0.3 },
+          limit: { context: 200000, output: 64000 },
+          options: {},
+        },
+        "databricks-claude-haiku-4-5": {
+          id: "databricks-claude-haiku-4-5",
+          name: "Claude Haiku 4.5 (Databricks)",
+          family: "claude-haiku",
+          attachment: true,
+          reasoning: false,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-10-22",
+          modalities: { input: ["text", "image"], output: ["text"] },
+          cost: { input: 0.8, output: 4, cache_read: 0.08 },
+          limit: { context: 200000, output: 8192 },
+          options: {},
+        },
+        "databricks-claude-opus-4-5": {
+          id: "databricks-claude-opus-4-5",
+          name: "Claude Opus 4.5 (Databricks)",
+          family: "claude-opus",
+          attachment: true,
+          reasoning: true,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-10-22",
+          modalities: { input: ["text", "image"], output: ["text"] },
+          cost: { input: 15, output: 75, cache_read: 1.5 },
+          limit: { context: 200000, output: 32000 },
+          options: {},
+        },
+        "databricks-meta-llama-3-3-70b-instruct": {
+          id: "databricks-meta-llama-3-3-70b-instruct",
+          name: "Meta Llama 3.3 70B Instruct (Databricks)",
+          family: "llama-3.3",
+          attachment: false,
+          reasoning: false,
+          tool_call: false, // Llama models have unreliable tool support via OpenAI-compatible API
+          temperature: true,
+          release_date: "2024-12-06",
+          modalities: { input: ["text"], output: ["text"] },
+          cost: { input: 0.65, output: 2.56 },
+          limit: { context: 128000, output: 4096 },
+          options: {},
+        },
+        "databricks-claude-3-7-sonnet": {
+          id: "databricks-claude-3-7-sonnet",
+          name: "Claude 3.7 Sonnet (Databricks)",
+          family: "claude-sonnet",
+          attachment: true,
+          reasoning: true,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-02-24",
+          modalities: { input: ["text", "image"], output: ["text"] },
+          cost: { input: 3, output: 15, cache_read: 0.3 },
+          limit: { context: 200000, output: 64000 },
+          options: {},
+        },
+        "databricks-claude-opus-4-1": {
+          id: "databricks-claude-opus-4-1",
+          name: "Claude Opus 4.1 (Databricks)",
+          family: "claude-opus",
+          attachment: true,
+          reasoning: true,
+          tool_call: true,
+          temperature: true,
+          release_date: "2025-04-16",
+          modalities: { input: ["text", "image"], output: ["text"] },
+          cost: { input: 15, output: 75, cache_read: 1.5 },
+          limit: { context: 200000, output: 32000 },
+          options: {},
+        },
+        "databricks-llama-4-maverick": {
+          id: "databricks-llama-4-maverick",
+          name: "Llama 4 Maverick (Databricks)",
+          family: "llama-4",
+          attachment: false,
+          reasoning: false,
+          tool_call: false, // Llama models have unreliable tool support via OpenAI-compatible API
+          temperature: true,
+          release_date: "2025-04-05",
+          modalities: { input: ["text"], output: ["text"] },
+          cost: { input: 0.2, output: 0.6 },
+          limit: { context: 1048576, output: 65536 },
+          options: {},
+        },
+        "databricks-meta-llama-3-1-405b-instruct": {
+          id: "databricks-meta-llama-3-1-405b-instruct",
+          name: "Meta Llama 3.1 405B Instruct (Databricks)",
+          family: "llama-3.1",
+          attachment: false,
+          reasoning: false,
+          tool_call: false, // Llama models have unreliable tool support via OpenAI-compatible API
+          temperature: true,
+          release_date: "2024-07-23",
+          modalities: { input: ["text"], output: ["text"] },
+          cost: { input: 3, output: 3 },
+          limit: { context: 128000, output: 4096 },
+          options: {},
+        },
+        "databricks-meta-llama-3-1-8b-instruct": {
+          id: "databricks-meta-llama-3-1-8b-instruct",
+          name: "Meta Llama 3.1 8B Instruct (Databricks)",
+          family: "llama-3.1",
+          attachment: false,
+          reasoning: false,
+          tool_call: false, // Llama models have unreliable tool support via OpenAI-compatible API
+          temperature: true,
+          release_date: "2024-07-23",
+          modalities: { input: ["text"], output: ["text"] },
+          cost: { input: 0.1, output: 0.1 },
+          limit: { context: 128000, output: 4096 },
+          options: {},
+        },
+        // Qwen Models
+        "databricks-qwen3-next-80b-a3b-instruct": {
+          id: "databricks-qwen3-next-80b-a3b-instruct",
+          name: "Qwen3 Next 80B A3B Instruct (Databricks)",
+          family: "qwen3",
+          attachment: false,
+          reasoning: false,
+          tool_call: false, // Qwen models have unreliable tool support via OpenAI-compatible API
+          temperature: true,
+          release_date: "2025-11-01",
+          modalities: { input: ["text"], output: ["text"] },
+          cost: { input: 0.5, output: 1.5 },
+          limit: { context: 512000, output: 32768 },
+          options: {},
+        },
+      }
+
+      // Transform ModelsDev.Model to Provider.Model format
+      function toProviderModel(model: ModelsDev.Model): Model {
+        return {
+          id: model.id,
+          providerID: "databricks",
+          name: model.name,
+          family: model.family,
+          api: {
+            id: model.id,
+            url: baseURL,
+            npm: "@ai-sdk/openai-compatible",
+          },
+          status: "active",
+          headers: {},
+          options: model.options ?? {},
+          cost: {
+            input: model.cost?.input ?? 0,
+            output: model.cost?.output ?? 0,
+            cache: {
+              read: model.cost?.cache_read ?? 0,
+              write: model.cost?.cache_write ?? 0,
+            },
+          },
+          limit: {
+            context: model.limit.context,
+            output: model.limit.output,
+          },
+          capabilities: {
+            temperature: model.temperature,
+            reasoning: model.reasoning,
+            attachment: model.attachment,
+            toolcall: model.tool_call,
+            input: {
+              text: model.modalities?.input?.includes("text") ?? false,
+              audio: model.modalities?.input?.includes("audio") ?? false,
+              image: model.modalities?.input?.includes("image") ?? false,
+              video: model.modalities?.input?.includes("video") ?? false,
+              pdf: model.modalities?.input?.includes("pdf") ?? false,
+            },
+            output: {
+              text: model.modalities?.output?.includes("text") ?? false,
+              audio: model.modalities?.output?.includes("audio") ?? false,
+              image: model.modalities?.output?.includes("image") ?? false,
+              video: model.modalities?.output?.includes("video") ?? false,
+              pdf: model.modalities?.output?.includes("pdf") ?? false,
+            },
+            interleaved: false,
+          },
+          release_date: model.release_date,
+          variants: {},
+        }
+      }
+
+      // Add default models to the input provider if not already defined
+      // Only include models that support tool calling since opencode requires it
+      for (const [modelID, model] of Object.entries(defaultModels)) {
+        if (!input.models[modelID] && model.tool_call) {
+          input.models[modelID] = toProviderModel(model)
+        }
+      }
+
+      // Custom fetch that gets fresh token before each request and fixes empty content
+      const databricksFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const freshToken = await getFreshToken()
+        const headers = new Headers(init?.headers)
+        headers.set("Authorization", `Bearer ${freshToken}`)
+
+        // Fix empty content issue: Databricks API rejects messages with empty string content
+        // The AI SDK sends content: "" for assistant messages with only tool calls
+        let body = init?.body
+        if (body && typeof body === "string") {
+          try {
+            const parsed = JSON.parse(body)
+            if (parsed.messages && Array.isArray(parsed.messages)) {
+              parsed.messages = parsed.messages.map((msg: any) => {
+                // For assistant messages with tool_calls but empty content, set content to null
+                if (msg.role === "assistant" && msg.tool_calls && msg.content === "") {
+                  return { ...msg, content: null }
+                }
+                return msg
+              })
+              body = JSON.stringify(parsed)
+            }
+          } catch {
+            // If parsing fails, use original body
+          }
+        }
+
+        return fetch(input, { ...init, body, headers })
+      }
+
+      return {
+        autoload: true,
+        async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
+          return sdk.languageModel(modelID)
+        },
+        options: {
+          baseURL,
+          apiKey: accessToken,
+          // Disable stream_options to prevent "unknown field" errors with Databricks OSS models
+          includeUsage: false,
+          headers: {
+            "User-Agent": "opencode",
+            // Prevent Claude beta headers from breaking Databricks Model Serving
+            "x-databricks-disable-beta-headers": "true",
+          },
+          // Use custom fetch that refreshes token when expired
+          fetch: databricksFetch,
+        },
+      }
+    },
   }
 
   export const Model = z
@@ -722,6 +1583,19 @@ export namespace Provider {
           ...model,
           providerID: "github-copilot-enterprise",
         })),
+      }
+    }
+
+    // Add Databricks provider for Foundation Model APIs
+    // This provider is not in models.dev so we create it programmatically
+    if (!database["databricks"]) {
+      database["databricks"] = {
+        id: "databricks",
+        name: "Databricks",
+        source: "custom",
+        env: ["DATABRICKS_TOKEN"],
+        options: {},
+        models: {},
       }
     }
 
