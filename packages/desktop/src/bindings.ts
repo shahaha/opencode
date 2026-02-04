@@ -14,6 +14,9 @@ export const commands = {
 	setDisplayBackend: (backend: LinuxDisplayBackend) => __TAURI_INVOKE<null>("set_display_backend", { backend }),
 	parseMarkdownCommand: (markdown: string) => __TAURI_INVOKE<string>("parse_markdown_command", { markdown }),
 	checkAppExists: (appName: string) => __TAURI_INVOKE<boolean>("check_app_exists", { appName }),
+	startWebMirror: (config: WebMirrorConfig) => __TAURI_INVOKE<WebMirrorStatus>("start_web_mirror", { config }),
+	stopWebMirror: () => __TAURI_INVOKE<null>("stop_web_mirror"),
+	getWebMirrorStatus: () => __TAURI_INVOKE<WebMirrorStatus>("get_web_mirror_status"),
 };
 
 /** Events */
@@ -50,3 +53,18 @@ function makeEvent<T>(name: string) {
     return Object.assign(fn, base);
 }
 
+export type WebMirrorConfig = {
+  enabled: boolean
+  port: number | null
+  username: string | null
+  password: string | null
+}
+
+export type WebMirrorStatus = {
+  running: boolean
+  local_url: string | null
+  network_url: string | null
+  username: string
+  password: string
+  config: WebMirrorConfig
+}

@@ -21,6 +21,7 @@ import { DragDropProvider, DragDropSensors, DragOverlay, SortableProvider, close
 import type { DragEvent } from "@thisbeyond/solid-dnd"
 import { useSync } from "@/context/sync"
 import { useTerminal, type LocalPTY } from "@/context/terminal"
+import { usePlatform } from "@/context/platform"
 import { useLayout } from "@/context/layout"
 import { checksum, base64Encode } from "@opencode-ai/util/encode"
 import { findLast } from "@opencode-ai/util/array"
@@ -92,6 +93,8 @@ export default function Page() {
   const file = useFile()
   const sync = useSync()
   const terminal = useTerminal()
+  const mirrorPlatform = usePlatform()
+  const isMirror = mirrorPlatform.platform === "desktop" && !mirrorPlatform.storage
   const dialog = useDialog()
   const codeComponent = useCodeComponent()
   const command = useCommand()
@@ -685,6 +688,7 @@ export default function Page() {
   })
 
   createEffect(() => {
+    if (isMirror) return
     if (!view().terminal.opened()) {
       setUi("autoCreated", false)
       return
@@ -1732,7 +1736,7 @@ export default function Page() {
       </div>
 
       <TerminalPanel
-        open={isDesktop() && view().terminal.opened()}
+        open={!isMirror && isDesktop() && view().terminal.opened()}
         height={layout.terminal.height()}
         resize={layout.terminal.resize}
         close={view().terminal.close}
