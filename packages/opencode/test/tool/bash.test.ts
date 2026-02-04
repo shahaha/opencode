@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
+import os from "os"
 import path from "path"
+import fs from "fs/promises"
+import { toPosix } from "@opencode-ai/util/path"
 import { BashTool } from "../../src/tool/bash"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
@@ -40,6 +43,28 @@ describe("tool.bash", () => {
 })
 
 describe("tool.bash permissions", () => {
+  test("resolves relative workdir against Instance.directory", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.mkdir(path.join(tmp.path, "inner"))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const result = await bash.execute(
+          {
+            command: "echo hi",
+            workdir: "inner",
+            description: "Echo in inner",
+          },
+          ctx,
+        )
+        expect(result.metadata.exit).toBe(0)
+        expect(result.output).toContain("hi")
+      },
+    })
+  })
+
   test("asks for bash permission with correct pattern", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -121,6 +146,39 @@ describe("tool.bash permissions", () => {
     })
   })
 
+  test("asks for external_directory permission even when PATH is broken", async () => {
+    const before = process.env.PATH
+    process.env.PATH = process.platform === "win32" ? "Z:\\nope" : "/nope"
+
+    try {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
+          const testCtx = {
+            ...ctx,
+            ask: async (req: Omit<PermissionNext.Request, "id" | "sessionID" | "tool">) => {
+              requests.push(req)
+            },
+          }
+          await bash.execute(
+            {
+              command: "cd ../",
+              description: "Change to parent directory",
+            },
+            testCtx,
+          )
+          const extDirReq = requests.find((r) => r.permission === "external_directory")
+          expect(extDirReq).toBeDefined()
+        },
+      })
+    } finally {
+      process.env.PATH = before
+    }
+  })
+
   test("asks for external_directory permission when workdir is outside project", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -137,14 +195,34 @@ describe("tool.bash permissions", () => {
         await bash.execute(
           {
             command: "ls",
-            workdir: "/tmp",
+            workdir: os.tmpdir(),
             description: "List /tmp",
           },
           testCtx,
         )
         const extDirReq = requests.find((r) => r.permission === "external_directory")
         expect(extDirReq).toBeDefined()
-        expect(extDirReq!.patterns).toContain("/tmp/*")
+        expect(extDirReq!.patterns).toContain(`${toPosix(os.tmpdir())}/*`)
+      },
+    })
+  })
+
+  test("throws on invalid workdir", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        await expect(
+          bash.execute(
+            {
+              command: "ls",
+              workdir: path.join(tmp.path, "missing"),
+              description: "List missing directory",
+            },
+            ctx,
+          ),
+        ).rejects.toThrow("Invalid working directory")
       },
     })
   })
@@ -176,7 +254,7 @@ describe("tool.bash permissions", () => {
           testCtx,
         )
         const extDirReq = requests.find((r) => r.permission === "external_directory")
-        const expected = path.join(outerTmp.path, "*")
+        const expected = toPosix(path.join(outerTmp.path, "*"))
         expect(extDirReq).toBeDefined()
         expect(extDirReq!.patterns).toContain(expected)
         expect(extDirReq!.always).toContain(expected)

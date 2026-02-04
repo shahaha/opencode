@@ -5,7 +5,7 @@ import { Instance } from "../project/instance"
 import { Log } from "../util/log"
 import { FileIgnore } from "./ignore"
 import { Config } from "../config/config"
-import path from "path"
+import path from "@/util/path"
 // @ts-ignore
 import { createWrapper } from "@parcel/watcher/wrapper"
 import { lazy } from "@/util/lazy"
@@ -66,9 +66,10 @@ export namespace FileWatcher {
       const subscribe: ParcelWatcher.SubscribeCallback = (err, evts) => {
         if (err) return
         for (const evt of evts) {
-          if (evt.type === "create") Bus.publish(Event.Updated, { file: evt.path, event: "add" })
-          if (evt.type === "update") Bus.publish(Event.Updated, { file: evt.path, event: "change" })
-          if (evt.type === "delete") Bus.publish(Event.Updated, { file: evt.path, event: "unlink" })
+          const file = path.toPosix(evt.path)
+          if (evt.type === "create") Bus.publish(Event.Updated, { file, event: "add" })
+          if (evt.type === "update") Bus.publish(Event.Updated, { file, event: "change" })
+          if (evt.type === "delete") Bus.publish(Event.Updated, { file, event: "unlink" })
         }
       }
 

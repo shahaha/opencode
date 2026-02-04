@@ -1,5 +1,5 @@
 import { Log } from "../util/log"
-import path from "path"
+import path from "@/util/path"
 import fs from "fs/promises"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
@@ -217,7 +217,7 @@ export namespace Storage {
           cwd: path.join(dir, ...prefix),
           onlyFiles: true,
         }),
-      ).then((results) => results.map((x) => [...prefix, ...x.slice(0, -5).split(path.sep)]))
+      ).then((results) => results.map((x) => [...prefix, ...path.toPosix(x).slice(0, -5).split("/")]))
       result.sort()
       return result
     } catch {

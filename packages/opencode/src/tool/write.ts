@@ -1,5 +1,5 @@
 import z from "zod"
-import * as path from "path"
+import path from "@/util/path"
 import { Tool } from "./tool"
 import { LSP } from "../lsp"
 import { createTwoFilesPatch } from "diff"
@@ -23,7 +23,8 @@ export const WriteTool = Tool.define("write", {
     filePath: z.string().describe("The absolute path to the file to write (must be absolute, not relative)"),
   }),
   async execute(params, ctx) {
-    const filepath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
+    const input = path.toPosix(params.filePath)
+    const filepath = path.isAbsolute(input) ? input : path.resolve(Instance.directory, input)
     await assertExternalDirectory(ctx, filepath)
 
     const file = Bun.file(filepath)
@@ -56,14 +57,18 @@ export const WriteTool = Tool.define("write", {
     await LSP.touchFile(filepath, true)
     const diagnostics = await LSP.diagnostics()
     const normalizedFilepath = Filesystem.normalizePath(filepath)
+    const seen = new Set<string>()
     let projectDiagnosticsCount = 0
     for (const [file, issues] of Object.entries(diagnostics)) {
+      const key = Filesystem.normalizePath(file)
+      if (seen.has(key)) continue
+      seen.add(key)
       const errors = issues.filter((item) => item.severity === 1)
       if (errors.length === 0) continue
       const limited = errors.slice(0, MAX_DIAGNOSTICS_PER_FILE)
       const suffix =
         errors.length > MAX_DIAGNOSTICS_PER_FILE ? `\n... and ${errors.length - MAX_DIAGNOSTICS_PER_FILE} more` : ""
-      if (file === normalizedFilepath) {
+      if (key === normalizedFilepath) {
         output += `\n\nLSP errors detected in this file, please fix:\n<diagnostics file="${filepath}">\n${limited.map(LSP.Diagnostic.pretty).join("\n")}${suffix}\n</diagnostics>`
         continue
       }

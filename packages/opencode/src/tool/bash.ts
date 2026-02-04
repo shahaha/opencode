@@ -1,18 +1,18 @@
 import z from "zod"
 import { spawn } from "child_process"
 import { Tool } from "./tool"
-import path from "path"
+import path from "@/util/path"
 import DESCRIPTION from "./bash.txt"
 import { Log } from "../util/log"
 import { Instance } from "../project/instance"
 import { lazy } from "@/util/lazy"
 import { Language } from "web-tree-sitter"
 
-import { $ } from "bun"
 import { Filesystem } from "@/util/filesystem"
 import { fileURLToPath } from "url"
 import { Flag } from "@/flag/flag.ts"
 import { Shell } from "@/shell/shell"
+import fs from "fs/promises"
 
 import { BashArity } from "@/permission/arity"
 import { Truncate } from "./truncation"
@@ -22,6 +22,35 @@ const MAX_METADATA_LENGTH = 30_000
 const DEFAULT_TIMEOUT = Flag.OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
 
 export const log = Log.create({ service: "bash-tool" })
+
+export function externalDirectoryGlob(target: string, kind: "file" | "directory" = "file") {
+  const normalized = path.toPosix(target)
+  const dir = kind === "directory" ? normalized : path.dirname(normalized)
+  return path.join(dir, "*")
+}
+
+const unquote = (input: string) => {
+  if (input.length < 2) return input
+  const head = input.at(0)
+  const tail = input.at(-1)
+  if (!head || !tail) return input
+  if (head === "'" && tail === "'") return input.slice(1, -1)
+  if (head === '"' && tail === '"') return input.slice(1, -1)
+  return input
+}
+
+const resolveArgPath = async (cwd: string, raw: string) => {
+  const arg = path.toPosix(unquote(raw))
+  if (!arg) return
+  if (arg.startsWith("-")) return
+  if (arg.includes("*") || arg.includes("?") || arg.includes("$")) return
+
+  const resolved = path.resolve(cwd, arg.startsWith("file://") ? path.toPosix(fileURLToPath(arg)) : arg)
+  return fs
+    .realpath(resolved)
+    .then((real) => Filesystem.normalizePath(real))
+    .catch(() => Filesystem.normalizePath(resolved))
+}
 
 const resolveWasm = (asset: string) => {
   if (asset.startsWith("file://")) return fileURLToPath(asset)
@@ -76,7 +105,14 @@ export const BashTool = Tool.define("bash", async () => {
         ),
     }),
     async execute(params, ctx) {
-      const cwd = params.workdir || Instance.directory
+      const cwd = (() => {
+        if (!params.workdir) return Instance.directory
+        const input = path.toPosix(params.workdir)
+        return path.isAbsolute(input) ? path.resolve(input) : path.resolve(Instance.directory, input)
+      })()
+      if (!(await Filesystem.isDir(cwd))) {
+        throw new Error(`Invalid working directory: ${cwd}`)
+      }
       if (params.timeout !== undefined && params.timeout < 0) {
         throw new Error(`Invalid timeout value: ${params.timeout}. Timeout must be a positive number.`)
       }
@@ -86,7 +122,7 @@ export const BashTool = Tool.define("bash", async () => {
         throw new Error("Failed to parse command")
       }
       const directories = new Set<string>()
-      if (!Instance.containsPath(cwd)) directories.add(cwd)
+      if (!Instance.containsPath(cwd)) directories.add(externalDirectoryGlob(cwd, "directory"))
       const patterns = new Set<string>()
       const always = new Set<string>()
 
@@ -116,24 +152,13 @@ export const BashTool = Tool.define("bash", async () => {
         if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(command[0])) {
           for (const arg of command.slice(1)) {
             if (arg.startsWith("-") || (command[0] === "chmod" && arg.startsWith("+"))) continue
-            const resolved = await $`realpath ${arg}`
-              .cwd(cwd)
-              .quiet()
-              .nothrow()
-              .text()
-              .then((x) => x.trim())
+            const resolved = await resolveArgPath(cwd, arg)
             log.info("resolved path", { arg, resolved })
-            if (resolved) {
-              // Git Bash on Windows returns Unix-style paths like /c/Users/...
-              const normalized =
-                process.platform === "win32" && resolved.match(/^\/[a-z]\//)
-                  ? resolved.replace(/^\/([a-z])\//, (_, drive) => `${drive.toUpperCase()}:\\`).replace(/\//g, "\\")
-                  : resolved
-              if (!Instance.containsPath(normalized)) {
-                const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
-                directories.add(dir)
-              }
-            }
+            if (!resolved) continue
+            const normalized = path.toPosix(resolved)
+            if (Instance.containsPath(normalized)) continue
+            const isDir = await Filesystem.isDir(normalized)
+            directories.add(externalDirectoryGlob(normalized, isDir ? "directory" : "file"))
           }
         }
 
@@ -145,11 +170,10 @@ export const BashTool = Tool.define("bash", async () => {
       }
 
       if (directories.size > 0) {
-        const globs = Array.from(directories).map((dir) => path.join(dir, "*"))
         await ctx.ask({
           permission: "external_directory",
-          patterns: globs,
-          always: globs,
+          patterns: Array.from(directories),
+          always: Array.from(directories),
           metadata: {},
         })
       }

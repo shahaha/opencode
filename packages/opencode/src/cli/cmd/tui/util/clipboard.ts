@@ -1,10 +1,9 @@
 import { $ } from "bun"
 import type { CliRenderer } from "@opentui/core"
-import { platform, release } from "os"
+import { platform, release, tmpdir } from "os"
 import clipboardy from "clipboardy"
 import { lazy } from "../../../../util/lazy.js"
-import { tmpdir } from "os"
-import path from "path"
+import path from "@/util/path"
 
 const rendererRef = { current: undefined as CliRenderer | undefined }
 

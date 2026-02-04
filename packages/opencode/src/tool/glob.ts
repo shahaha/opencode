@@ -1,5 +1,5 @@
 import z from "zod"
-import path from "path"
+import path from "@/util/path"
 import { Tool } from "./tool"
 import DESCRIPTION from "./glob.txt"
 import { Ripgrep } from "../file/ripgrep"
@@ -28,8 +28,7 @@ export const GlobTool = Tool.define("glob", {
       },
     })
 
-    let search = params.path ?? Instance.directory
-    search = path.isAbsolute(search) ? search : path.resolve(Instance.directory, search)
+    const search = path.resolve(Instance.directory, path.toPosix(params.path ?? Instance.directory))
     await assertExternalDirectory(ctx, search, { kind: "directory" })
 
     const limit = 100

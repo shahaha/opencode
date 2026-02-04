@@ -6,7 +6,7 @@ import { tmpdir } from "../fixture/fixture"
 import path from "path"
 import fs from "fs/promises"
 import { pathToFileURL } from "url"
-import { Global } from "../../src/global"
+import { toPosix } from "@opencode-ai/util/path"
 
 // Get managed config directory from environment (set in preload.ts)
 const managedConfigDir = process.env.OPENCODE_TEST_MANAGED_CONFIG_DIR!
@@ -184,6 +184,35 @@ test("handles file inclusion substitution", async () => {
       })
     },
   })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.theme).toBe("test_theme")
+    },
+  })
+})
+
+test("windows: handles file inclusion substitution with MSYS absolute paths", async () => {
+  if (process.platform !== "win32") return
+
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(path.join(dir, "included.txt"), "test_theme")
+
+      const msysDir = toPosix(dir).replace(/^([a-zA-Z]):\//, (_, d) => `/${d.toLowerCase()}/`)
+      const included = `${msysDir}/included.txt`
+
+      await Bun.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          theme: `{file:${included}}`,
+        }),
+      )
+    },
+  })
+
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
@@ -541,6 +570,39 @@ Nested command template`,
   })
 })
 
+test("windows: loads commands when instance directory is MSYS path", async () => {
+  if (process.platform !== "win32") return
+
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      const opencodeDir = path.join(dir, ".opencode")
+      await fs.mkdir(opencodeDir, { recursive: true })
+      const commandDir = path.join(opencodeDir, "command")
+      await fs.mkdir(commandDir, { recursive: true })
+      await Bun.write(
+        path.join(commandDir, "hello.md"),
+        `---
+description: Test command
+---
+Hello from MSYS command`,
+      )
+    },
+  })
+
+  const msysDir = toPosix(tmp.path).replace(/^([a-zA-Z]):\//, (_, d) => `/${d.toLowerCase()}/`)
+
+  await Instance.provide({
+    directory: msysDir,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.command?.["hello"]).toEqual({
+        description: "Test command",
+        template: "Hello from MSYS command",
+      })
+    },
+  })
+})
+
 test("updates config and writes to file", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -606,8 +668,8 @@ test("resolves scoped npm plugins in config", async () => {
       const config = await Config.get()
       const pluginEntries = config.plugin ?? []
 
-      const baseUrl = pathToFileURL(path.join(tmp.path, "opencode.json")).href
-      const expected = import.meta.resolve("@scope/plugin", baseUrl)
+      const configPath = path.join(tmp.path, "opencode.json")
+      const expected = pathToFileURL(Bun.resolveSync("@scope/plugin", configPath)).href
 
       expect(pluginEntries.includes(expected)).toBe(true)
 

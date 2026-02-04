@@ -1,6 +1,6 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
-import path from "path"
+import path from "@/util/path"
 import { pathToFileURL, fileURLToPath } from "url"
 import { createMessageConnection, StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node"
 import type { Diagnostic as VSCodeDiagnostic } from "vscode-languageserver-types"
@@ -50,13 +50,15 @@ export namespace LSPClient {
 
     const diagnostics = new Map<string, Diagnostic[]>()
     connection.onNotification("textDocument/publishDiagnostics", (params) => {
-      const filePath = Filesystem.normalizePath(fileURLToPath(params.uri))
+      const rawPath = path.toPosix(fileURLToPath(params.uri))
+      const filePath = Filesystem.normalizePath(rawPath)
       l.info("textDocument/publishDiagnostics", {
         path: filePath,
         count: params.diagnostics.length,
       })
       const exists = diagnostics.has(filePath)
       diagnostics.set(filePath, params.diagnostics)
+      if (rawPath !== filePath) diagnostics.set(rawPath, params.diagnostics)
       if (!exists && input.serverID === "typescript") return
       Bus.publish(Event.Diagnostics, { path: filePath, serverID: input.serverID })
     })
@@ -146,7 +148,8 @@ export namespace LSPClient {
       },
       notify: {
         async open(input: { path: string }) {
-          input.path = path.isAbsolute(input.path) ? input.path : path.resolve(Instance.directory, input.path)
+          const filepath = path.toPosix(input.path)
+          input.path = path.isAbsolute(filepath) ? filepath : path.resolve(Instance.directory, filepath)
           const file = Bun.file(input.path)
           const text = await file.text()
           const extension = path.extname(input.path)
@@ -208,8 +211,9 @@ export namespace LSPClient {
         return diagnostics
       },
       async waitForDiagnostics(input: { path: string }) {
+        const filepath = path.toPosix(input.path)
         const normalizedPath = Filesystem.normalizePath(
-          path.isAbsolute(input.path) ? input.path : path.resolve(Instance.directory, input.path),
+          path.isAbsolute(filepath) ? filepath : path.resolve(Instance.directory, filepath),
         )
         log.info("waiting for diagnostics", { path: normalizedPath })
         let unsub: () => void

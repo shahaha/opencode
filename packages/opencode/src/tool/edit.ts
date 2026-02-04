@@ -4,7 +4,7 @@
 // https://github.com/cline/cline/blob/main/evals/diff-edits/diff-apply/diff-06-26-25.ts
 
 import z from "zod"
-import * as path from "path"
+import path from "@/util/path"
 import { Tool } from "./tool"
 import { LSP } from "../lsp"
 import { createTwoFilesPatch, diffLines } from "diff"
@@ -41,7 +41,8 @@ export const EditTool = Tool.define("edit", {
       throw new Error("oldString and newString must be different")
     }
 
-    const filePath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
+    const input = path.toPosix(params.filePath)
+    const filePath = path.isAbsolute(input) ? input : path.resolve(Instance.directory, input)
     await assertExternalDirectory(ctx, filePath)
 
     let diff = ""
@@ -133,7 +134,7 @@ export const EditTool = Tool.define("edit", {
     await LSP.touchFile(filePath, true)
     const diagnostics = await LSP.diagnostics()
     const normalizedFilePath = Filesystem.normalizePath(filePath)
-    const issues = diagnostics[normalizedFilePath] ?? []
+    const issues = diagnostics[normalizedFilePath] ?? diagnostics[path.toPosix(filePath)] ?? []
     const errors = issues.filter((item) => item.severity === 1)
     if (errors.length > 0) {
       const limited = errors.slice(0, MAX_DIAGNOSTICS_PER_FILE)

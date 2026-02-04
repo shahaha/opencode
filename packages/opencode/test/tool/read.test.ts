@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
+import { toPosix } from "@opencode-ai/util/path"
 import { ReadTool } from "../../src/tool/read"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { PermissionNext } from "../../src/permission/next"
 import { Agent } from "../../src/agent/agent"
+
+const isWin = process.platform === "win32"
 
 const FIXTURES_DIR = path.join(import.meta.dir, "fixtures")
 
@@ -73,7 +76,7 @@ describe("tool.read external_directory permission", () => {
         await read.execute({ filePath: path.join(outerTmp.path, "secret.txt") }, testCtx)
         const extDirReq = requests.find((r) => r.permission === "external_directory")
         expect(extDirReq).toBeDefined()
-        expect(extDirReq!.patterns.some((p) => p.includes(outerTmp.path))).toBe(true)
+        expect(extDirReq!.patterns.some((p) => p.includes(toPosix(outerTmp.path)))).toBe(true)
       },
     })
   })
@@ -120,6 +123,26 @@ describe("tool.read external_directory permission", () => {
         await read.execute({ filePath: path.join(tmp.path, "internal.txt") }, testCtx)
         const extDirReq = requests.find((r) => r.permission === "external_directory")
         expect(extDirReq).toBeUndefined()
+      },
+    })
+  })
+
+  if (!isWin) return
+
+  test("windows: reads MSYS-style absolute paths", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "msys.txt"), "msys content")
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        const msysDir = toPosix(tmp.path).replace(/^([a-zA-Z]):\//, (_, d) => `/${d.toLowerCase()}/`)
+        const result = await read.execute({ filePath: `${msysDir}/msys.txt` }, ctx)
+        expect(result.output).toContain("msys content")
       },
     })
   })
@@ -351,7 +374,7 @@ describe("tool.read loaded instructions", () => {
         expect(result.output).toContain("system-reminder")
         expect(result.output).toContain("Test Instructions")
         expect(result.metadata.loaded).toBeDefined()
-        expect(result.metadata.loaded).toContain(path.join(tmp.path, "subdir", "AGENTS.md"))
+        expect(result.metadata.loaded).toContain(toPosix(path.join(tmp.path, "subdir", "AGENTS.md")))
       },
     })
   })

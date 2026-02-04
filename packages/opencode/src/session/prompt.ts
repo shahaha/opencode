@@ -1,4 +1,4 @@
-import path from "path"
+import path from "@/util/path"
 import os from "os"
 import fs from "fs/promises"
 import z from "zod"
@@ -189,45 +189,42 @@ export namespace SessionPrompt {
     ]
     const files = ConfigMarkdown.files(template)
     const seen = new Set<string>()
-    await Promise.all(
-      files.map(async (match) => {
-        const name = match[1]
-        if (seen.has(name)) return
-        seen.add(name)
-        const filepath = name.startsWith("~/")
-          ? path.join(os.homedir(), name.slice(2))
-          : path.resolve(Instance.worktree, name)
+    for (const match of files) {
+      const name = match[1]
+      if (seen.has(name)) continue
+      seen.add(name)
+      const filepath = name.startsWith("~/")
+        ? path.join(os.homedir(), name.slice(2))
+        : path.resolve(Instance.worktree, name)
 
-        const stats = await fs.stat(filepath).catch(() => undefined)
-        if (!stats) {
-          const agent = await Agent.get(name)
-          if (agent) {
-            parts.push({
-              type: "agent",
-              name: agent.name,
-            })
-          }
-          return
-        }
+      const stats = await fs.stat(filepath).catch(() => undefined)
+      if (!stats) {
+        const agent = await Agent.get(name)
+        if (!agent) continue
+        parts.push({
+          type: "agent",
+          name: agent.name,
+        })
+        continue
+      }
 
-        if (stats.isDirectory()) {
-          parts.push({
-            type: "file",
-            url: `file://${filepath}`,
-            filename: name,
-            mime: "application/x-directory",
-          })
-          return
-        }
-
+      if (stats.isDirectory()) {
         parts.push({
           type: "file",
           url: `file://${filepath}`,
           filename: name,
-          mime: "text/plain",
+          mime: "application/x-directory",
         })
-      }),
-    )
+        continue
+      }
+
+      parts.push({
+        type: "file",
+        url: `file://${filepath}`,
+        filename: name,
+        mime: "text/plain",
+      })
+    }
     return parts
   }
 
@@ -858,8 +855,9 @@ export namespace SessionPrompt {
     }
     using _ = defer(() => InstructionPrompt.clear(info.id))
 
-    const parts = await Promise.all(
-      input.parts.map(async (part): Promise<MessageV2.Part[]> => {
+    const parts: MessageV2.Part[] = []
+    for (const part of input.parts) {
+      const items = await (async (): Promise<MessageV2.Part[]> => {
         if (part.type === "file") {
           // before checking the protocol we check if this is an mcp resource because it needs special handling
           if (part.source?.type === "resource") {
@@ -967,7 +965,7 @@ export namespace SessionPrompt {
               log.info("file", { mime: part.mime })
               // have to normalize, symbol search returns absolute paths
               // Decode the pathname since URL constructor doesn't automatically decode it
-              const filepath = fileURLToPath(part.url)
+              const filepath = path.toPosix(fileURLToPath(part.url))
               const stat = await Bun.file(filepath).stat()
 
               if (stat.isDirectory()) {
@@ -1184,8 +1182,9 @@ export namespace SessionPrompt {
             sessionID: input.sessionID,
           },
         ]
-      }),
-    ).then((x) => x.flat())
+      })()
+      parts.push(...items)
+    }
 
     await Plugin.trigger(
       "chat.message",

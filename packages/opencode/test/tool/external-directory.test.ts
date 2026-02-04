@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test"
-import path from "path"
+import path from "../../src/util/path"
 import type { Tool } from "../../src/tool/tool"
 import { Instance } from "../../src/project/instance"
 import { assertExternalDirectory } from "../../src/tool/external-directory"
 import type { PermissionNext } from "../../src/permission/next"
+import { tmpdir } from "../fixture/fixture"
+import { toPosix } from "@opencode-ai/util/path"
+
+const isWin = process.platform === "win32"
 
 const baseCtx: Omit<Tool.Context, "ask"> = {
   sessionID: "test",
@@ -25,8 +29,9 @@ describe("tool.assertExternalDirectory", () => {
       },
     }
 
+    await using tmp = await tmpdir({ git: true })
     await Instance.provide({
-      directory: "/tmp",
+      directory: tmp.path,
       fn: async () => {
         await assertExternalDirectory(ctx)
       },
@@ -44,10 +49,11 @@ describe("tool.assertExternalDirectory", () => {
       },
     }
 
+    await using tmp = await tmpdir({ git: true })
     await Instance.provide({
-      directory: "/tmp/project",
+      directory: tmp.path,
       fn: async () => {
-        await assertExternalDirectory(ctx, path.join("/tmp/project", "file.txt"))
+        await assertExternalDirectory(ctx, path.join(tmp.path, "file.txt"))
       },
     })
 
@@ -63,8 +69,10 @@ describe("tool.assertExternalDirectory", () => {
       },
     }
 
-    const directory = "/tmp/project"
-    const target = "/tmp/outside/file.txt"
+    await using project = await tmpdir({ git: true })
+    await using outside = await tmpdir()
+    const directory = project.path
+    const target = path.join(outside.path, "file.txt")
     const expected = path.join(path.dirname(target), "*")
 
     await Instance.provide({
@@ -89,8 +97,10 @@ describe("tool.assertExternalDirectory", () => {
       },
     }
 
-    const directory = "/tmp/project"
-    const target = "/tmp/outside"
+    await using project = await tmpdir({ git: true })
+    await using outside = await tmpdir()
+    const directory = project.path
+    const target = outside.path
     const expected = path.join(target, "*")
 
     await Instance.provide({
@@ -115,13 +125,44 @@ describe("tool.assertExternalDirectory", () => {
       },
     }
 
+    await using project = await tmpdir({ git: true })
+    await using outside = await tmpdir()
     await Instance.provide({
-      directory: "/tmp/project",
+      directory: project.path,
       fn: async () => {
-        await assertExternalDirectory(ctx, "/tmp/outside/file.txt", { bypass: true })
+        await assertExternalDirectory(ctx, path.join(outside.path, "file.txt"), { bypass: true })
       },
     })
 
     expect(requests.length).toBe(0)
+  })
+
+  if (!isWin) return
+
+  test("windows: normalizes MSYS-style absolute targets", async () => {
+    const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
+    const ctx: Tool.Context = {
+      ...baseCtx,
+      ask: async (req) => {
+        requests.push(req)
+      },
+    }
+
+    await using project = await tmpdir({ git: true })
+    await using outside = await tmpdir()
+
+    const msysDir = toPosix(outside.path).replace(/^([a-zA-Z]):\//, (_, d) => `/${d.toLowerCase()}/`)
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        await assertExternalDirectory(ctx, `${msysDir}/file.txt`)
+      },
+    })
+
+    const req = requests.find((r) => r.permission === "external_directory")
+    expect(req).toBeDefined()
+    expect(req!.patterns[0]).toContain(toPosix(outside.path))
+    expect(req!.patterns[0]).not.toContain("\\")
+    expect(req!.patterns[0]).not.toContain("/c/")
   })
 })

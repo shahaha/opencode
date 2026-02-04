@@ -1,6 +1,6 @@
 import z from "zod"
-import path from "path"
 import os from "os"
+import path from "@/util/path"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
 import { NamedError } from "@opencode-ai/util/error"
@@ -53,12 +53,14 @@ export namespace Skill {
     const dirs = new Set<string>()
 
     const addSkill = async (match: string) => {
-      const md = await ConfigMarkdown.parse(match).catch((err) => {
+      const file = path.toPosix(match)
+
+      const md = await ConfigMarkdown.parse(file).catch((err) => {
         const message = ConfigMarkdown.FrontmatterError.isInstance(err)
           ? err.data.message
-          : `Failed to parse skill ${match}`
+          : `Failed to parse skill ${file}`
         Bus.publish(Session.Event.Error, { error: new NamedError.Unknown({ message }).toObject() })
-        log.error("failed to load skill", { skill: match, err })
+        log.error("failed to load skill", { skill: file, err })
         return undefined
       })
 
@@ -72,7 +74,7 @@ export namespace Skill {
         log.warn("duplicate skill name", {
           name: parsed.data.name,
           existing: skills[parsed.data.name].location,
-          duplicate: match,
+          duplicate: file,
         })
       }
 
@@ -81,7 +83,7 @@ export namespace Skill {
       skills[parsed.data.name] = {
         name: parsed.data.name,
         description: parsed.data.description,
-        location: match,
+        location: file,
         content: md.content,
       }
     }

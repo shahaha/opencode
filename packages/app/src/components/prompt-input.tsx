@@ -39,7 +39,7 @@ import type { IconName } from "@opencode-ai/ui/icons/provider"
 import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Select } from "@opencode-ai/ui/select"
-import { getDirectory, getFilename, getFilenameTruncated } from "@opencode-ai/util/path"
+import { getDirectory, getFilename, getFilenameTruncated, normalizeDirectory, toPosix } from "@opencode-ai/util/path"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { ImagePreview } from "@opencode-ai/ui/image-preview"
 import { ModelSelectorPopover } from "@/components/dialog-select-model"
@@ -482,6 +482,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         .map((path) => ({ type: "file", path, display: path }))
       return [...agents, ...pinned, ...fileOptions]
     },
+    normalizeFilter: toPosix,
     key: atKey,
     filterKeys: ["display"],
     groupBy: (item) => {
@@ -1302,8 +1303,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       }
     }
 
-    const toAbsolutePath = (path: string) =>
-      path.startsWith("/") ? path : (sessionDirectory + "/" + path).replace("//", "/")
+    const toAbsolutePath = (input: string) => {
+      if (input.startsWith("/") || /^[a-zA-Z]:/.test(input)) return toPosix(input)
+      const base = normalizeDirectory(sessionDirectory)
+      const suffix = input.startsWith("/") ? input.slice(1) : input
+      return toPosix(`${base}/${suffix}`)
+    }
 
     const fileAttachments = currentPrompt.filter((part) => part.type === "file") as FileAttachmentPart[]
     const agentAttachments = currentPrompt.filter((part) => part.type === "agent") as AgentPart[]

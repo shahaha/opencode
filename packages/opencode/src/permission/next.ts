@@ -8,16 +8,20 @@ import { fn } from "@/util/fn"
 import { Log } from "@/util/log"
 import { Wildcard } from "@/util/wildcard"
 import os from "os"
+import { toPosix } from "@/util/path"
 import z from "zod"
 
 export namespace PermissionNext {
   const log = Log.create({ service: "permission" })
 
+  const PATH_PERMISSIONS = new Set(["edit", "read", "list", "glob", "grep", "lsp", "external_directory"])
+
   function expand(pattern: string): string {
-    if (pattern.startsWith("~/")) return os.homedir() + pattern.slice(1)
-    if (pattern === "~") return os.homedir()
-    if (pattern.startsWith("$HOME/")) return os.homedir() + pattern.slice(5)
-    if (pattern.startsWith("$HOME")) return os.homedir() + pattern.slice(5)
+    const home = toPosix(os.homedir())
+    if (pattern.startsWith("~/")) return home + pattern.slice(1)
+    if (pattern === "~") return home
+    if (pattern.startsWith("$HOME/")) return home + pattern.slice(5)
+    if (pattern.startsWith("$HOME")) return home + pattern.slice(5)
     return pattern
   }
 
@@ -54,7 +58,11 @@ export namespace PermissionNext {
         continue
       }
       ruleset.push(
-        ...Object.entries(value).map(([pattern, action]) => ({ permission: key, pattern: expand(pattern), action })),
+        ...Object.entries(value).map(([pattern, action]) => {
+          const expanded = expand(pattern)
+          const normalized = PATH_PERMISSIONS.has(key) ? toPosix(expanded) : expanded
+          return { permission: key, pattern: normalized, action }
+        }),
       )
     }
     return ruleset
@@ -230,10 +238,19 @@ export namespace PermissionNext {
 
   export function evaluate(permission: string, pattern: string, ...rulesets: Ruleset[]): Rule {
     const merged = merge(...rulesets)
-    log.info("evaluate", { permission, pattern, ruleset: merged })
-    const match = merged.findLast(
-      (rule) => Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern),
-    )
+    const isPath = PATH_PERMISSIONS.has(permission)
+
+    const target = isPath ? toPosix(pattern) : pattern
+    const targetKey = isPath && process.platform === "win32" ? target.toLowerCase() : target
+
+    log.info("evaluate", { permission, pattern: target, ruleset: merged })
+
+    const match = merged.findLast((rule) => {
+      if (!Wildcard.match(permission, rule.permission)) return false
+      const candidate = isPath ? toPosix(rule.pattern) : rule.pattern
+      const candidateKey = isPath && process.platform === "win32" ? candidate.toLowerCase() : candidate
+      return Wildcard.match(targetKey, candidateKey)
+    })
     return match ?? { action: "ask", permission, pattern: "*" }
   }
 

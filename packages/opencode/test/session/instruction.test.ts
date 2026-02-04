@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import path from "path"
+import { toPosix } from "@opencode-ai/util/path"
 import { InstructionPrompt } from "../../src/session/instruction"
 import { Instance } from "../../src/project/instance"
 import { Global } from "../../src/global"
@@ -17,7 +18,7 @@ describe("InstructionPrompt.resolve", () => {
       directory: tmp.path,
       fn: async () => {
         const system = await InstructionPrompt.systemPaths()
-        expect(system.has(path.join(tmp.path, "AGENTS.md"))).toBe(true)
+        expect(system.has(toPosix(path.join(tmp.path, "AGENTS.md")))).toBe(true)
 
         const results = await InstructionPrompt.resolve([], path.join(tmp.path, "src", "file.ts"), "test-message-1")
         expect(results).toEqual([])
@@ -36,7 +37,7 @@ describe("InstructionPrompt.resolve", () => {
       directory: tmp.path,
       fn: async () => {
         const system = await InstructionPrompt.systemPaths()
-        expect(system.has(path.join(tmp.path, "subdir", "AGENTS.md"))).toBe(false)
+        expect(system.has(toPosix(path.join(tmp.path, "subdir", "AGENTS.md")))).toBe(false)
 
         const results = await InstructionPrompt.resolve(
           [],
@@ -44,7 +45,7 @@ describe("InstructionPrompt.resolve", () => {
           "test-message-2",
         )
         expect(results.length).toBe(1)
-        expect(results[0].filepath).toBe(path.join(tmp.path, "subdir", "AGENTS.md"))
+        expect(results[0].filepath).toBe(toPosix(path.join(tmp.path, "subdir", "AGENTS.md")))
       },
     })
   })
@@ -61,7 +62,7 @@ describe("InstructionPrompt.resolve", () => {
       fn: async () => {
         const filepath = path.join(tmp.path, "subdir", "AGENTS.md")
         const system = await InstructionPrompt.systemPaths()
-        expect(system.has(filepath)).toBe(false)
+        expect(system.has(toPosix(filepath))).toBe(false)
 
         const results = await InstructionPrompt.resolve([], filepath, "test-message-2")
         expect(results).toEqual([])
@@ -80,9 +81,9 @@ describe("InstructionPrompt.systemPaths OPENCODE_CONFIG_DIR", () => {
   afterEach(() => {
     if (originalConfigDir === undefined) {
       delete process.env["OPENCODE_CONFIG_DIR"]
-    } else {
-      process.env["OPENCODE_CONFIG_DIR"] = originalConfigDir
+      return
     }
+    process.env["OPENCODE_CONFIG_DIR"] = originalConfigDir
   })
 
   test("prefers OPENCODE_CONFIG_DIR AGENTS.md over global when both exist", async () => {
@@ -107,8 +108,8 @@ describe("InstructionPrompt.systemPaths OPENCODE_CONFIG_DIR", () => {
         directory: projectTmp.path,
         fn: async () => {
           const paths = await InstructionPrompt.systemPaths()
-          expect(paths.has(path.join(profileTmp.path, "AGENTS.md"))).toBe(true)
-          expect(paths.has(path.join(globalTmp.path, "AGENTS.md"))).toBe(false)
+          expect(paths.has(toPosix(path.join(profileTmp.path, "AGENTS.md")))).toBe(true)
+          expect(paths.has(toPosix(path.join(globalTmp.path, "AGENTS.md")))).toBe(false)
         },
       })
     } finally {
@@ -134,8 +135,8 @@ describe("InstructionPrompt.systemPaths OPENCODE_CONFIG_DIR", () => {
         directory: projectTmp.path,
         fn: async () => {
           const paths = await InstructionPrompt.systemPaths()
-          expect(paths.has(path.join(profileTmp.path, "AGENTS.md"))).toBe(false)
-          expect(paths.has(path.join(globalTmp.path, "AGENTS.md"))).toBe(true)
+          expect(paths.has(toPosix(path.join(profileTmp.path, "AGENTS.md")))).toBe(false)
+          expect(paths.has(toPosix(path.join(globalTmp.path, "AGENTS.md")))).toBe(true)
         },
       })
     } finally {
@@ -160,7 +161,7 @@ describe("InstructionPrompt.systemPaths OPENCODE_CONFIG_DIR", () => {
         directory: projectTmp.path,
         fn: async () => {
           const paths = await InstructionPrompt.systemPaths()
-          expect(paths.has(path.join(globalTmp.path, "AGENTS.md"))).toBe(true)
+          expect(paths.has(toPosix(path.join(globalTmp.path, "AGENTS.md")))).toBe(true)
         },
       })
     } finally {
