@@ -1090,6 +1090,10 @@ export type KeybindsConfig = {
    */
   tool_details?: string
   /**
+   * Toggle thinking visibility
+   */
+  thinking_toggle?: string
+  /**
    * List available models
    */
   model_list?: string
