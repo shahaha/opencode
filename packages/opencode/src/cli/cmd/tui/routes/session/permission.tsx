@@ -121,6 +121,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
   const sync = useSync()
   const [store, setStore] = createStore({
     stage: "permission" as PermissionStage,
+    selectedOption: null as string | null,
   })
 
   const session = createMemo(() => sync.data.session.find((s) => s.id === props.request.sessionID))
@@ -171,8 +172,10 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           onSelect={(option) => {
             setStore("stage", "permission")
             if (option === "cancel") return
+            // Use the selected option from the initial choice
+            const reply = store.selectedOption || "project_recursive"
             sdk.client.permission.reply({
-              reply: "always",
+              reply: reply as any,
               requestID: props.request.id,
             })
           }}
@@ -264,12 +267,42 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                   </Match>
                 </Switch>
               }
-              options={{ once: "Allow once", always: "Allow always", reject: "Reject" }}
+              options={(() => {
+                const isFileTool = ["edit", "read"].includes(props.request.permission)
+                const input_data = input()
+                const filePath = (() => {
+                  if (typeof input_data.filePath === "string") return input_data.filePath
+                  if (typeof input_data.path === "string") return input_data.path
+                  const meta = props.request.metadata
+                  if (typeof meta?.filepath === "string") return meta.filepath
+                  return null
+                })()
+
+                if (isFileTool && filePath) {
+                  return {
+                    once: "Allow once",
+                    file_always: "Always allow this file",
+                    folder_always: "Always allow this folder",
+                    folder_recursive: "Always allow this folder (recursive)",
+                    project_recursive: "Always allow entire project",
+                    reject: "Reject",
+                  }
+                }
+
+                return {
+                  once: "Allow once",
+                  project_recursive: "Always allow entire project",
+                  reject: "Reject",
+                }
+              })()}
               escapeKey="reject"
               fullscreen
               onSelect={(option) => {
-                if (option === "always") {
+                if (
+                  ["file_always", "folder_always", "folder_recursive", "project_recursive"].includes(option as string)
+                ) {
                   setStore("stage", "always")
+                  setStore("selectedOption", option as string)
                   return
                 }
                 if (option === "reject") {
@@ -283,8 +316,15 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                   })
                   return
                 }
+                if (option === "project_recursive") {
+                  sdk.client.permission.reply({
+                    reply: "project_recursive",
+                    requestID: props.request.id,
+                  })
+                  return
+                }
                 sdk.client.permission.reply({
-                  reply: "once",
+                  reply: option,
                   requestID: props.request.id,
                 })
               }}
