@@ -208,7 +208,15 @@ function App() {
       .catch(toast.error)
     renderer.clearSelection()
   }
-  const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
+  const [terminalTitleEnabled, setTerminalTitleEnabled] = kv.signal("terminal_title_enabled", true)
+  const [codeConceal, setCodeConceal] = kv.signal("conceal_code", true)
+  const [timestamps, setTimestamps] = kv.signal<"hide" | "show">("timestamps", "hide")
+  const [showThinking, setShowThinking] = kv.signal("thinking_visibility", true)
+  const [showDetails, setShowDetails] = kv.signal("tool_details_visibility", true)
+  const [_, setShowScrollbar] = kv.signal("scrollbar_visible", false)
+  const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
+  const [diffWrapMode, setDiffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
+  const [openrouterWarning, setOpenrouterWarning] = kv.signal("openrouter_warning", false)
 
   createEffect(() => {
     console.log(JSON.stringify(route.data))
@@ -472,34 +480,92 @@ function App() {
       category: "System",
     },
     {
-      title: "Help",
-      value: "help.show",
-      slash: {
-        name: "help",
-      },
-      onSelect: () => {
-        dialog.replace(() => <DialogHelp />)
-      },
+      title: animationsEnabled() ? "Disable animations" : "Enable animations",
+      value: "app.toggle.animations",
       category: "System",
-    },
-    {
-      title: "Open docs",
-      value: "docs.open",
-      onSelect: () => {
-        open("https://opencode.ai/docs").catch(() => {})
+      onSelect: (dialog) => {
+        setAnimationsEnabled((prev) => !prev)
         dialog.clear()
       },
-      category: "System",
     },
     {
-      title: "Exit the app",
-      value: "app.exit",
-      slash: {
-        name: "exit",
-        aliases: ["quit", "q"],
-      },
-      onSelect: () => exit(),
+      title: diffWrapMode() === "word" ? "Disable diff wrapping" : "Enable diff wrapping",
+      value: "app.toggle.diffwrap",
       category: "System",
+      onSelect: (dialog) => {
+        setDiffWrapMode((prev) => (prev === "word" ? "none" : "word"))
+        dialog.clear()
+      },
+    },
+    {
+      title: codeConceal() ? "Disable code concealment" : "Enable code concealment",
+      value: "app.toggle.conceal",
+      keybind: "messages_toggle_conceal",
+      category: "System",
+      onSelect: (dialog) => {
+        setCodeConceal((prev) => !prev)
+        dialog.clear()
+      },
+    },
+    {
+      title: timestamps() === "show" ? "Hide timestamps" : "Show timestamps",
+      value: "app.toggle.timestamps",
+      category: "System",
+      slash: {
+        name: "timestamps",
+        aliases: ["toggle-timestamps"],
+      },
+      onSelect: (dialog) => {
+        setTimestamps((prev) => (prev === "show" ? "hide" : "show"))
+        dialog.clear()
+      },
+    },
+    {
+      title: showThinking() ? "Hide thinking" : "Show thinking",
+      value: "app.toggle.thinking",
+      category: "System",
+      slash: {
+        name: "thinking",
+        aliases: ["toggle-thinking"],
+      },
+      onSelect: (dialog) => {
+        setShowThinking((prev) => !prev)
+        dialog.clear()
+      },
+    },
+    {
+      title: showDetails() ? "Hide tool details" : "Show tool details",
+      value: "app.toggle.actions",
+      keybind: "tool_details",
+      category: "System",
+      onSelect: (dialog) => {
+        setShowDetails((prev) => !prev)
+        dialog.clear()
+      },
+    },
+    {
+      title: "Toggle session scrollbar",
+      value: "app.toggle.scrollbar",
+      keybind: "scrollbar_toggle",
+      category: "System",
+      onSelect: (dialog) => {
+        setShowScrollbar((prev) => !prev)
+        dialog.clear()
+      },
+    },
+    {
+      title: terminalTitleEnabled() ? "Disable terminal title" : "Enable terminal title",
+      value: "terminal.title.toggle",
+      keybind: "terminal_title_toggle",
+      category: "System",
+      onSelect: (dialog) => {
+        setTerminalTitleEnabled((prev) => {
+          const next = !prev
+          if (!next) renderer.setTerminalTitle("")
+          return next
+        })
+        dialog.clear()
+      },
     },
     {
       title: "Toggle debug panel",
@@ -550,51 +616,47 @@ function App() {
       },
     },
     {
-      title: terminalTitleEnabled() ? "Disable terminal title" : "Enable terminal title",
-      value: "terminal.title.toggle",
-      keybind: "terminal_title_toggle",
-      category: "System",
-      onSelect: (dialog) => {
-        setTerminalTitleEnabled((prev) => {
-          const next = !prev
-          kv.set("terminal_title_enabled", next)
-          if (!next) renderer.setTerminalTitle("")
-          return next
-        })
-        dialog.clear()
+      title: "Help",
+      value: "help.show",
+      slash: {
+        name: "help",
       },
+      onSelect: () => {
+        dialog.replace(() => <DialogHelp />)
+      },
+      category: "System",
     },
     {
-      title: kv.get("animations_enabled", true) ? "Disable animations" : "Enable animations",
-      value: "app.toggle.animations",
-      category: "System",
-      onSelect: (dialog) => {
-        kv.set("animations_enabled", !kv.get("animations_enabled", true))
+      title: "Open docs",
+      value: "docs.open",
+      onSelect: () => {
+        open("https://opencode.ai/docs").catch(() => {})
         dialog.clear()
       },
+      category: "System",
     },
     {
-      title: kv.get("diff_wrap_mode", "word") === "word" ? "Disable diff wrapping" : "Enable diff wrapping",
-      value: "app.toggle.diffwrap",
-      category: "System",
-      onSelect: (dialog) => {
-        const current = kv.get("diff_wrap_mode", "word")
-        kv.set("diff_wrap_mode", current === "word" ? "none" : "word")
-        dialog.clear()
+      title: "Exit app",
+      value: "app.exit",
+      slash: {
+        name: "exit",
+        aliases: ["quit", "q"],
       },
+      onSelect: () => exit(),
+      category: "System",
     },
   ])
 
   createEffect(() => {
     const currentModel = local.model.current()
     if (!currentModel) return
-    if (currentModel.providerID === "openrouter" && !kv.get("openrouter_warning", false)) {
+    if (currentModel.providerID === "openrouter" && !openrouterWarning()) {
       untrack(() => {
         DialogAlert.show(
           dialog,
           "Warning",
           "While openrouter is a convenient way to access LLMs your request will often be routed to subpar providers that do not work well in our testing.\n\nFor reliable access to models check out OpenCode Zen\nhttps://opencode.ai/zen",
-        ).then(() => kv.set("openrouter_warning", true))
+        ).then(() => setOpenrouterWarning(() => true))
       })
     }
   })
