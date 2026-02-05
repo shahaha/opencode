@@ -33,6 +33,9 @@ export interface Settings {
   }
   notifications: NotificationSettings
   sounds: SoundSettings
+  palette: {
+    projects: boolean
+  }
 }
 
 const defaultSettings: Settings = {
@@ -60,6 +63,9 @@ const defaultSettings: Settings = {
     agent: "staplebops-01",
     permissions: "staplebops-02",
     errors: "nope-03",
+  },
+  palette: {
+    projects: true,
   },
 }
 
@@ -156,6 +162,12 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         errors: createMemo(() => store.notifications?.errors ?? defaultSettings.notifications.errors),
         setErrors(value: boolean) {
           setStore("notifications", "errors", value)
+        },
+      },
+      palette: {
+        projects: createMemo(() => store.palette?.projects ?? defaultSettings.palette.projects),
+        setProjects(value: boolean) {
+          setStore("palette", "projects", value)
         },
       },
       sounds: {
