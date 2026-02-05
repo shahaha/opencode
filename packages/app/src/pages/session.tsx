@@ -30,7 +30,7 @@ import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { Select } from "@opencode-ai/ui/select"
 import { useCodeComponent } from "@opencode-ai/ui/context/code"
-import { LineComment as LineCommentView, LineCommentEditor } from "@opencode-ai/ui/line-comment"
+import { LineCommentEditor } from "@opencode-ai/ui/line-comment"
 import { SessionTurn } from "@opencode-ai/ui/session-turn"
 import { BasicTool } from "@opencode-ai/ui/basic-tool"
 import { createAutoScroll } from "@opencode-ai/ui/hooks"
@@ -2959,11 +2959,17 @@ export default function Page() {
 
                           const commentedLines = createMemo(() => fileComments().map((comment) => comment.selection))
 
+                          const commentAnchors = createMemo(() =>
+                            fileComments().map((comment) => ({
+                              id: comment.id,
+                              line: Math.max(comment.selection.start, comment.selection.end),
+                            })),
+                          )
+
                           const [note, setNote] = createStore({
                             openedComment: null as string | null,
                             commenting: null as SelectedLineRange | null,
                             draft: "",
-                            positions: {} as Record<string, number>,
                             draftTop: undefined as number | undefined,
                           })
 
@@ -2983,11 +2989,6 @@ export default function Page() {
                           const setDraft = (
                             value: typeof note.draft | ((value: typeof note.draft) => typeof note.draft),
                           ) => setNote("draft", value)
-
-                          const positions = () => note.positions
-                          const setPositions = (
-                            value: typeof note.positions | ((value: typeof note.positions) => typeof note.positions),
-                          ) => setNote("positions", value)
 
                           const draftTop = () => note.draftTop
                           const setDraftTop = (
@@ -3021,32 +3022,23 @@ export default function Page() {
                             return node
                           }
 
-                          const markerTop = (wrapper: HTMLElement, marker: HTMLElement) => {
-                            const wrapperRect = wrapper.getBoundingClientRect()
-                            const rect = marker.getBoundingClientRect()
-                            return rect.top - wrapperRect.top + Math.max(0, (rect.height - 20) / 2)
-                          }
+                          let draftPositionFrame: number | undefined
 
-                          const updateComments = () => {
-                            const el = wrap
-                            const root = getRoot()
-                            if (!el || !root) {
-                              setPositions({})
+                          const updateDraftPosition = () => {
+                            const range = commenting()
+                            if (!range) {
                               setDraftTop(undefined)
                               return
                             }
 
-                            const next: Record<string, number> = {}
-                            for (const comment of fileComments()) {
-                              const marker = findMarker(root, comment.selection)
-                              if (!marker) continue
-                              next[comment.id] = markerTop(el, marker)
+                            const el = wrap
+                            if (!el) {
+                              setDraftTop(undefined)
+                              return
                             }
 
-                            setPositions(next)
-
-                            const range = commenting()
-                            if (!range) {
+                            const root = getRoot()
+                            if (!root) {
                               setDraftTop(undefined)
                               return
                             }
@@ -3057,21 +3049,30 @@ export default function Page() {
                               return
                             }
 
-                            setDraftTop(markerTop(el, marker))
+                            // Position relative to wrapper (viewport), not content
+                            const wrapperRect = el.getBoundingClientRect()
+                            const rect = marker.getBoundingClientRect()
+                            setDraftTop(rect.top - wrapperRect.top + Math.max(0, (rect.height - 20) / 2))
                           }
 
-                          const scheduleComments = () => {
-                            requestAnimationFrame(updateComments)
+                          const scheduleDraftPosition = () => {
+                            if (draftPositionFrame !== undefined) return
+                            draftPositionFrame = requestAnimationFrame(() => {
+                              draftPositionFrame = undefined
+                              updateDraftPosition()
+                            })
                           }
 
-                          createEffect(() => {
-                            fileComments()
-                            scheduleComments()
+                          onCleanup(() => {
+                            if (draftPositionFrame !== undefined) {
+                              cancelAnimationFrame(draftPositionFrame)
+                              draftPositionFrame = undefined
+                            }
                           })
 
                           createEffect(() => {
                             const range = commenting()
-                            scheduleComments()
+                            scheduleDraftPosition()
                             if (!range) return
                             setDraft("")
                           })
@@ -3092,13 +3093,12 @@ export default function Page() {
                             requestAnimationFrame(() => comments.clearFocus())
                           })
 
-                          const renderCode = (source: string, wrapperClass: string) => (
+                          const renderCode = (source: string, wrapperClass: string, fillHeight?: boolean) => (
                             <div
                               ref={(el) => {
                                 wrap = el
-                                scheduleComments()
                               }}
-                              class={`relative overflow-hidden ${wrapperClass}`}
+                              class={`relative ${wrapperClass}`}
                             >
                               <Dynamic
                                 component={codeComponent}
@@ -3108,11 +3108,13 @@ export default function Page() {
                                   cacheKey: cacheKey(),
                                 }}
                                 enableLineSelection
+                                fillHeight={fillHeight}
                                 selectedLines={selectedLines()}
                                 commentedLines={commentedLines()}
+                                commentAnchors={commentAnchors()}
                                 onRendered={() => {
                                   requestAnimationFrame(restoreScroll)
-                                  requestAnimationFrame(scheduleComments)
+                                  requestAnimationFrame(scheduleDraftPosition)
                                 }}
                                 onLineSelected={(range: SelectedLineRange | null) => {
                                   const p = path()
@@ -3129,32 +3131,26 @@ export default function Page() {
                                   setOpenedComment(null)
                                   setCommenting(range)
                                 }}
+                                onCommentAnchorClick={(id: string) => {
+                                  const p = path()
+                                  if (!p) return
+                                  const comment = fileComments().find((c) => c.id === id)
+                                  if (!comment) return
+                                  setCommenting(null)
+                                  setOpenedComment((current) => (current === id ? null : id))
+                                  file.setSelectedLines(p, comment.selection)
+                                }}
+                                onCommentAnchorHover={(id: string | null) => {
+                                  const p = path()
+                                  if (!p) return
+                                  if (id) {
+                                    const comment = fileComments().find((c) => c.id === id)
+                                    if (comment) file.setSelectedLines(p, comment.selection)
+                                  }
+                                }}
                                 overflow="scroll"
                                 class="select-text"
                               />
-                              <For each={fileComments()}>
-                                {(comment) => (
-                                  <LineCommentView
-                                    id={comment.id}
-                                    top={positions()[comment.id]}
-                                    open={openedComment() === comment.id}
-                                    comment={comment.comment}
-                                    selection={commentLabel(comment.selection)}
-                                    onMouseEnter={() => {
-                                      const p = path()
-                                      if (!p) return
-                                      file.setSelectedLines(p, comment.selection)
-                                    }}
-                                    onClick={() => {
-                                      const p = path()
-                                      if (!p) return
-                                      setCommenting(null)
-                                      setOpenedComment((current) => (current === comment.id ? null : comment.id))
-                                      file.setSelectedLines(p, comment.selection)
-                                    }}
-                                  />
-                                )}
-                              </For>
                               <Show when={commenting()}>
                                 {(range) => (
                                   <Show when={draftTop() !== undefined}>
@@ -3224,16 +3220,15 @@ export default function Page() {
                           }
 
                           const handleCodeScroll = (event: Event) => {
-                            const el = scroll
-                            if (!el) return
-
                             const target = event.currentTarget
                             if (!(target instanceof HTMLElement)) return
 
                             queueScrollUpdate({
                               x: target.scrollLeft,
-                              y: el.scrollTop,
+                              y: target.scrollTop,
                             })
+
+                            scheduleDraftPosition()
                           }
 
                           const syncCodeScroll = () => {
@@ -3255,21 +3250,20 @@ export default function Page() {
                             const el = scroll
                             if (!el) return
 
+                            syncCodeScroll()
+
                             const s = view()?.scroll(tab)
                             if (!s) return
-
-                            syncCodeScroll()
 
                             if (codeScroll.length > 0) {
                               for (const item of codeScroll) {
                                 if (item.scrollLeft !== s.x) item.scrollLeft = s.x
+                                if (item.scrollTop !== s.y) item.scrollTop = s.y
                               }
+                              return
                             }
 
                             if (el.scrollTop !== s.y) el.scrollTop = s.y
-
-                            if (codeScroll.length > 0) return
-
                             if (el.scrollLeft !== s.x) el.scrollLeft = s.x
                           }
 
@@ -3278,7 +3272,7 @@ export default function Page() {
 
                             queueScrollUpdate({
                               x: codeScroll[0]?.scrollLeft ?? event.currentTarget.scrollLeft,
-                              y: event.currentTarget.scrollTop,
+                              y: codeScroll[0]?.scrollTop ?? event.currentTarget.scrollTop,
                             })
                           }
 
@@ -3368,7 +3362,7 @@ export default function Page() {
                                     </div>
                                   </div>
                                 </Match>
-                                <Match when={state()?.loaded}>{renderCode(contents(), "pb-40")}</Match>
+                                <Match when={state()?.loaded}>{renderCode(contents(), "h-full", true)}</Match>
                                 <Match when={state()?.loading}>
                                   <div class="px-6 py-4 text-text-weak">{language.t("common.loading")}...</div>
                                 </Match>
