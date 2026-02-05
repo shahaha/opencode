@@ -346,19 +346,53 @@ export namespace Provider {
         },
       }
     },
-    "google-vertex": async () => {
-      const project = Env.get("GOOGLE_CLOUD_PROJECT") ?? Env.get("GCP_PROJECT") ?? Env.get("GCLOUD_PROJECT")
-      const location = Env.get("GOOGLE_CLOUD_LOCATION") ?? Env.get("VERTEX_LOCATION") ?? "us-east5"
+    "google-vertex": async (provider) => {
+      const project =
+        provider.options?.project ??
+        Env.get("GOOGLE_CLOUD_PROJECT") ??
+        Env.get("GCP_PROJECT") ??
+        Env.get("GCLOUD_PROJECT")
+
+      const location =
+        provider.options?.location ?? Env.get("GOOGLE_CLOUD_LOCATION") ?? Env.get("VERTEX_LOCATION") ?? "us-central1"
+
       const autoload = Boolean(project)
       if (!autoload) return { autoload: false }
+
       return {
         autoload: true,
         options: {
           project,
           location,
+          baseURL:
+            location === "global"
+              ? `https://aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/endpoints/openapi`
+              : `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/endpoints/openapi`,
+          fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+            const { GoogleAuth } = await import(await BunProc.install("google-auth-library"))
+            const auth = new GoogleAuth()
+            const client = await auth.getApplicationDefault()
+            const credentials = await client.credential
+            const token = await credentials.getAccessToken()
+
+            const headers = new Headers(init?.headers)
+            headers.set("Authorization", `Bearer ${token.token}`)
+
+            return fetch(input, { ...init, headers })
+          },
         },
         async getModel(sdk: any, modelID: string) {
           const id = String(modelID).trim()
+          // For official SDK, it expects languageModel(id). For openai-compatible (via openapi), it likely expects just the ID or similar,
+          // but relying on the defaults in getSDK should handle the sdk() call if it's not the official one.
+          // Yet, looking at the previous implementations:
+          // vertex: sdk.languageModel(id)
+          // vertex-openapi: sdk(modelID)
+          // We need to know which SDK we are dealing with.
+          // However, getModel is called with the *instantiated* SDK.
+          // If it's @ai-sdk/google-vertex, it has .languageModel
+          // If it's @ai-sdk/openai-compatible, it is a function.
+          if (typeof sdk === "function") return sdk(id)
           return sdk.languageModel(id)
         },
       }
@@ -639,13 +673,13 @@ export namespace Provider {
         },
         experimentalOver200K: model.cost?.context_over_200k
           ? {
-              cache: {
-                read: model.cost.context_over_200k.cache_read ?? 0,
-                write: model.cost.context_over_200k.cache_write ?? 0,
-              },
-              input: model.cost.context_over_200k.input,
-              output: model.cost.context_over_200k.output,
-            }
+            cache: {
+              read: model.cost.context_over_200k.cache_read ?? 0,
+              write: model.cost.context_over_200k.cache_write ?? 0,
+            },
+            input: model.cost.context_over_200k.input,
+            output: model.cost.context_over_200k.output,
+          }
           : undefined,
       },
       limit: {
@@ -771,6 +805,7 @@ export namespace Provider {
           api: {
             id: model.id ?? existingModel?.api.id ?? modelID,
             npm:
+              (model.protocol === "openapi" ? "@ai-sdk/openai-compatible" : undefined) ??
               model.provider?.npm ??
               provider.npm ??
               existingModel?.api.npm ??
@@ -986,6 +1021,19 @@ export namespace Provider {
       const s = await state()
       const provider = s.providers[model.providerID]
       const options = { ...provider.options }
+
+      // Sanitize options for official Google Vertex SDK to prevent conflicts
+      if (model.api.npm === "@ai-sdk/google-vertex" || model.api.npm === "@ai-sdk/google") {
+        // Only strip if it's a standard Google URL (which conflicts with official SDK internals).
+        // Custom proxies and localhost will have a baseURL that doesn't include "googleapis.com", 
+        // so they will bypass this stripping.
+        const isGoogle = !options.baseURL || options.baseURL.includes("googleapis.com")
+        if (isGoogle) {
+          delete options.baseURL
+          delete options.fetch
+          delete options.headers
+        }
+      }
 
       if (model.api.npm.includes("@ai-sdk/openai-compatible") && options["includeUsage"] !== false) {
         options["includeUsage"] = true

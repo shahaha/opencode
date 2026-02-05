@@ -63,6 +63,7 @@ export namespace ModelsDev {
     experimental: z.boolean().optional(),
     status: z.enum(["alpha", "beta", "deprecated"]).optional(),
     options: z.record(z.string(), z.any()),
+    protocol: z.string().optional(),
     headers: z.record(z.string(), z.string()).optional(),
     provider: z.object({ npm: z.string() }).optional(),
     variants: z.record(z.string(), z.record(z.string(), z.any())).optional(),
