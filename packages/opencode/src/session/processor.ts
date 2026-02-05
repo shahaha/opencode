@@ -139,6 +139,7 @@ export namespace SessionProcessor {
                       metadata: value.providerMetadata,
                     })
                     toolcalls[value.toolCallId] = part as MessageV2.ToolPart
+                    console.log(`[Parallel Processing] Tool started: ${value.toolName}`)
 
                     const parts = await MessageV2.parts(input.assistantMessage.id)
                     const lastThree = parts.slice(-DOOM_LOOP_THRESHOLD)
@@ -214,6 +215,17 @@ export namespace SessionProcessor {
                       value.error instanceof Question.RejectedError
                     ) {
                       blocked = shouldBreak
+                    } else if (!shouldBreak) {
+                      // Automatic Recovery: Inject a system hint to retry
+                      console.log(`[Self Healing] Recovering from tool error with synthetic message: ${value.error}`)
+                      await Session.updatePart({
+                        id: Identifier.ascending("part"),
+                        messageID: input.assistantMessage.id,
+                        sessionID: input.assistantMessage.sessionID,
+                        type: "text",
+                        synthetic: true,
+                        text: `\n<system>The tool ${value.toolName} failed with an error. Please analyze the error message in the tool output and try again with corrected inputs.</system>\n`,
+                      })
                     }
                     delete toolcalls[value.toolCallId]
                   }
@@ -352,7 +364,7 @@ export namespace SessionProcessor {
                 message: retry,
                 next: Date.now() + delay,
               })
-              await SessionRetry.sleep(delay, input.abort).catch(() => {})
+              await SessionRetry.sleep(delay, input.abort).catch(() => { })
               continue
             }
             input.assistantMessage.error = error
