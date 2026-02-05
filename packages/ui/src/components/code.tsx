@@ -143,6 +143,7 @@ export function Code<T>(props: CodeProps<T>) {
   let findOverlayScroll: HTMLElement[] = []
   let findScroll: HTMLElement | undefined
   let observer: MutationObserver | undefined
+  let contentObserver: MutationObserver | undefined
   let renderToken = 0
   let selectionFrame: number | undefined
   let dragFrame: number | undefined
@@ -719,7 +720,27 @@ export function Code<T>(props: CodeProps<T>) {
         if (token !== renderToken) return
         applySelection(lastSelection)
         applyFind({ reset: true })
+        applyCommentedLines(local.commentedLines ?? [])
+        applyCommentAnchors(local.commentAnchors ?? [])
         local.onRendered?.()
+
+        // Watch for subsequent DOM changes (e.g., syntax highlighting)
+        // and re-apply comment anchors when content is updated
+        const root = getRoot()
+        if (root && typeof MutationObserver !== "undefined") {
+          contentObserver?.disconnect()
+          contentObserver = new MutationObserver(() => {
+            if (token !== renderToken) return
+            // Re-apply anchors if they were removed by DOM updates
+            const hasAnchors = root.querySelector("[data-comment-anchor]") !== null
+            const shouldHaveAnchors = (local.commentAnchors ?? []).length > 0
+            if (shouldHaveAnchors && !hasAnchors) {
+              applyCommentedLines(local.commentedLines ?? [])
+              applyCommentAnchors(local.commentAnchors ?? [])
+            }
+          })
+          contentObserver.observe(root, { childList: true, subtree: true })
+        }
       })
     }
 
@@ -941,6 +962,8 @@ export function Code<T>(props: CodeProps<T>) {
   createEffect(() => {
     observer?.disconnect()
     observer = undefined
+    contentObserver?.disconnect()
+    contentObserver = undefined
 
     container.innerHTML = ""
     file().render({
@@ -1009,6 +1032,7 @@ export function Code<T>(props: CodeProps<T>) {
 
   onCleanup(() => {
     observer?.disconnect()
+    contentObserver?.disconnect()
 
     clearOverlayScroll()
     clearOverlay()
