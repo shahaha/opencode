@@ -3349,13 +3349,14 @@ export default function Page() {
 
                               // Track initial horizontal scroll position
                               setNote("codeScrollLeft", s.x)
-
-                              if (codeScroll.length > 0) return
-
-                              if (el.scrollLeft !== s.x) el.scrollLeft = s.x
                             }
 
+                            // Always restore vertical scroll
                             if (el.scrollTop !== s.y) el.scrollTop = s.y
+
+                            // Only set horizontal scroll on container if no code scroll elements
+                            if (codeScroll.length > 0) return
+                            if (el.scrollLeft !== s.x) el.scrollLeft = s.x
                           }
 
                           const handleScroll = (event: Event & { currentTarget: HTMLDivElement }) => {
