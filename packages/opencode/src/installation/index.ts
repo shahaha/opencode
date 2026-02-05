@@ -6,6 +6,7 @@ import { NamedError } from "@opencode-ai/util/error"
 import { Log } from "../util/log"
 import { iife } from "@/util/iife"
 import { Flag } from "../flag/flag"
+import { withTimeout } from "@/util/timeout"
 
 declare global {
   const OPENCODE_VERSION: string
@@ -14,6 +15,9 @@ declare global {
 
 export namespace Installation {
   const log = Log.create({ service: "installation" })
+
+  // TODO: Move to config file
+  const TIMEOUT_MS = 5000
 
   export type Method = Awaited<ReturnType<typeof method>>
 
@@ -102,11 +106,21 @@ export namespace Installation {
     })
 
     for (const check of checks) {
-      const output = await check.command()
-      const installedName =
-        check.name === "brew" || check.name === "choco" || check.name === "scoop" ? "opencode" : "opencode-ai"
-      if (output.includes(installedName)) {
-        return check.name
+      try {
+        log.debug("Checking package manager", { name: check.name })
+        const output = await withTimeout(check.command(), TIMEOUT_MS)
+        const installedName =
+          check.name === "brew" || check.name === "choco" || check.name === "scoop" ? "opencode" : "opencode-ai"
+        if (output.includes(installedName)) {
+          log.info("Detected installation method", { method: check.name })
+          return check.name
+        }
+      } catch (e) {
+        log.warn("Package manager check failed", {
+          name: check.name,
+          error: e instanceof Error ? e.message : String(e),
+        })
+        continue
       }
     }
 

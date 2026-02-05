@@ -75,6 +75,7 @@ import { DialogEditProject } from "@/components/dialog-edit-project"
 import { Titlebar } from "@/components/titlebar"
 import { useServer } from "@/context/server"
 import { useLanguage, type Locale } from "@/context/language"
+import { normalizePathForComparison } from "@/utils/path"
 
 export default function Layout(props: ParentProps) {
   const [store, setStore, , ready] = persisted(
@@ -553,11 +554,14 @@ export default function Layout(props: ParentProps) {
     if (!directory) return
 
     const projects = layout.projects.list()
+    // 使用规范化路径查找项目,避免Windows上的路径不一致问题
+    // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+    const normalizedDirectory = normalizePathForComparison(directory)
 
     const sandbox = projects.find((p) => p.sandboxes?.includes(directory))
     if (sandbox) return sandbox
 
-    const direct = projects.find((p) => p.worktree === directory)
+    const direct = projects.find((p) => normalizePathForComparison(p.worktree) === normalizedDirectory)
     if (direct) return direct
 
     const [child] = globalSync.child(directory, { bootstrap: false })
@@ -568,7 +572,7 @@ export default function Layout(props: ParentProps) {
     const root = meta?.worktree
     if (!root) return
 
-    return projects.find((p) => p.worktree === root)
+    return projects.find((p) => normalizePathForComparison(p.worktree) === normalizePathForComparison(root))
   })
 
   createEffect(
@@ -614,11 +618,16 @@ export default function Layout(props: ParentProps) {
     ),
   )
 
-  const workspaceKey = (directory: string) => directory.replace(/[\\/]+$/, "")
+  /**
+   * 生成工作区唯一标识键
+   * 使用规范化路径确保在Windows上同一物理路径不会产生重复键
+   * 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+   */
+  const workspaceKey = (directory: string) => normalizePathForComparison(directory)
 
   const workspaceName = (directory: string, projectId?: string, branch?: string) => {
     const key = workspaceKey(directory)
-    const direct = store.workspaceName[key] ?? store.workspaceName[directory]
+    const direct = store.workspaceName[key]
     if (direct) return direct
     if (!projectId) return
     if (!branch) return
@@ -1219,12 +1228,32 @@ export default function Layout(props: ParentProps) {
 
   const deepLinkEvent = "opencode:deep-link"
 
-  const parseDeepLink = (input: string) => {
+  /**
+   * 解析深度链接URL
+   * 返回原始项目目录路径，保留原始格式
+   * 在需要比较路径时再进行规范化
+<<<<<<< HEAD
+   *
+   * @param input - 深度链接URL字符串
+   * @returns 原始目录路径，如果URL无效则返回undefined
+   *
+=======
+   * 
+   * @param input - 深度链接URL字符串
+   * @returns 原始目录路径，如果URL无效则返回undefined
+   * 
+>>>>>>> 065844dbe (优化: 重构路径规范化逻辑，消除代码重复)
+   * @example
+   * parseDeepLink('opencode://open-project?directory=C:\\Users\\Project')
+   * // 返回: 'C:\\Users\\Project'
+   */
+  const parseDeepLink = (input: string): string | undefined => {
     if (!input.startsWith("opencode://")) return
     const url = new URL(input)
     if (url.hostname !== "open-project") return
     const directory = url.searchParams.get("directory")
     if (!directory) return
+    // 返回原始路径，保留原始格式
     return directory
   }
 
@@ -1279,7 +1308,10 @@ export default function Layout(props: ParentProps) {
   }
 
   function closeProject(directory: string) {
-    const index = layout.projects.list().findIndex((x) => x.worktree === directory)
+    // 使用规范化路径查找项目,避免Windows上的路径不一致问题
+    // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+    const normalizedDirectory = normalizePathForComparison(directory)
+    const index = layout.projects.list().findIndex((x) => normalizePathForComparison(x.worktree) === normalizedDirectory)
     const next = layout.projects.list()[index + 1]
     layout.projects.close(directory)
     if (next) navigateToProject(next.worktree)
@@ -1617,8 +1649,12 @@ export default function Layout(props: ParentProps) {
     const { draggable, droppable } = event
     if (draggable && droppable) {
       const projects = layout.projects.list()
-      const fromIndex = projects.findIndex((p) => p.worktree === draggable.id.toString())
-      const toIndex = projects.findIndex((p) => p.worktree === droppable.id.toString())
+      // 使用规范化路径查找项目,避免Windows上的路径不一致问题
+      // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+      const normalizedDraggable = normalizePathForComparison(draggable.id.toString())
+      const normalizedDroppable = normalizePathForComparison(droppable.id.toString())
+      const fromIndex = projects.findIndex((p) => normalizePathForComparison(p.worktree) === normalizedDraggable)
+      const toIndex = projects.findIndex((p) => normalizePathForComparison(p.worktree) === normalizedDroppable)
       if (fromIndex !== toIndex && toIndex !== -1) {
         layout.projects.move(draggable.id.toString(), toIndex)
       }
@@ -1634,7 +1670,11 @@ export default function Layout(props: ParentProps) {
     const local = project.worktree
     const dirs = [local, ...(project.sandboxes ?? [])]
     const active = currentProject()
-    const directory = active?.worktree === project.worktree ? decode64(params.dir) : undefined
+    // 使用规范化路径比较,避免Windows上的路径不一致问题
+    // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+    const normalizedActiveWorktree = active?.worktree ? normalizePathForComparison(active.worktree) : undefined
+    const normalizedProjectWorktree = normalizePathForComparison(project.worktree)
+    const directory = normalizedActiveWorktree === normalizedProjectWorktree ? decode64(params.dir) : undefined
     const extra = directory && directory !== local && !dirs.includes(directory) ? directory : undefined
     const pending = extra ? WorktreeState.get(extra)?.status === "pending" : false
 
@@ -1670,8 +1710,12 @@ export default function Layout(props: ParentProps) {
     if (!project) return
 
     const ids = workspaceIds(project)
-    const fromIndex = ids.findIndex((dir) => dir === draggable.id.toString())
-    const toIndex = ids.findIndex((dir) => dir === droppable.id.toString())
+    // 使用规范化路径查找项目,避免Windows上的路径不一致问题
+    // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+    const normalizedDraggable = normalizePathForComparison(draggable.id.toString())
+    const normalizedDroppable = normalizePathForComparison(droppable.id.toString())
+    const fromIndex = ids.findIndex((dir) => normalizePathForComparison(dir) === normalizedDraggable)
+    const toIndex = ids.findIndex((dir) => normalizePathForComparison(dir) === normalizedDroppable)
     if (fromIndex === -1 || toIndex === -1) return
     if (fromIndex === toIndex) return
 
@@ -1980,7 +2024,12 @@ export default function Layout(props: ParentProps) {
   }
 
   const ProjectDragOverlay = (): JSX.Element => {
-    const project = createMemo(() => layout.projects.list().find((p) => p.worktree === store.activeProject))
+    const project = createMemo(() => {
+      // 使用规范化路径查找项目,避免Windows上的路径不一致问题
+      // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+      const normalizedActiveProject = store.activeProject ? normalizePathForComparison(store.activeProject) : undefined
+      return layout.projects.list().find((p) => normalizedActiveProject && normalizePathForComparison(p.worktree) === normalizedActiveProject)
+    })
     return (
       <Show when={project()}>
         {(p) => (
@@ -2042,10 +2091,20 @@ export default function Layout(props: ParentProps) {
       }
       return map
     })
-    const local = createMemo(() => props.directory === props.project.worktree)
+    const local = createMemo(() => {
+      // 使用规范化路径比较,避免Windows上的路径不一致问题
+      // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+      const normalizedDirectory = normalizePathForComparison(props.directory)
+      const normalizedWorktree = normalizePathForComparison(props.project.worktree)
+      return normalizedDirectory === normalizedWorktree
+    })
     const active = createMemo(() => {
       const current = decode64(params.dir) ?? ""
-      return current === props.directory
+      // 使用规范化路径比较,避免Windows上的路径不一致问题
+      // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+      const normalizedCurrent = normalizePathForComparison(current)
+      const normalizedDirectory = normalizePathForComparison(props.directory)
+      return normalizedCurrent === normalizedDirectory
     })
     const workspaceValue = createMemo(() => {
       const branch = workspaceStore.vcs?.branch
@@ -2257,7 +2316,11 @@ export default function Layout(props: ParentProps) {
     const sortable = createSortable(props.project.worktree)
     const selected = createMemo(() => {
       const current = decode64(params.dir) ?? ""
-      return props.project.worktree === current || props.project.sandboxes?.includes(current)
+      // 使用规范化路径比较,避免Windows上的路径不一致问题
+      // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+      const normalizedCurrent = normalizePathForComparison(current)
+      const normalizedWorktree = normalizePathForComparison(props.project.worktree)
+      return normalizedWorktree === normalizedCurrent || props.project.sandboxes?.includes(current)
     })
 
     const workspaces = createMemo(() => workspaceIds(props.project).slice(0, 2))
@@ -2269,9 +2332,13 @@ export default function Layout(props: ParentProps) {
 
     const preview = createMemo(() => !props.mobile && layout.sidebar.opened())
     const overlay = createMemo(() => !props.mobile && !layout.sidebar.opened())
-    const active = createMemo(
-      () => menu() || (preview() ? open() : overlay() && state.hoverProject === props.project.worktree),
-    )
+    const active = createMemo(() => {
+      // 使用规范化路径比较,避免Windows上的路径不一致问题
+      // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+      const normalizedHoverProject = state.hoverProject ? normalizePathForComparison(state.hoverProject) : undefined
+      const normalizedWorktree = normalizePathForComparison(props.project.worktree)
+      return (preview() ? open() : overlay() && normalizedHoverProject === normalizedWorktree)
+    })
 
     createEffect(() => {
       if (preview()) return
@@ -2281,8 +2348,12 @@ export default function Layout(props: ParentProps) {
 
     const label = (directory: string) => {
       const [data] = globalSync.child(directory, { bootstrap: false })
+      // 使用规范化路径比较,避免Windows上的路径不一致问题
+      // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+      const normalizedDirectory = normalizePathForComparison(directory)
+      const normalizedWorktree = normalizePathForComparison(props.project.worktree)
       const kind =
-        directory === props.project.worktree ? language.t("workspace.type.local") : language.t("workspace.type.sandbox")
+        normalizedDirectory === normalizedWorktree ? language.t("workspace.type.local") : language.t("workspace.type.sandbox")
       const name = workspaceLabel(directory, data.vcs?.branch, props.project.id)
       return `${kind} : ${name}`
     }
@@ -2581,9 +2652,6 @@ export default function Layout(props: ParentProps) {
     setBusy(created.directory, true)
     WorktreeState.pending(created.directory)
     setStore("workspaceExpanded", key, true)
-    if (key !== created.directory) {
-      setStore("workspaceExpanded", created.directory, true)
-    }
     setStore("workspaceOrder", project.worktree, (prev) => {
       const existing = prev ?? []
       const next = existing.filter((item) => {

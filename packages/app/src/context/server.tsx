@@ -4,6 +4,7 @@ import { batch, createEffect, createMemo, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { usePlatform } from "@/context/platform"
 import { Persist, persisted } from "@/utils/persist"
+import { normalizePathForComparison } from "@/utils/path"
 
 type StoredProject = { worktree: string; expanded: boolean }
 
@@ -164,38 +165,54 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
           const key = origin()
           if (!key) return
           const current = store.projects[key] ?? []
-          if (current.find((x) => x.worktree === directory)) return
+          // 使用规范化路径检查项目是否已存在,避免Windows上的重复项目
+          // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+          const normalizedDirectory = normalizePathForComparison(directory)
+          const existing = current.find((x) => normalizePathForComparison(x.worktree) === normalizedDirectory)
+          if (existing) return
           setStore("projects", key, [{ worktree: directory, expanded: true }, ...current])
         },
         close(directory: string) {
           const key = origin()
           if (!key) return
           const current = store.projects[key] ?? []
+          // 使用规范化路径查找项目,避免Windows上的路径不一致问题
+          // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+          const normalizedDirectory = normalizePathForComparison(directory)
           setStore(
             "projects",
             key,
-            current.filter((x) => x.worktree !== directory),
+            current.filter((x) => normalizePathForComparison(x.worktree) !== normalizedDirectory),
           )
         },
         expand(directory: string) {
           const key = origin()
           if (!key) return
           const current = store.projects[key] ?? []
-          const index = current.findIndex((x) => x.worktree === directory)
+          // 使用规范化路径查找项目,避免Windows上的路径不一致问题
+          // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+          const normalizedDirectory = normalizePathForComparison(directory)
+          const index = current.findIndex((x) => normalizePathForComparison(x.worktree) === normalizedDirectory)
           if (index !== -1) setStore("projects", key, index, "expanded", true)
         },
         collapse(directory: string) {
           const key = origin()
           if (!key) return
           const current = store.projects[key] ?? []
-          const index = current.findIndex((x) => x.worktree === directory)
+          // 使用规范化路径查找项目,避免Windows上的路径不一致问题
+          // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+          const normalizedDirectory = normalizePathForComparison(directory)
+          const index = current.findIndex((x) => normalizePathForComparison(x.worktree) === normalizedDirectory)
           if (index !== -1) setStore("projects", key, index, "expanded", false)
         },
         move(directory: string, toIndex: number) {
           const key = origin()
           if (!key) return
           const current = store.projects[key] ?? []
-          const fromIndex = current.findIndex((x) => x.worktree === directory)
+          // 使用规范化路径查找项目,避免Windows上的路径不一致问题
+          // 修复Issue #11666: Windows路径规范化不一致导致重复创建项目
+          const normalizedDirectory = normalizePathForComparison(directory)
+          const fromIndex = current.findIndex((x) => normalizePathForComparison(x.worktree) === normalizedDirectory)
           if (fromIndex === -1 || fromIndex === toIndex) return
           const result = [...current]
           const [item] = result.splice(fromIndex, 1)
