@@ -2881,6 +2881,9 @@ export default function Page() {
                           let scrollFrame: number | undefined
                           let pending: { x: number; y: number } | undefined
                           let codeScroll: HTMLElement[] = []
+                          let hScrollbar: HTMLDivElement | undefined
+                          let hScrollContent: HTMLDivElement | undefined
+                          let syncingHScroll = false
 
                           const path = createMemo(() => file.pathFromTab(tab))
                           const state = createMemo(() => {
@@ -3036,7 +3039,7 @@ export default function Page() {
                           const markerTop = (wrapper: HTMLElement, marker: HTMLElement) => {
                             const wrapperRect = wrapper.getBoundingClientRect()
                             const rect = marker.getBoundingClientRect()
-                            return rect.top - wrapperRect.top + Math.max(0, rect.height )
+                            return rect.top - wrapperRect.top + Math.max(0, rect.height)
                           }
 
                           const updateComments = () => {
@@ -3106,7 +3109,7 @@ export default function Page() {
 
                           let wrapResizeObserver: ResizeObserver | undefined
 
-                          const renderCode = (source: string, wrapperClass: string, fillHeight?: boolean) => (
+                          const renderCode = (source: string, wrapperClass: string) => (
                             <div
                               ref={(el) => {
                                 wrap = el
@@ -3131,14 +3134,17 @@ export default function Page() {
                                   cacheKey: cacheKey(),
                                 }}
                                 enableLineSelection
-                                fillHeight={fillHeight}
                                 selectedLines={selectedLines()}
                                 commentedLines={commentedLines()}
                                 commentAnchors={commentAnchors()}
                                 anchorViewportWidth={viewportWidth()}
                                 anchorScrollLeft={codeScrollLeft()}
                                 onRendered={() => {
-                                  requestAnimationFrame(restoreScroll)
+                                  requestAnimationFrame(() => {
+                                    syncCodeScroll()
+                                    restoreScroll()
+                                    updateHScrollbarWidth()
+                                  })
                                   requestAnimationFrame(scheduleComments)
                                 }}
                                 onLineSelected={(range: SelectedLineRange | null) => {
@@ -3274,13 +3280,17 @@ export default function Page() {
 
                             queueScrollUpdate({
                               x: target.scrollLeft,
-                              y: target.scrollTop,
+                              y: scroll?.scrollTop ?? 0,
                             })
 
                             // Track horizontal scroll for anchor positioning
                             setNote("codeScrollLeft", target.scrollLeft)
 
-                            scheduleComments()
+                            if (!syncingHScroll && hScrollbar) {
+                              syncingHScroll = true
+                              hScrollbar.scrollLeft = target.scrollLeft
+                              syncingHScroll = false
+                            }
                           }
 
                           const syncCodeScroll = () => {
@@ -3310,15 +3320,20 @@ export default function Page() {
                             if (codeScroll.length > 0) {
                               for (const item of codeScroll) {
                                 if (item.scrollLeft !== s.x) item.scrollLeft = s.x
-                                if (item.scrollTop !== s.y) item.scrollTop = s.y
                               }
+                              if (hScrollbar && hScrollbar.scrollLeft !== s.x) {
+                                hScrollbar.scrollLeft = s.x
+                              }
+
                               // Track initial horizontal scroll position
                               setNote("codeScrollLeft", s.x)
-                              return
+
+                              if (codeScroll.length > 0) return
+
+                              if (el.scrollLeft !== s.x) el.scrollLeft = s.x
                             }
 
                             if (el.scrollTop !== s.y) el.scrollTop = s.y
-                            if (el.scrollLeft !== s.x) el.scrollLeft = s.x
                           }
 
                           const handleScroll = (event: Event & { currentTarget: HTMLDivElement }) => {
@@ -3326,8 +3341,40 @@ export default function Page() {
 
                             queueScrollUpdate({
                               x: codeScroll[0]?.scrollLeft ?? event.currentTarget.scrollLeft,
-                              y: codeScroll[0]?.scrollTop ?? event.currentTarget.scrollTop,
+                              y: event.currentTarget.scrollTop,
                             })
+                          }
+
+                          const updateHScrollbarWidth = () => {
+                            if (!hScrollContent) return
+                            const code = codeScroll[0]
+                            if (!code) {
+                              hScrollContent.style.width = "0"
+                              return
+                            }
+                            hScrollContent.style.width = `${code.scrollWidth}px`
+                          }
+
+                          const handleHScrollbarScroll = () => {
+                            if (syncingHScroll || !hScrollbar) return
+                            syncingHScroll = true
+                            for (const item of codeScroll) {
+                              item.scrollLeft = hScrollbar.scrollLeft
+                            }
+                            queueScrollUpdate({
+                              x: hScrollbar.scrollLeft,
+                              y: scroll?.scrollTop ?? 0,
+                            })
+                            syncingHScroll = false
+                          }
+
+                          const syncHScrollbarFromCode = () => {
+                            if (syncingHScroll || !hScrollbar) return
+                            const code = codeScroll[0]
+                            if (!code) return
+                            syncingHScroll = true
+                            hScrollbar.scrollLeft = code.scrollLeft
+                            syncingHScroll = false
                           }
 
                           createEffect(
@@ -3375,7 +3422,7 @@ export default function Page() {
                           return (
                             <Tabs.Content
                               value={tab}
-                              class="mt-3 relative"
+                              class="mt-3 relative session-scroller"
                               ref={(el: HTMLDivElement) => {
                                 scroll = el
                                 restoreScroll()
@@ -3416,7 +3463,7 @@ export default function Page() {
                                     </div>
                                   </div>
                                 </Match>
-                                <Match when={state()?.loaded}>{renderCode(contents(), "h-full", true)}</Match>
+                                <Match when={state()?.loaded}>{renderCode(contents(), "pb-40")}</Match>
                                 <Match when={state()?.loading}>
                                   <div class="px-6 py-4 text-text-weak">{language.t("common.loading")}...</div>
                                 </Match>
@@ -3424,6 +3471,16 @@ export default function Page() {
                                   {(err) => <div class="px-6 py-4 text-text-weak">{err()}</div>}
                                 </Match>
                               </Switch>
+                              <Show when={state()?.loaded && !isImage() && !isSvg() && !isBinary()}>
+                                <div
+                                  ref={(el) => (hScrollbar = el)}
+                                  onScroll={handleHScrollbarScroll}
+                                  class="session-scroller sticky bottom-0 z-10 overflow-x-auto overflow-y-hidden bg-background-base"
+                                  style={{ height: "12px" }}
+                                >
+                                  <div ref={(el) => (hScrollContent = el)} style={{ height: "1px" }} />
+                                </div>
+                              </Show>
                             </Tabs.Content>
                           )
                         }}

@@ -124,6 +124,9 @@ const unsafeCSS = `
   [data-column-number] {
     background-color: var(--background-stronger);
     cursor: default !important;
+    position: sticky;
+    left: 0;
+    z-index: 1;
   }
 
   &[data-interactive-line-numbers] [data-column-number] {
@@ -134,29 +137,11 @@ const unsafeCSS = `
     cursor: auto !important;
   }
   [data-code] {
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-weak-base) transparent;
+    overflow-x: auto !important;
+    scrollbar-width: none;
   }
   [data-code]::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-  [data-code]::-webkit-scrollbar-track {
-    background: transparent;
-    border-radius: 5px;
-  }
-  [data-code]::-webkit-scrollbar-thumb {
-    background: var(--border-weak-base);
-    border-radius: 5px;
-    border: 3px solid transparent;
-    background-clip: padding-box;
-  }
-  [data-code]::-webkit-scrollbar-thumb:hover {
-    background: var(--border-weak-base);
-  }
-
-  [data-column-number] {
-    position: relative;
+    display: none;
   }
 
   [data-comment-anchor] {
