@@ -37,6 +37,8 @@ export namespace ProviderTransform {
         return "gateway"
       case "@openrouter/ai-sdk-provider":
         return "openrouter"
+      case "@llmgateway/ai-sdk-provider":
+        return "llmgateway"
     }
     return undefined
   }
@@ -594,7 +596,7 @@ export namespace ProviderTransform {
       result["store"] = false
     }
 
-    if (input.model.api.npm === "@openrouter/ai-sdk-provider") {
+    if (input.model.api.npm === "@openrouter/ai-sdk-provider" || input.model.api.npm === "@llmgateway/ai-sdk-provider") {
       result["usage"] = {
         include: true,
       }
@@ -693,7 +695,7 @@ export namespace ProviderTransform {
       }
       return { thinkingConfig: { thinkingBudget: 0 } }
     }
-    if (model.providerID === "openrouter") {
+    if (model.providerID === "openrouter" || model.providerID === "llmgateway") {
       if (model.api.id.includes("google")) {
         return { reasoning: { enabled: false } }
       }
