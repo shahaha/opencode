@@ -2884,6 +2884,7 @@ export default function Page() {
                           let hScrollbar: HTMLDivElement | undefined
                           let hScrollContent: HTMLDivElement | undefined
                           let syncingHScroll = false
+                          let shadowObserver: MutationObserver | undefined
 
                           const path = createMemo(() => file.pathFromTab(tab))
                           const state = createMemo(() => {
@@ -3144,6 +3145,7 @@ export default function Page() {
                                     syncCodeScroll()
                                     restoreScroll()
                                     updateHScrollbarWidth()
+                                    setupShadowObserver()
                                   })
                                   requestAnimationFrame(scheduleComments)
                                 }}
@@ -3308,6 +3310,26 @@ export default function Page() {
                             }
                           }
 
+                          // Watch for DOM changes (e.g. syntax highlighting) that may recreate [data-code] elements
+                          const setupShadowObserver = () => {
+                            if (shadowObserver) return
+
+                            const el = scroll
+                            if (!el) return
+
+                            const host = el.querySelector("diffs-container")
+                            if (!(host instanceof HTMLElement)) return
+
+                            const root = host.shadowRoot
+                            if (!root) return
+
+                            shadowObserver = new MutationObserver(() => {
+                              syncCodeScroll()
+                              updateHScrollbarWidth()
+                            })
+                            shadowObserver.observe(root, { childList: true, subtree: true })
+                          }
+
                           const restoreScroll = () => {
                             const el = scroll
                             if (!el) return
@@ -3415,8 +3437,12 @@ export default function Page() {
                               item.removeEventListener("scroll", handleCodeScroll)
                             }
 
-                            if (scrollFrame === undefined) return
-                            cancelAnimationFrame(scrollFrame)
+                            shadowObserver?.disconnect()
+                            shadowObserver = undefined
+
+                            if (scrollFrame !== undefined) {
+                              cancelAnimationFrame(scrollFrame)
+                            }
                           })
 
                           return (
