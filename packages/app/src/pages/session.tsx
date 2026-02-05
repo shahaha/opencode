@@ -30,7 +30,7 @@ import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { Select } from "@opencode-ai/ui/select"
 import { useCodeComponent } from "@opencode-ai/ui/context/code"
-import { LineCommentEditor } from "@opencode-ai/ui/line-comment"
+import { LineComment as LineCommentView, LineCommentEditor } from "@opencode-ai/ui/line-comment"
 import { SessionTurn } from "@opencode-ai/ui/session-turn"
 import { BasicTool } from "@opencode-ai/ui/basic-tool"
 import { createAutoScroll } from "@opencode-ai/ui/hooks"
@@ -2970,7 +2970,10 @@ export default function Page() {
                             openedComment: null as string | null,
                             commenting: null as SelectedLineRange | null,
                             draft: "",
+                            positions: {} as Record<string, number>,
                             draftTop: undefined as number | undefined,
+                            viewportWidth: 0,
+                            codeScrollLeft: 0,
                           })
 
                           const openedComment = () => note.openedComment
@@ -2990,10 +2993,18 @@ export default function Page() {
                             value: typeof note.draft | ((value: typeof note.draft) => typeof note.draft),
                           ) => setNote("draft", value)
 
+                          const positions = () => note.positions
+                          const setPositions = (
+                            value: typeof note.positions | ((value: typeof note.positions) => typeof note.positions),
+                          ) => setNote("positions", value)
+
                           const draftTop = () => note.draftTop
                           const setDraftTop = (
                             value: typeof note.draftTop | ((value: typeof note.draftTop) => typeof note.draftTop),
                           ) => setNote("draftTop", value)
+
+                          const viewportWidth = () => note.viewportWidth
+                          const codeScrollLeft = () => note.codeScrollLeft
 
                           const commentLabel = (range: SelectedLineRange) => {
                             const start = Math.min(range.start, range.end)
@@ -3022,23 +3033,32 @@ export default function Page() {
                             return node
                           }
 
-                          let draftPositionFrame: number | undefined
+                          const markerTop = (wrapper: HTMLElement, marker: HTMLElement) => {
+                            const wrapperRect = wrapper.getBoundingClientRect()
+                            const rect = marker.getBoundingClientRect()
+                            return rect.top - wrapperRect.top + Math.max(0, rect.height )
+                          }
 
-                          const updateDraftPosition = () => {
+                          const updateComments = () => {
+                            const el = wrap
+                            const root = getRoot()
+                            if (!el || !root) {
+                              setPositions({})
+                              setDraftTop(undefined)
+                              return
+                            }
+
+                            const next: Record<string, number> = {}
+                            for (const comment of fileComments()) {
+                              const marker = findMarker(root, comment.selection)
+                              if (!marker) continue
+                              next[comment.id] = markerTop(el, marker)
+                            }
+
+                            setPositions(next)
+
                             const range = commenting()
                             if (!range) {
-                              setDraftTop(undefined)
-                              return
-                            }
-
-                            const el = wrap
-                            if (!el) {
-                              setDraftTop(undefined)
-                              return
-                            }
-
-                            const root = getRoot()
-                            if (!root) {
                               setDraftTop(undefined)
                               return
                             }
@@ -3049,30 +3069,21 @@ export default function Page() {
                               return
                             }
 
-                            // Position relative to wrapper (viewport), not content
-                            const wrapperRect = el.getBoundingClientRect()
-                            const rect = marker.getBoundingClientRect()
-                            setDraftTop(rect.top - wrapperRect.top + Math.max(0, (rect.height - 20) / 2))
+                            setDraftTop(markerTop(el, marker))
                           }
 
-                          const scheduleDraftPosition = () => {
-                            if (draftPositionFrame !== undefined) return
-                            draftPositionFrame = requestAnimationFrame(() => {
-                              draftPositionFrame = undefined
-                              updateDraftPosition()
-                            })
+                          const scheduleComments = () => {
+                            requestAnimationFrame(updateComments)
                           }
 
-                          onCleanup(() => {
-                            if (draftPositionFrame !== undefined) {
-                              cancelAnimationFrame(draftPositionFrame)
-                              draftPositionFrame = undefined
-                            }
+                          createEffect(() => {
+                            fileComments()
+                            scheduleComments()
                           })
 
                           createEffect(() => {
                             const range = commenting()
-                            scheduleDraftPosition()
+                            scheduleComments()
                             if (!range) return
                             setDraft("")
                           })
@@ -3093,10 +3104,22 @@ export default function Page() {
                             requestAnimationFrame(() => comments.clearFocus())
                           })
 
+                          let wrapResizeObserver: ResizeObserver | undefined
+
                           const renderCode = (source: string, wrapperClass: string, fillHeight?: boolean) => (
                             <div
                               ref={(el) => {
                                 wrap = el
+                                scheduleComments()
+
+                                // Track viewport width for anchor positioning
+                                wrapResizeObserver?.disconnect()
+                                wrapResizeObserver = new ResizeObserver((entries) => {
+                                  for (const entry of entries) {
+                                    setNote("viewportWidth", entry.contentRect.width)
+                                  }
+                                })
+                                wrapResizeObserver.observe(el)
                               }}
                               class={`relative ${wrapperClass}`}
                             >
@@ -3112,9 +3135,11 @@ export default function Page() {
                                 selectedLines={selectedLines()}
                                 commentedLines={commentedLines()}
                                 commentAnchors={commentAnchors()}
+                                anchorViewportWidth={viewportWidth()}
+                                anchorScrollLeft={codeScrollLeft()}
                                 onRendered={() => {
                                   requestAnimationFrame(restoreScroll)
-                                  requestAnimationFrame(scheduleDraftPosition)
+                                  requestAnimationFrame(scheduleComments)
                                 }}
                                 onLineSelected={(range: SelectedLineRange | null) => {
                                   const p = path()
@@ -3151,6 +3176,30 @@ export default function Page() {
                                 overflow="scroll"
                                 class="select-text"
                               />
+                              <For each={fileComments()}>
+                                {(comment) => (
+                                  <LineCommentView
+                                    id={comment.id}
+                                    top={positions()[comment.id]}
+                                    open={openedComment() === comment.id}
+                                    hideAnchor
+                                    comment={comment.comment}
+                                    selection={commentLabel(comment.selection)}
+                                    onMouseEnter={() => {
+                                      const p = path()
+                                      if (!p) return
+                                      file.setSelectedLines(p, comment.selection)
+                                    }}
+                                    onClick={() => {
+                                      const p = path()
+                                      if (!p) return
+                                      setCommenting(null)
+                                      setOpenedComment((current) => (current === comment.id ? null : comment.id))
+                                      file.setSelectedLines(p, comment.selection)
+                                    }}
+                                  />
+                                )}
+                              </For>
                               <Show when={commenting()}>
                                 {(range) => (
                                   <Show when={draftTop() !== undefined}>
@@ -3228,7 +3277,10 @@ export default function Page() {
                               y: target.scrollTop,
                             })
 
-                            scheduleDraftPosition()
+                            // Track horizontal scroll for anchor positioning
+                            setNote("codeScrollLeft", target.scrollLeft)
+
+                            scheduleComments()
                           }
 
                           const syncCodeScroll = () => {
@@ -3260,6 +3312,8 @@ export default function Page() {
                                 if (item.scrollLeft !== s.x) item.scrollLeft = s.x
                                 if (item.scrollTop !== s.y) item.scrollTop = s.y
                               }
+                              // Track initial horizontal scroll position
+                              setNote("codeScrollLeft", s.x)
                               return
                             }
 

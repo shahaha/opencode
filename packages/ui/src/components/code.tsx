@@ -17,6 +17,10 @@ export type CodeProps<T = {}> = FileOptions<T> & {
   selectedLines?: SelectedLineRange | null
   commentedLines?: SelectedLineRange[]
   commentAnchors?: CommentAnchor[]
+  /** Width of the viewport containing this code component (for anchor positioning) */
+  anchorViewportWidth?: number
+  /** Horizontal scroll position of the viewport (for anchor positioning) */
+  anchorScrollLeft?: number
   onRendered?: () => void
   onLineSelectionEnd?: (selection: SelectedLineRange | null) => void
   onCommentAnchorClick?: (id: string) => void
@@ -157,6 +161,8 @@ export function Code<T>(props: CodeProps<T>) {
     "selectedLines",
     "commentedLines",
     "commentAnchors",
+    "anchorViewportWidth",
+    "anchorScrollLeft",
     "onRendered",
     "onCommentAnchorClick",
     "onCommentAnchorHover",
@@ -631,14 +637,34 @@ export function Code<T>(props: CodeProps<T>) {
       const lineEl = root.querySelector(`[data-line="${anchor.line}"]`)
       if (!(lineEl instanceof HTMLElement)) continue
 
-      // Find the line number column within this line
-      const numberCol = lineEl.querySelector("[data-column-number]")
-      if (!(numberCol instanceof HTMLElement)) continue
-
       const btn = document.createElement("button")
       btn.setAttribute("data-comment-anchor", anchor.id)
       btn.setAttribute("type", "button")
       btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H5.5L3 13.5V11H3a1 1 0 0 1-1-1V3Z"/></svg>`
+
+      // Position the anchor absolutely within the line
+      btn.style.cssText = `
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 10;
+        width: 20px;
+        height: 20px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--icon-interactive-base);
+        box-shadow: var(--shadow-xs);
+        cursor: default;
+        border: none;
+        color: white;
+      `
+
+      // Make the line element position: relative if it isn't already
+      if (getComputedStyle(lineEl).position === "static") {
+        lineEl.style.position = "relative"
+      }
 
       btn.addEventListener("click", (e) => {
         e.stopPropagation()
@@ -653,7 +679,33 @@ export function Code<T>(props: CodeProps<T>) {
         local.onCommentAnchorHover?.(null)
       })
 
-      numberCol.appendChild(btn)
+      lineEl.appendChild(btn)
+    }
+
+    // Update anchor positions based on viewport
+    updateAnchorPositions()
+  }
+
+  const updateAnchorPositions = () => {
+    const root = getRoot()
+    if (!root) return
+
+    const viewportWidth = local.anchorViewportWidth
+    const scrollLeft = local.anchorScrollLeft ?? 0
+
+    const anchors = root.querySelectorAll("[data-comment-anchor]")
+    for (const anchor of anchors) {
+      if (!(anchor instanceof HTMLElement)) continue
+
+      if (viewportWidth !== undefined && viewportWidth > 0) {
+        // Position at 80% of viewport width from the left edge of visible area
+        // left = scrollLeft + viewportWidth * 0.8
+        const left = scrollLeft + viewportWidth - 45
+        anchor.style.left = `${left}px`
+      } else {
+        // Fallback: position at 80% of line width
+        anchor.style.left = "94%"
+      }
     }
   }
 
@@ -979,6 +1031,14 @@ export function Code<T>(props: CodeProps<T>) {
     rendered()
     const anchors = local.commentAnchors ?? []
     requestAnimationFrame(() => applyCommentAnchors(anchors))
+  })
+
+  // Update anchor positions when viewport dimensions change
+  createEffect(() => {
+    // Track these values to trigger effect
+    local.anchorViewportWidth
+    local.anchorScrollLeft
+    updateAnchorPositions()
   })
 
   createEffect(() => {
