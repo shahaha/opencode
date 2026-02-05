@@ -40,6 +40,17 @@ export const ProviderRoutes = lazy(() =>
         const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
 
         const allProviders = await ModelsDev.get()
+
+        // Add Databricks if not already present (it's not in models.dev)
+        if (!allProviders["databricks"]) {
+          allProviders["databricks"] = {
+            id: "databricks",
+            name: "Databricks",
+            env: ["DATABRICKS_TOKEN"],
+            models: {},
+          }
+        }
+
         const filteredProviders: Record<string, (typeof allProviders)[string]> = {}
         for (const [key, value] of Object.entries(allProviders)) {
           if ((enabled ? enabled.has(key) : true) && !disabled.has(key)) {

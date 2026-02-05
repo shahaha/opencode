@@ -2573,3 +2573,230 @@ describe("ProviderTransform.message - Databricks prompt caching", () => {
     expect(systemMsgs[2].providerOptions?.openaiCompatible?.cache_control).toBeUndefined()
   })
 })
+
+describe("ProviderTransform.schema - Databricks Gemini $schema stripping", () => {
+  const databricksGeminiModel = {
+    id: "databricks-gemini-3-pro",
+    providerID: "databricks",
+    api: {
+      id: "databricks-gemini-3-pro",
+      url: "https://workspace.cloud.databricks.com/serving-endpoints",
+      npm: "@ai-sdk/openai-compatible",
+    },
+    name: "Gemini 3 Pro (Databricks)",
+    capabilities: {
+      temperature: true,
+      reasoning: true,
+      attachment: true,
+      toolcall: true,
+      input: { text: true, audio: true, image: true, video: true, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+      interleaved: false,
+    },
+    cost: {
+      input: 2,
+      output: 12,
+      cache: { read: 0.2, write: 0 },
+    },
+    limit: {
+      context: 1000000,
+      output: 65536,
+    },
+    status: "active",
+    options: {},
+    headers: {},
+    release_date: "2025-11-20",
+  } as any
+
+  const databricksGptModel2 = {
+    id: "databricks-gpt-5",
+    providerID: "databricks",
+    api: {
+      id: "databricks-gpt-5",
+      url: "https://workspace.cloud.databricks.com/serving-endpoints",
+      npm: "@ai-sdk/openai-compatible",
+    },
+    name: "GPT-5 (Databricks)",
+    capabilities: {
+      temperature: true,
+      reasoning: true,
+      attachment: true,
+      toolcall: true,
+      input: { text: true, audio: false, image: true, video: false, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+      interleaved: false,
+    },
+    cost: {
+      input: 1.25,
+      output: 10,
+      cache: { read: 0.125, write: 0 },
+    },
+    limit: {
+      context: 400000,
+      output: 128000,
+    },
+    status: "active",
+    options: {},
+    headers: {},
+    release_date: "2025-06-12",
+  } as any
+
+  test("strips $schema field from Databricks Gemini tool schemas", () => {
+    const schema = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      properties: {
+        name: { type: "string" },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(databricksGeminiModel, schema) as any
+
+    expect(result.$schema).toBeUndefined()
+    expect(result.type).toBe("object")
+    expect(result.properties.name.type).toBe("string")
+  })
+
+  test("strips $defs and definitions from Databricks Gemini tool schemas", () => {
+    const schema = {
+      type: "object",
+      $defs: {
+        MyType: { type: "string" },
+      },
+      definitions: {
+        AnotherType: { type: "number" },
+      },
+      properties: {
+        name: { type: "string" },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(databricksGeminiModel, schema) as any
+
+    expect(result.$defs).toBeUndefined()
+    expect(result.definitions).toBeUndefined()
+    expect(result.properties.name.type).toBe("string")
+  })
+
+  test("resolves $ref references inline for Databricks Gemini", () => {
+    const schema = {
+      type: "object",
+      $defs: {
+        Address: {
+          type: "object",
+          properties: {
+            street: { type: "string" },
+            city: { type: "string" },
+          },
+        },
+      },
+      properties: {
+        homeAddress: { $ref: "#/$defs/Address" },
+        workAddress: { $ref: "#/$defs/Address" },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(databricksGeminiModel, schema) as any
+
+    // $defs should be stripped
+    expect(result.$defs).toBeUndefined()
+
+    // $ref should be resolved inline
+    expect(result.properties.homeAddress.type).toBe("object")
+    expect(result.properties.homeAddress.properties.street.type).toBe("string")
+    expect(result.properties.homeAddress.$ref).toBeUndefined()
+
+    expect(result.properties.workAddress.type).toBe("object")
+    expect(result.properties.workAddress.properties.city.type).toBe("string")
+  })
+
+  test("resolves nested $ref references", () => {
+    const schema = {
+      type: "object",
+      $defs: {
+        Person: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            address: { $ref: "#/$defs/Address" },
+          },
+        },
+        Address: {
+          type: "object",
+          properties: {
+            city: { type: "string" },
+          },
+        },
+      },
+      properties: {
+        person: { $ref: "#/$defs/Person" },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(databricksGeminiModel, schema) as any
+
+    expect(result.properties.person.type).toBe("object")
+    expect(result.properties.person.properties.name.type).toBe("string")
+    expect(result.properties.person.properties.address.type).toBe("object")
+    expect(result.properties.person.properties.address.properties.city.type).toBe("string")
+  })
+
+  test("does NOT strip $schema for non-Gemini Databricks models", () => {
+    const schema = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      properties: {
+        name: { type: "string" },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(databricksGptModel2, schema) as any
+
+    // GPT models keep $schema (they handle it fine)
+    expect(result.$schema).toBe("https://json-schema.org/draft/2020-12/schema")
+  })
+
+  test("handles schemas with both $schema and $ref", () => {
+    const schema = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      $defs: {
+        Item: { type: "string" },
+      },
+      properties: {
+        items: {
+          type: "array",
+          items: { $ref: "#/$defs/Item" },
+        },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(databricksGeminiModel, schema) as any
+
+    expect(result.$schema).toBeUndefined()
+    expect(result.$defs).toBeUndefined()
+    expect(result.properties.items.type).toBe("array")
+    expect(result.properties.items.items.type).toBe("string")
+  })
+
+  test("preserves other schema fields while stripping $schema", () => {
+    const schema = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      title: "MyTool",
+      description: "A useful tool",
+      required: ["name"],
+      properties: {
+        name: { type: "string", description: "The name" },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(databricksGeminiModel, schema) as any
+
+    expect(result.$schema).toBeUndefined()
+    expect(result.title).toBe("MyTool")
+    expect(result.description).toBe("A useful tool")
+    expect(result.required).toEqual(["name"])
+    expect(result.properties.name.description).toBe("The name")
+  })
+})

@@ -1326,9 +1326,13 @@ export namespace Provider {
         // Fix empty content issue: Databricks API rejects messages with empty string content
         // The AI SDK sends content: "" for assistant messages with only tool calls
         let body = init?.body
+        let isGeminiModel = false
         if (body && typeof body === "string") {
           try {
             const parsed = JSON.parse(body)
+            // Detect if this is a Gemini model request
+            isGeminiModel = parsed.model?.includes("gemini") ?? false
+
             if (parsed.messages && Array.isArray(parsed.messages)) {
               parsed.messages = parsed.messages.map((msg: any) => {
                 // For assistant messages with tool_calls but empty content, set content to null
@@ -1344,7 +1348,59 @@ export namespace Provider {
           }
         }
 
-        return fetch(input, { ...init, body, headers })
+        const response = await fetch(input, { ...init, body, headers })
+
+        // For Gemini models, transform streaming responses
+        // Gemini returns content as array [{type:"text", text:"..."}] but AI SDK expects string
+        if (isGeminiModel && response.body) {
+          const originalBody = response.body
+          const transformStream = new TransformStream<Uint8Array, Uint8Array>({
+            transform(chunk, controller) {
+              const text = new TextDecoder().decode(chunk)
+              const lines = text.split("\n")
+              const transformedLines = lines.map((line) => {
+                if (!line.startsWith("data: ") || line === "data: [DONE]") {
+                  return line
+                }
+
+                try {
+                  const jsonStr = line.slice(6) // Remove "data: " prefix
+                  if (!jsonStr.trim()) return line
+
+                  const data = JSON.parse(jsonStr)
+
+                  // Transform choices[].delta.content from array to string
+                  if (data.choices && Array.isArray(data.choices)) {
+                    for (const choice of data.choices) {
+                      if (choice.delta && Array.isArray(choice.delta.content)) {
+                        // Extract text from content array
+                        const textParts = choice.delta.content
+                          .filter((part: any) => part.type === "text" && part.text)
+                          .map((part: any) => part.text)
+                        choice.delta.content = textParts.join("")
+                      }
+                    }
+                    return "data: " + JSON.stringify(data)
+                  }
+                } catch {
+                  // If parsing fails, return original line
+                }
+                return line
+              })
+
+              controller.enqueue(new TextEncoder().encode(transformedLines.join("\n")))
+            },
+          })
+
+          const transformedBody = originalBody.pipeThrough(transformStream)
+          return new Response(transformedBody, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers,
+          })
+        }
+
+        return response
       }
 
       return {

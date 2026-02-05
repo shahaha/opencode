@@ -748,6 +748,54 @@ export namespace ProviderTransform {
         return result
       }
       schema = ensureType(schema)
+
+      // For Databricks Gemini models, strip $schema and resolve $ref references
+      // Gemini API rejects tool schemas containing $schema field
+      if (model.id.includes("gemini")) {
+        const sanitizeForGemini = (obj: any, defs?: Record<string, any>): any => {
+          if (obj === null || typeof obj !== "object") {
+            return obj
+          }
+
+          if (Array.isArray(obj)) {
+            return obj.map((item) => sanitizeForGemini(item, defs))
+          }
+
+          const result: any = {}
+
+          // Collect $defs/definitions for reference resolution
+          const definitions = obj.$defs ?? obj.definitions ?? defs
+
+          for (const [key, value] of Object.entries(obj)) {
+            // Strip $schema, $defs, and definitions fields
+            if (key === "$schema" || key === "$defs" || key === "definitions") {
+              continue
+            }
+
+            // Resolve $ref references inline
+            if (key === "$ref" && typeof value === "string" && definitions) {
+              const refPath = value.replace(/^#\/(\$defs|definitions)\//, "")
+              const resolved = definitions[refPath]
+              if (resolved) {
+                // Merge resolved reference into result (without the $ref key)
+                const sanitized = sanitizeForGemini(resolved, definitions)
+                Object.assign(result, sanitized)
+                continue
+              }
+            }
+
+            if (typeof value === "object" && value !== null) {
+              result[key] = sanitizeForGemini(value, definitions)
+            } else {
+              result[key] = value
+            }
+          }
+
+          return result
+        }
+
+        schema = sanitizeForGemini(schema)
+      }
     }
 
     /*
