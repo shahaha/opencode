@@ -8,6 +8,7 @@ import { Tabs } from "@opencode-ai/ui/tabs"
 import { getFilename } from "@opencode-ai/util/path"
 import { useFile } from "@/context/file"
 import { useLanguage } from "@/context/language"
+import { scrollTabIntoView } from "@/utils/dom"
 import { useCommand } from "@/context/command"
 
 export function FileVisual(props: { path: string; active?: boolean }): JSX.Element {
@@ -31,6 +32,9 @@ export function SortableTab(props: { tab: string; onTabClose: (tab: string) => v
   const command = useCommand()
   const sortable = createSortable(props.tab)
   const path = createMemo(() => file.pathFromTab(props.tab))
+
+  const handleClick = (e: MouseEvent) => scrollTabIntoView(e.currentTarget as HTMLElement)
+
   return (
     // @ts-ignore
     <div use:sortable classList={{ "h-full": true, "opacity-0": sortable.isActiveDraggable }}>
@@ -54,6 +58,7 @@ export function SortableTab(props: { tab: string; onTabClose: (tab: string) => v
           }
           hideCloseButton
           onMiddleClick={() => props.onTabClose(props.tab)}
+          onClick={handleClick}
         >
           <Show when={path()}>{(p) => <FileVisual path={p()} />}</Show>
         </Tabs.Trigger>

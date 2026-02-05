@@ -74,6 +74,7 @@ import {
 } from "@/components/session"
 import { navMark, navParams } from "@/utils/perf"
 import { same } from "@/utils/same"
+import { scrollTabIntoView } from "@/utils/dom"
 
 type DiffStyle = "unified" | "split"
 
@@ -155,6 +156,7 @@ function StickyAddButton(props: { children: JSX.Element }) {
   return (
     <div
       ref={button}
+      data-slot="sticky-add-button"
       class="bg-background-base h-full shrink-0 sticky right-0 z-10 flex items-center justify-center border-b border-border-weak-base px-3"
       classList={{ "border-l": stuck() }}
     >
@@ -2815,6 +2817,7 @@ export default function Page() {
                               }
                               hideCloseButton
                               onMiddleClick={() => tabs().close("context")}
+                              onClick={(e: MouseEvent) => scrollTabIntoView(e.currentTarget as HTMLElement)}
                             >
                               <div class="flex items-center gap-2">
                                 <SessionContextUsage variant="indicator" />
