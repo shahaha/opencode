@@ -26,6 +26,7 @@ import { EOL } from "os"
 import { WebCommand } from "./cli/cmd/web"
 import { PrCommand } from "./cli/cmd/pr"
 import { SessionCommand } from "./cli/cmd/session"
+import { PluginCommand } from "./cli/cmd/plugin"
 
 process.on("unhandledRejection", (e) => {
   Log.Default.error("rejection", {
@@ -79,6 +80,7 @@ const cli = yargs(hideBin(process.argv))
   .completion("completion", "generate shell completion script")
   .command(AcpCommand)
   .command(McpCommand)
+  .command(PluginCommand)
   .command(TuiThreadCommand)
   .command(AttachCommand)
   .command(RunCommand)
