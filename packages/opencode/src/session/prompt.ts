@@ -12,7 +12,7 @@ import { Provider } from "../provider/provider"
 import { type Tool as AITool, tool, jsonSchema, type ToolCallOptions, asSchema } from "ai"
 import { SessionCompaction } from "./compaction"
 import { Instance } from "../project/instance"
-import { Bus } from "../bus"
+import { Bus, HookEvent } from "../bus"
 import { ProviderTransform } from "../provider/transform"
 import { SystemPrompt } from "./system"
 import { InstructionPrompt } from "./instruction"
@@ -152,6 +152,13 @@ export namespace SessionPrompt {
 
     const message = await createUserMessage(input)
     await Session.touch(input.sessionID)
+    
+    // Emit UserPromptSubmit hook
+    const promptText = input.parts?.find(p => p.type === "text")?.text || ""
+    Bus.publish(HookEvent.UserPromptSubmit, { 
+      prompt: promptText, 
+      sessionID: input.sessionID 
+    })
 
     // this is backwards compatibility for allowing `tools` to be specified when
     // prompting
@@ -713,7 +720,27 @@ export namespace SessionPrompt {
               args,
             },
           )
-          const result = await item.execute(args, ctx)
+          // Emit PreToolUse hook
+          Bus.publish(HookEvent.PreToolUse, { 
+            toolCall: { tool: item.id, args, callID: ctx.callID }, 
+            sessionID: ctx.sessionID 
+          })
+          
+          let result: any
+          let error: Error | undefined
+          try {
+            result = await item.execute(args, ctx)
+          } catch (e) {
+            error = e as Error
+            // Emit PostToolUseFailure hook
+            Bus.publish(HookEvent.PostToolUseFailure, { 
+              toolCall: { tool: item.id, args, callID: ctx.callID }, 
+              sessionID: ctx.sessionID,
+              error: error.message
+            })
+            throw e
+          }
+          
           await Plugin.trigger(
             "tool.execute.after",
             {
@@ -723,6 +750,11 @@ export namespace SessionPrompt {
             },
             result,
           )
+          // Emit PostToolUse hook
+          Bus.publish(HookEvent.PostToolUse, { 
+            toolCall: { tool: item.id, args, callID: ctx.callID, result }, 
+            sessionID: ctx.sessionID 
+          })
           return result
         },
       })
@@ -749,6 +781,11 @@ export namespace SessionPrompt {
             args,
           },
         )
+        // Emit PreToolUse hook
+        Bus.publish(HookEvent.PreToolUse, { 
+          toolCall: { tool: key, args, callID: opts.toolCallId }, 
+          sessionID: ctx.sessionID 
+        })
 
         await ctx.ask({
           permission: key,
@@ -757,7 +794,20 @@ export namespace SessionPrompt {
           always: ["*"],
         })
 
-        const result = await execute(args, opts)
+        let result: any
+        let mcpError: Error | undefined
+        try {
+          result = await execute(args, opts)
+        } catch (e) {
+          mcpError = e as Error
+          // Emit PostToolUseFailure hook
+          Bus.publish(HookEvent.PostToolUseFailure, { 
+            toolCall: { tool: key, args, callID: opts.toolCallId }, 
+            sessionID: ctx.sessionID,
+            error: mcpError.message
+          })
+          throw e
+        }
 
         await Plugin.trigger(
           "tool.execute.after",
@@ -768,6 +818,11 @@ export namespace SessionPrompt {
           },
           result,
         )
+        // Emit PostToolUse hook
+        Bus.publish(HookEvent.PostToolUse, { 
+          toolCall: { tool: key, args, callID: opts.toolCallId, result }, 
+          sessionID: ctx.sessionID 
+        })
 
         const textParts: string[] = []
         const attachments: MessageV2.FilePart[] = []
