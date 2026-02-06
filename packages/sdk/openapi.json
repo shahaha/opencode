@@ -6164,6 +6164,9 @@
           },
           "variant": {
             "type": "string"
+          },
+          "clientMessageID": {
+            "type": "string"
           }
         },
         "required": ["id", "sessionID", "role", "time", "agent", "model"]
