@@ -267,6 +267,125 @@ describe("ProviderTransform.maxOutputTokens", () => {
       expect(result).toBe(OUTPUT_TOKEN_MAX)
     })
   })
+
+  describe("gateway with anthropic thinking", () => {
+    test("adjusts output tokens for gateway anthropic thinking budget", () => {
+      const modelLimit = 50000
+      const options = {
+        providerOptions: {
+          anthropic: {
+            thinking: {
+              type: "enabled",
+              budgetTokens: 30000,
+            },
+          },
+        },
+      }
+      const result = ProviderTransform.maxOutputTokens("@ai-sdk/gateway", options, modelLimit, OUTPUT_TOKEN_MAX)
+      expect(result).toBe(20000)
+    })
+
+    test("returns standard limit when no gateway thinking options", () => {
+      const modelLimit = 100000
+      const result = ProviderTransform.maxOutputTokens("@ai-sdk/gateway", {}, modelLimit, OUTPUT_TOKEN_MAX)
+      expect(result).toBe(OUTPUT_TOKEN_MAX)
+    })
+  })
+})
+
+describe("ProviderTransform.providerOptions", () => {
+  const createMockModel = (overrides: Partial<any> = {}): any => ({
+    id: "test/test-model",
+    providerID: "test",
+    api: {
+      id: "test-model",
+      url: "https://api.test.com",
+      npm: "@ai-sdk/openai",
+    },
+    ...overrides,
+  })
+
+  test("wraps options under SDK key for normal providers", () => {
+    const model = createMockModel({
+      api: { id: "claude-sonnet-4", url: "https://api.anthropic.com", npm: "@ai-sdk/anthropic" },
+    })
+    const result = ProviderTransform.providerOptions(model, {
+      thinking: { type: "enabled", budgetTokens: 16000 },
+    })
+    expect(result).toEqual({
+      anthropic: { thinking: { type: "enabled", budgetTokens: 16000 } },
+    })
+  })
+
+  test("does not extract providerOptions key for non-gateway providers", () => {
+    const model = createMockModel({
+      api: { id: "claude-sonnet-4", url: "https://api.anthropic.com", npm: "@ai-sdk/anthropic" },
+    })
+    const result = ProviderTransform.providerOptions(model, {
+      thinking: { type: "enabled", budgetTokens: 16000 },
+      providerOptions: { something: "should be kept as-is" },
+    })
+    expect(result).toEqual({
+      anthropic: {
+        thinking: { type: "enabled", budgetTokens: 16000 },
+        providerOptions: { something: "should be kept as-is" },
+      },
+    })
+  })
+
+  test("extracts providerOptions key for gateway and spreads into result", () => {
+    const model = createMockModel({
+      providerID: "vercel",
+      api: { id: "anthropic/claude-sonnet-4", url: "https://ai-gateway.vercel.sh", npm: "@ai-sdk/gateway" },
+    })
+    const result = ProviderTransform.providerOptions(model, {
+      providerOptions: {
+        anthropic: { thinking: { type: "enabled", budgetTokens: 16000 } },
+      },
+    })
+    expect(result).toEqual({
+      anthropic: { thinking: { type: "enabled", budgetTokens: 16000 } },
+    })
+  })
+
+  test("combines gateway rest options with explicit providerOptions", () => {
+    const model = createMockModel({
+      providerID: "vercel",
+      api: { id: "anthropic/claude-sonnet-4", url: "https://ai-gateway.vercel.sh", npm: "@ai-sdk/gateway" },
+    })
+    const result = ProviderTransform.providerOptions(model, {
+      order: ["vertex", "anthropic"],
+      providerOptions: {
+        anthropic: { thinking: { type: "enabled", budgetTokens: 16000 } },
+      },
+    })
+    expect(result).toEqual({
+      gateway: { order: ["vertex", "anthropic"] },
+      anthropic: { thinking: { type: "enabled", budgetTokens: 16000 } },
+    })
+  })
+
+  test("gateway with only rest options and no providerOptions key", () => {
+    const model = createMockModel({
+      providerID: "vercel",
+      api: { id: "anthropic/claude-sonnet-4", url: "https://ai-gateway.vercel.sh", npm: "@ai-sdk/gateway" },
+    })
+    const result = ProviderTransform.providerOptions(model, {
+      order: ["vertex"],
+    })
+    expect(result).toEqual({
+      gateway: { order: ["vertex"] },
+    })
+  })
+
+  test("gateway with empty options", () => {
+    const model = createMockModel({
+      providerID: "vercel",
+      api: { id: "anthropic/claude-sonnet-4", url: "https://ai-gateway.vercel.sh", npm: "@ai-sdk/gateway" },
+    })
+    const result = ProviderTransform.providerOptions(model, {})
+    expect(result).toEqual({})
+  })
 })
 
 describe("ProviderTransform.schema - gemini array items", () => {
@@ -1502,20 +1621,97 @@ describe("ProviderTransform.variants", () => {
   })
 
   describe("@ai-sdk/gateway", () => {
-    test("returns OPENAI_EFFORTS with reasoningEffort", () => {
+    test("anthropic models return thinking variants with providerOptions wrapper", () => {
       const model = createMockModel({
-        id: "gateway/gateway-model",
-        providerID: "gateway",
+        id: "anthropic/claude-sonnet-4.5",
+        providerID: "vercel",
         api: {
-          id: "gateway-model",
-          url: "https://gateway.ai",
+          id: "anthropic/claude-sonnet-4.5",
+          url: "https://ai-gateway.vercel.sh",
           npm: "@ai-sdk/gateway",
         },
       })
       const result = ProviderTransform.variants(model)
-      expect(Object.keys(result)).toEqual(["none", "minimal", "low", "medium", "high", "xhigh"])
-      expect(result.low).toEqual({ reasoningEffort: "low" })
-      expect(result.high).toEqual({ reasoningEffort: "high" })
+      expect(Object.keys(result)).toEqual(["high", "max"])
+      expect(result.high).toEqual({
+        providerOptions: {
+          anthropic: {
+            thinking: {
+              type: "enabled",
+              budgetTokens: expect.any(Number),
+            },
+          },
+        },
+      })
+      expect(result.max).toEqual({
+        providerOptions: {
+          anthropic: {
+            thinking: {
+              type: "enabled",
+              budgetTokens: expect.any(Number),
+            },
+          },
+        },
+      })
+    })
+
+    test("openai models return reasoningEffort variants with providerOptions wrapper", () => {
+      const model = createMockModel({
+        id: "openai/o3",
+        providerID: "vercel",
+        api: {
+          id: "openai/o3",
+          url: "https://ai-gateway.vercel.sh",
+          npm: "@ai-sdk/gateway",
+        },
+        release_date: "2025-12-04",
+      })
+      const result = ProviderTransform.variants(model)
+      expect(result.high).toEqual({
+        providerOptions: {
+          openai: expect.objectContaining({
+            reasoningEffort: "high",
+          }),
+        },
+      })
+    })
+
+    test("google gemini-2.5 models return thinkingConfig variants with providerOptions wrapper", () => {
+      const model = createMockModel({
+        id: "google/gemini-2.5-flash",
+        providerID: "vercel",
+        api: {
+          id: "google/gemini-2.5-flash",
+          url: "https://ai-gateway.vercel.sh",
+          npm: "@ai-sdk/gateway",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(Object.keys(result)).toEqual(["high", "max"])
+      expect(result.high).toEqual({
+        providerOptions: {
+          google: {
+            thinkingConfig: {
+              includeThoughts: true,
+              thinkingBudget: 16000,
+            },
+          },
+        },
+      })
+    })
+
+    test("unknown provider prefix returns empty variants", () => {
+      const model = createMockModel({
+        id: "meta/llama-4-scout",
+        providerID: "vercel",
+        api: {
+          id: "meta/llama-4-scout",
+          url: "https://ai-gateway.vercel.sh",
+          npm: "@ai-sdk/gateway",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(result).toEqual({})
     })
   })
 
