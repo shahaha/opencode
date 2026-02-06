@@ -22,10 +22,18 @@ export namespace Plugin {
   const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin, CopilotAuthPlugin, GitlabAuthPlugin]
 
   const state = Instance.state(async () => {
+    const localFetch = Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = input instanceof Request ? input : new Request(input, init)
+        return Server.App().fetch(request)
+      },
+      // Bun's fetch includes a preconnect helper; mirror it to satisfy the expected type.
+      { preconnect: fetch.preconnect?.bind(fetch) },
+    ) as typeof fetch
+
     const client = createOpencodeClient({
       baseUrl: "http://localhost:4096",
-      // @ts-ignore - fetch type incompatibility
-      fetch: async (...args) => Server.App().fetch(...args),
+      fetch: localFetch,
     })
     const config = await Config.get()
     const hooks: Hooks[] = []
