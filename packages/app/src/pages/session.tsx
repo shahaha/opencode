@@ -2454,7 +2454,7 @@ export default function Page() {
                           if (isDesktop()) scheduleScrollSpy(e.currentTarget)
                         }}
                         onClick={autoScroll.handleInteraction}
-                        class="relative min-w-0 w-full h-full overflow-y-auto session-scroller"
+                        class="relative min-w-0 w-full h-full overflow-y-auto custom-scroller"
                         style={{ "--session-title-height": info()?.title || info()?.parentID ? "40px" : "0px" }}
                       >
                         <Show when={info()?.title || info()?.parentID}>
@@ -3527,7 +3527,7 @@ export default function Page() {
                         {language.t("session.files.all")}
                       </Tabs.Trigger>
                     </Tabs.List>
-                    <Tabs.Content value="changes" class="bg-background-base px-3 py-0">
+                    <Tabs.Content value="changes" class="bg-background-base px-3 py-0 overflow-y-auto custom-scroller">
                       <Switch>
                         <Match when={hasReview()}>
                           <Show
@@ -3556,7 +3556,7 @@ export default function Page() {
                         </Match>
                       </Switch>
                     </Tabs.Content>
-                    <Tabs.Content value="all" class="bg-background-base px-3 py-0">
+                    <Tabs.Content value="all" class="bg-background-base px-3 py-0 overflow-y-auto custom-scroller">
                       <FileTree
                         path=""
                         modified={diffFiles()}

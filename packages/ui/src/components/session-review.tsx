@@ -278,6 +278,7 @@ export const SessionReview = (props: SessionReviewProps) => {
         props.scrollRef?.(el)
       }}
       onScroll={props.onScroll}
+      class="custom-scroller"
       classList={{
         ...(props.classList ?? {}),
         [props.classes?.root ?? ""]: !!props.classes?.root,
