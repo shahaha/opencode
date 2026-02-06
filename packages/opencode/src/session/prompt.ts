@@ -365,6 +365,7 @@ export namespace SessionPrompt {
           description: task.description,
           subagent_type: task.agent,
           command: task.command,
+          model: task.model,
         }
         await Plugin.trigger(
           "tool.execute.before",
@@ -383,7 +384,7 @@ export namespace SessionPrompt {
           sessionID: sessionID,
           abort,
           callID: part.callID,
-          extra: { bypassAgentCheck: true },
+          extra: { bypassAgentCheck: true, bypassModelCheck: task.model !== undefined },
           messages: msgs,
           async metadata(input) {
             await Session.updatePart({
@@ -553,6 +554,8 @@ export namespace SessionPrompt {
       // Check if user explicitly invoked an agent via @ in this turn
       const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
       const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
+      // Check if user explicitly included a model override in @agent:provider/model syntax
+      const bypassModelCheck = lastUserMsg?.parts.some((p) => p.type === "agent" && p.model !== undefined) ?? false
 
       const tools = await resolveTools({
         agent,
@@ -561,6 +564,7 @@ export namespace SessionPrompt {
         tools: lastUser.tools,
         processor,
         bypassAgentCheck,
+        bypassModelCheck,
         messages: msgs,
       })
 
@@ -651,6 +655,7 @@ export namespace SessionPrompt {
     tools?: Record<string, boolean>
     processor: SessionProcessor.Info
     bypassAgentCheck: boolean
+    bypassModelCheck: boolean
     messages: MessageV2.WithParts[]
   }) {
     using _ = log.time("resolveTools")
@@ -661,7 +666,7 @@ export namespace SessionPrompt {
       abort: options.abortSignal!,
       messageID: input.processor.message.id,
       callID: options.toolCallId,
-      extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck },
+      extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck, bypassModelCheck: input.bypassModelCheck },
       agent: input.agent.name,
       messages: input.messages,
       metadata: async (val: { title?: string; metadata?: any }) => {
@@ -1149,6 +1154,7 @@ export namespace SessionPrompt {
           // Check if this agent would be denied by task permission
           const perm = PermissionNext.evaluate("task", part.name, agent.permission)
           const hint = perm.action === "deny" ? " . Invoked by user; guaranteed to exist." : ""
+          const modelHint = part.model ? ` Use model override: ${part.model.providerID}/${part.model.modelID}.` : ""
           return [
             {
               id: Identifier.ascending("part"),
@@ -1162,11 +1168,10 @@ export namespace SessionPrompt {
               sessionID: input.sessionID,
               type: "text",
               synthetic: true,
-              // An extra space is added here. Otherwise the 'Use' gets appended
-              // to user's last word; making a combined word
               text:
                 " Use the above message and context to generate a prompt and call the task tool with subagent: " +
                 part.name +
+                modelHint +
                 hint,
             },
           ]

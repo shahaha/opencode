@@ -48,7 +48,7 @@ function extractLineRange(input: string) {
 export type AutocompleteRef = {
   onInput: (value: string) => void
   onKeyDown: (e: KeyEvent) => void
-  visible: false | "@" | "/"
+  visible: false | "@" | "/" | "@:model"
 }
 
 export type AutocompleteOption = {
@@ -72,6 +72,7 @@ export function Autocomplete(props: {
   ref: (ref: AutocompleteRef) => void
   fileStyleId: number
   agentStyleId: number
+  modelStyleId: number
   promptPartTypeId: () => number
 }) {
   const sdk = useSDK()
@@ -86,6 +87,7 @@ export function Autocomplete(props: {
     selected: 0,
     visible: false as AutocompleteRef["visible"],
     input: "keyboard" as "keyboard" | "mouse",
+    agentForModel: undefined as string | undefined,
   })
 
   const [positionTick, setPositionTick] = createSignal(0)
@@ -167,50 +169,88 @@ export function Autocomplete(props: {
     const extmarkStart = store.index
     const extmarkEnd = extmarkStart + Bun.stringWidth(virtualText)
 
-    const styleId = part.type === "file" ? props.fileStyleId : part.type === "agent" ? props.agentStyleId : undefined
+    if (part.type === "agent" && part.model) {
+      const colonIndex = text.indexOf(":")
+      const agentText = "@" + text.slice(0, colonIndex)
+      const modelText = text.slice(colonIndex)
 
-    const extmarkId = input.extmarks.create({
-      start: extmarkStart,
-      end: extmarkEnd,
-      virtual: true,
-      styleId,
-      typeId: props.promptPartTypeId(),
-    })
+      const agentEnd = extmarkStart + Bun.stringWidth(agentText)
+      const modelStart = agentEnd
+      const modelEnd = modelStart + Bun.stringWidth(modelText)
 
-    props.setPrompt((draft) => {
-      if (part.type === "file") {
-        const existingIndex = draft.parts.findIndex((p) => p.type === "file" && "url" in p && p.url === part.url)
-        if (existingIndex !== -1) {
-          const existing = draft.parts[existingIndex]
-          if (
-            part.source?.text &&
-            existing &&
-            "source" in existing &&
-            existing.source &&
-            "text" in existing.source &&
-            existing.source.text
-          ) {
-            existing.source.text.start = extmarkStart
-            existing.source.text.end = extmarkEnd
-            existing.source.text.value = virtualText
-          }
-          return
+      const agentExtmarkId = input.extmarks.create({
+        start: extmarkStart,
+        end: agentEnd,
+        virtual: true,
+        styleId: props.agentStyleId,
+        typeId: props.promptPartTypeId(),
+      })
+
+      const modelExtmarkId = input.extmarks.create({
+        start: modelStart,
+        end: modelEnd,
+        virtual: true,
+        styleId: props.modelStyleId,
+        typeId: props.promptPartTypeId(),
+      })
+
+      props.setPrompt((draft) => {
+        if (part.source) {
+          part.source.start = extmarkStart
+          part.source.end = extmarkEnd
+          part.source.value = virtualText
         }
-      }
+        const partIndex = draft.parts.length
+        draft.parts.push(part)
+        props.setExtmark(partIndex, agentExtmarkId)
+        props.setExtmark(partIndex, modelExtmarkId)
+      })
+    } else {
+      const styleId = part.type === "file" ? props.fileStyleId : part.type === "agent" ? props.agentStyleId : undefined
 
-      if (part.type === "file" && part.source?.text) {
-        part.source.text.start = extmarkStart
-        part.source.text.end = extmarkEnd
-        part.source.text.value = virtualText
-      } else if (part.type === "agent" && part.source) {
-        part.source.start = extmarkStart
-        part.source.end = extmarkEnd
-        part.source.value = virtualText
-      }
-      const partIndex = draft.parts.length
-      draft.parts.push(part)
-      props.setExtmark(partIndex, extmarkId)
-    })
+      const extmarkId = input.extmarks.create({
+        start: extmarkStart,
+        end: extmarkEnd,
+        virtual: true,
+        styleId,
+        typeId: props.promptPartTypeId(),
+      })
+
+      props.setPrompt((draft) => {
+        if (part.type === "file") {
+          const existingIndex = draft.parts.findIndex((p) => p.type === "file" && "url" in p && p.url === part.url)
+          if (existingIndex !== -1) {
+            const existing = draft.parts[existingIndex]
+            if (
+              part.source?.text &&
+              existing &&
+              "source" in existing &&
+              existing.source &&
+              "text" in existing.source &&
+              existing.source.text
+            ) {
+              existing.source.text.start = extmarkStart
+              existing.source.text.end = extmarkEnd
+              existing.source.text.value = virtualText
+            }
+            return
+          }
+        }
+
+        if (part.type === "file" && part.source?.text) {
+          part.source.text.start = extmarkStart
+          part.source.text.end = extmarkEnd
+          part.source.text.value = virtualText
+        } else if (part.type === "agent" && part.source) {
+          part.source.start = extmarkStart
+          part.source.end = extmarkEnd
+          part.source.value = virtualText
+        }
+        const partIndex = draft.parts.length
+        draft.parts.push(part)
+        props.setExtmark(partIndex, extmarkId)
+      })
+    }
 
     if (part.type === "file" && part.source && part.source.type === "file") {
       frecency.updateFrecency(part.source.path)
@@ -220,7 +260,7 @@ export function Autocomplete(props: {
   const [files] = createResource(
     () => search(),
     async (query) => {
-      if (!store.visible || store.visible === "/") return []
+      if (!store.visible || store.visible === "/" || store.agentForModel) return []
 
       const { lineRange, baseQuery } = extractLineRange(query ?? "")
 
@@ -351,6 +391,34 @@ export function Autocomplete(props: {
       )
   })
 
+  const models = createMemo(() => {
+    if (!store.agentForModel) return []
+    const agentName = store.agentForModel
+    const width = props.anchor().width - 4
+
+    return sync.data.provider.flatMap((provider) =>
+      Object.entries(provider.models)
+        .filter(([_, info]) => info.status !== "deprecated")
+        .map(([modelId, info]): AutocompleteOption => {
+          const modelRef = `${provider.id}/${modelId}`
+          const displayText = `@${agentName}:${modelRef}`
+          return {
+            display: Locale.truncateMiddle(displayText, width),
+            value: modelRef,
+            onSelect: () => {
+              insertPart(`${agentName}:${modelRef}`, {
+                type: "agent",
+                name: agentName,
+                model: { providerID: provider.id, modelID: modelId },
+                source: { start: 0, end: 0, value: "" },
+              })
+              setStore("agentForModel", undefined)
+            },
+          }
+        }),
+    )
+  })
+
   const commands = createMemo((): AutocompleteOption[] => {
     const results: AutocompleteOption[] = [...command.slashes()]
 
@@ -381,6 +449,28 @@ export function Autocomplete(props: {
   })
 
   const options = createMemo((prev: AutocompleteOption[] | undefined) => {
+    if (store.agentForModel) {
+      const modelOptions = models()
+      const currentFilter = filter()
+
+      if (files.loading && prev && prev.length > 0) {
+        return prev
+      }
+
+      if (!currentFilter) return modelOptions
+
+      const colonIndex = currentFilter.indexOf(":")
+      const modelFilter = colonIndex !== -1 ? currentFilter.slice(colonIndex + 1) : ""
+
+      if (!modelFilter) return modelOptions
+
+      const result = fuzzysort.go(modelFilter, modelOptions, {
+        keys: [(obj) => (obj.value ?? obj.display).trimEnd(), "description"],
+        limit: 10,
+      })
+      return result.map((arr) => arr.obj)
+    }
+
     const filesValue = files()
     const agentsValue = agents()
     const commandsValue = commands()
@@ -486,13 +576,13 @@ export function Autocomplete(props: {
     if (store.visible === "/" && !text.endsWith(" ") && text.startsWith("/")) {
       const cursor = props.input().logicalCursor
       props.input().deleteRange(0, 0, cursor.row, cursor.col)
-      // Sync the prompt store immediately since onContentChange is async
       props.setPrompt((draft) => {
         draft.input = props.input().plainText
       })
     }
     command.keybinds(true)
     setStore("visible", false)
+    setStore("agentForModel", undefined)
   }
 
   onMount(() => {
@@ -502,31 +592,85 @@ export function Autocomplete(props: {
       },
       onInput(value) {
         if (store.visible) {
+          if (store.agentForModel) {
+            const textAfterTrigger = value.slice(store.index + 1, props.input().cursorOffset)
+            if (!textAfterTrigger.includes(":")) {
+              setStore("agentForModel", undefined)
+              setStore("visible", "@")
+            }
+          }
+
           if (
-            // Typed text before the trigger
             props.input().cursorOffset <= store.index ||
-            // There is a space between the trigger and the cursor
             props.input().getTextRange(store.index, props.input().cursorOffset).match(/\s/) ||
-            // "/<command>" is not the sole content
             (store.visible === "/" && value.match(/^\S+\s+\S+\s*$/))
           ) {
             hide()
+            return
+          }
+
+          if (store.visible === "@" && !store.agentForModel) {
+            const offset = props.input().cursorOffset
+            const textAfterTrigger = value.slice(store.index + 1, offset)
+            // Match against known agent names followed by colon to handle agents with colons in their names
+            const validAgent = sync.data.agent.find(
+              (a) =>
+                !a.hidden &&
+                a.mode !== "primary" &&
+                textAfterTrigger.toLowerCase().startsWith(a.name.toLowerCase() + ":"),
+            )
+            if (validAgent) {
+              setStore("agentForModel", validAgent.name)
+              setStore("visible", "@:model")
+            }
           }
           return
         }
 
-        // Check if autocomplete should reopen (e.g., after backspace deleted a space)
         const offset = props.input().cursorOffset
         if (offset === 0) return
 
-        // Check for "/" at position 0 - reopen slash commands
+        // Collapse space before colon when typing `:` after `@agentname `
+        // This allows ergonomic model override: select agent (adds space), then type `:` to override model
+        const charBeforeCursor = offset > 0 ? value[offset - 1] : undefined
+        if (charBeforeCursor === ":" && offset >= 3) {
+          const charBeforeColon = value[offset - 2]
+          if (charBeforeColon === " ") {
+            const textBeforeSpace = value.slice(0, offset - 2)
+            const atIdx = textBeforeSpace.lastIndexOf("@")
+            if (atIdx !== -1) {
+              const agentName = textBeforeSpace.slice(atIdx + 1)
+              const validAgent = sync.data.agent.find(
+                (a) => !a.hidden && a.mode !== "primary" && a.name.toLowerCase() === agentName.toLowerCase(),
+              )
+              if (validAgent) {
+                // Delete the space before the colon
+                const input = props.input()
+                const spacePos = offset - 2
+                input.cursorOffset = spacePos
+                const startCursor = input.logicalCursor
+                input.cursorOffset = spacePos + 1
+                const endCursor = input.logicalCursor
+                input.deleteRange(startCursor.row, startCursor.col, endCursor.row, endCursor.col)
+                // After deletion, colon is now at spacePos, so position cursor after it
+                input.cursorOffset = spacePos + 1
+                // Trigger model autocomplete
+                show("@")
+                setStore("index", atIdx)
+                setStore("agentForModel", validAgent.name)
+                setStore("visible", "@:model")
+                return
+              }
+            }
+          }
+        }
+
         if (value.startsWith("/") && !value.slice(0, offset).match(/\s/)) {
           show("/")
           setStore("index", 0)
           return
         }
 
-        // Check for "@" trigger - find the nearest "@" before cursor with no whitespace between
         const text = value.slice(0, offset)
         const idx = text.lastIndexOf("@")
         if (idx === -1) return
@@ -536,6 +680,17 @@ export function Autocomplete(props: {
         if ((before === undefined || /\s/.test(before)) && !between.match(/\s/)) {
           show("@")
           setStore("index", idx)
+
+          const textAfterAt = between.slice(1)
+          // Match against known agent names followed by colon to handle agents with colons in their names
+          const validAgent = sync.data.agent.find(
+            (a) =>
+              !a.hidden && a.mode !== "primary" && textAfterAt.toLowerCase().startsWith(a.name.toLowerCase() + ":"),
+          )
+          if (validAgent) {
+            setStore("agentForModel", validAgent.name)
+            setStore("visible", "@:model")
+          }
         }
       },
       onKeyDown(e: KeyEvent) {

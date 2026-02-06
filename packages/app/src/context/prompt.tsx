@@ -25,6 +25,10 @@ export interface FileAttachmentPart extends PartBase {
 export interface AgentPart extends PartBase {
   type: "agent"
   name: string
+  model?: {
+    providerID: string
+    modelID: string
+  }
 }
 
 export interface ImageAttachmentPart {
@@ -75,8 +79,12 @@ export function isPromptEqual(promptA: Prompt, promptB: Prompt): boolean {
       if (fileA.path !== fileB.path) return false
       if (!isSelectionEqual(fileA.selection, fileB.selection)) return false
     }
-    if (partA.type === "agent" && partA.name !== (partB as AgentPart).name) {
-      return false
+    if (partA.type === "agent") {
+      const agentA = partA as AgentPart
+      const agentB = partB as AgentPart
+      if (agentA.name !== agentB.name) return false
+      if (agentA.model?.providerID !== agentB.model?.providerID) return false
+      if (agentA.model?.modelID !== agentB.model?.modelID) return false
     }
     if (partA.type === "image" && partA.id !== (partB as ImageAttachmentPart).id) {
       return false
@@ -93,7 +101,7 @@ function cloneSelection(selection?: FileSelection) {
 function clonePart(part: ContentPart): ContentPart {
   if (part.type === "text") return { ...part }
   if (part.type === "image") return { ...part }
-  if (part.type === "agent") return { ...part }
+  if (part.type === "agent") return { ...part, model: part.model ? { ...part.model } : undefined }
   return {
     ...part,
     selection: cloneSelection(part.selection),
