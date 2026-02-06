@@ -39,6 +39,7 @@ export namespace LLM {
     small?: boolean
     tools: Record<string, Tool>
     retries?: number
+    toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string }
   }
 
   export type StreamOutput = StreamTextResult<ToolSet, unknown>
@@ -214,6 +215,7 @@ export namespace LLM {
       activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
       tools,
       maxOutputTokens,
+      toolChoice: input.toolChoice,
       abortSignal: input.abort,
       headers: {
         ...(input.model.providerID.startsWith("opencode")
