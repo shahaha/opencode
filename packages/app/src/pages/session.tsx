@@ -2834,6 +2834,32 @@ export default function Page() {
                             let scrollTimeout: number | undefined
                             let prevScrollWidth = el.scrollWidth
                             let prevContextOpen = contextOpen()
+                            let prevActiveTab = activeTab()
+
+                            // Scroll to active tab when it changes (fixes #11674)
+                            createEffect(() => {
+                              const currentTab = activeTab()
+                              if (currentTab && currentTab !== prevActiveTab) {
+                                const trigger = el.querySelector(`[data-value="${currentTab}"]`) as HTMLElement
+                                if (trigger) {
+                                  const containerRect = el.getBoundingClientRect()
+                                  const triggerRect = trigger.getBoundingClientRect()
+
+                                  // Check if trigger is overflowed on either side
+                                  const isOverflowed = triggerRect.right > containerRect.right || triggerRect.left < containerRect.left
+
+                                  if (isOverflowed) {
+                                    // Calculate scroll amount needed
+                                    const scrollLeft = el.scrollLeft + (triggerRect.left - containerRect.left)
+                                    el.scrollTo({
+                                      left: scrollLeft,
+                                      behavior: "smooth",
+                                    })
+                                  }
+                                }
+                              }
+                              prevActiveTab = currentTab
+                            })
 
                             const handler = () => {
                               if (scrollTimeout !== undefined) clearTimeout(scrollTimeout)
