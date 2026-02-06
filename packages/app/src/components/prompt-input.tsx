@@ -38,6 +38,7 @@ import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import type { IconName } from "@opencode-ai/ui/icons/provider"
 import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { IconButton } from "@opencode-ai/ui/icon-button"
+import { Spinner } from "@opencode-ai/ui/spinner"
 import { Select } from "@opencode-ai/ui/select"
 import { getDirectory, getFilename, getFilenameTruncated } from "@opencode-ai/util/path"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
@@ -254,6 +255,16 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     applyingHistory: false,
   })
 
+  const [recording, setRecording] = createSignal(false)
+  const [transcribing, setTranscribing] = createSignal(false)
+  const audio = {
+    recorder: undefined as MediaRecorder | undefined,
+    stream: undefined as MediaStream | undefined,
+    controller: undefined as AbortController | undefined,
+    chunks: [] as Blob[],
+    mime: "",
+  }
+
   const MAX_HISTORY = 100
   const [history, setHistory] = persisted(
     Persist.global("prompt-history", ["prompt-history.v1"]),
@@ -387,6 +398,204 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     addPart({ type: "text", content: plainText, start: 0, end: 0 })
   }
 
+  const isVoiceSupported = () =>
+    typeof navigator !== "undefined" &&
+    typeof window !== "undefined" &&
+    Boolean(navigator.mediaDevices?.getUserMedia) &&
+    typeof MediaRecorder !== "undefined"
+
+  const stopStream = () => {
+    audio.stream?.getTracks().forEach((track) => track.stop())
+    audio.stream = undefined
+  }
+
+  const recordStart = async () => {
+    if (!isVoiceSupported()) {
+      showToast({
+        title: "Voice input unavailable",
+        description: "Your browser does not support audio recording.",
+      })
+      return false
+    }
+    if (audio.recorder) return false
+
+    const stream = await navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .catch(() => undefined)
+    if (!stream) {
+      showToast({
+        title: "Microphone blocked",
+        description: "Allow microphone access to start recording.",
+      })
+      return false
+    }
+
+    // ensure we can clean up stream even if mime unsupported
+    audio.stream = stream
+
+    const preferred = "audio/webm;codecs=opus"
+    const fallback = "audio/webm"
+    const mime = MediaRecorder.isTypeSupported(preferred)
+      ? preferred
+      : MediaRecorder.isTypeSupported(fallback)
+        ? fallback
+        : ""
+    if (!mime) {
+      stopStream()
+      showToast({
+        title: "Voice input unavailable",
+        description: "This browser does not support the available audio formats.",
+      })
+      return false
+    }
+    const recorder = new MediaRecorder(stream, { mimeType: mime })
+
+    audio.mime = recorder.mimeType || mime
+    audio.chunks = []
+    audio.recorder = recorder
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size === 0) return
+      audio.chunks.push(event.data)
+    }
+
+    recorder.start()
+    setRecording(true)
+    return true
+  }
+
+  const recordStop = async () => {
+    if (!audio.recorder) return
+    const recorder = audio.recorder
+    audio.recorder = undefined
+
+    const result = new Promise<Blob>((resolve) => {
+      recorder.onstop = () => {
+        resolve(new Blob(audio.chunks, { type: audio.mime || "audio/webm" }))
+      }
+    })
+
+    recorder.stop()
+    const blob = await result
+    stopStream()
+    setRecording(false)
+    return blob
+  }
+
+  const transcribeAudio = async (blob: Blob) => {
+    if (!blob.size) {
+      showToast({
+        title: "No audio captured",
+        description: "Try recording again.",
+      })
+      return
+    }
+
+    const mime = blob.type || "audio/webm"
+    const filename = mime.includes("webm") ? "audio.webm" : "audio.dat"
+    const file = new File([blob], filename, { type: mime })
+    const form = new FormData()
+    const currentPrompt = prompt.current()
+    const promptText = currentPrompt.map((part) => ("content" in part ? part.content : "")).join("")
+    form.append("file", file)
+    if (params.id) {
+      form.append("sessionID", params.id)
+    }
+    if (promptText.trim()) {
+      form.append("prompt", promptText)
+    }
+
+    const fetcher = platform.fetch ?? fetch
+    const controller = new AbortController()
+    audio.controller = controller
+    setTranscribing(true)
+    const response = await fetcher(`${sdk.url}/voice/transcribe`, {
+      method: "POST",
+      body: form,
+      signal: controller.signal,
+    }).catch(() => undefined)
+
+    audio.controller = undefined
+
+    if (!response) {
+      setTranscribing(false)
+      if (controller.signal.aborted) return
+      showToast({
+        title: "Transcription failed",
+        description: "Failed to reach the server.",
+      })
+      return
+    }
+
+    const payload = await response.json().catch(() => ({ text: "" }))
+    const text = typeof payload?.text === "string" ? payload.text : ""
+    setTranscribing(false)
+
+    if (!response.ok) {
+      if (controller.signal.aborted) return
+      showToast({
+        title: "Transcription failed",
+        description: text || "Request failed.",
+      })
+      return
+    }
+
+    if (!text.trim()) {
+      showToast({
+        title: "No speech detected",
+        description: "Try speaking closer to the microphone.",
+      })
+      return
+    }
+
+    addPart({ type: "text", content: text, start: 0, end: 0 })
+    requestAnimationFrame(() => {
+      editorRef.focus()
+      queueScroll()
+    })
+  }
+
+  const toggleVoice = async () => {
+    if (transcribing()) {
+      const controller = audio.controller
+      if (controller) {
+        controller.abort()
+        setTranscribing(false)
+        showToast({
+          title: "Transcription cancelled",
+          description: "Stopped the current transcription.",
+        })
+      }
+      return
+    }
+
+    if (recording()) {
+      const blob = await recordStop()
+      if (!blob) return
+      await transcribeAudio(blob)
+      return
+    }
+
+    await recordStart()
+  }
+
+  const voiceTitle = createMemo(() =>
+    transcribing() ? "Cancel transcription" : recording() ? "Stop recording" : "Voice input",
+  )
+
+  command.register(() => [
+    {
+      id: "prompt.voice",
+      title: "Voice input",
+      description: "Start or stop voice recording",
+      category: "Prompt",
+      keybind: "mod+shift+m",
+      onSelect: () => {
+        void toggleVoice()
+      },
+    },
+  ])
+
   const handleGlobalDragOver = (event: DragEvent) => {
     if (dialog.active) return
 
@@ -431,6 +640,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     document.removeEventListener("dragover", handleGlobalDragOver)
     document.removeEventListener("dragleave", handleGlobalDragLeave)
     document.removeEventListener("drop", handleGlobalDrop)
+    if (transcribing()) {
+      const controller = audio.controller
+      if (controller) controller.abort()
+      setTranscribing(false)
+    }
+    if (!recording()) return
+    void recordStop()
   })
 
   createEffect(() => {
@@ -858,9 +1074,19 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const addPart = (part: ContentPart) => {
     const selection = window.getSelection()
-    if (!selection || selection.rangeCount === 0) return
+    if (!selection) return
 
-    const cursorPosition = getCursorPosition(editorRef)
+    const hasRange = selection.rangeCount > 0
+    const inEditor = hasRange && editorRef.contains(selection.anchorNode)
+    const cursorPosition = inEditor
+      ? getCursorPosition(editorRef)
+      : (prompt.cursor() ?? getCursorPosition(editorRef))
+    if (!inEditor) {
+      editorRef.focus()
+      setCursorPosition(editorRef, cursorPosition)
+    }
+    if (selection.rangeCount === 0) return
+
     const currentPrompt = prompt.current()
     const rawText = currentPrompt.map((p) => ("content" in p ? p.content : "")).join("")
     const textBeforeCursor = rawText.substring(0, cursorPosition)
@@ -2052,6 +2278,21 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 </Tooltip>
               </Show>
             </div>
+            <TooltipKeybind placement="top" title={voiceTitle()} keybind={command.keybind("prompt.voice")}>
+              <Button type="button" variant="ghost" class="h-6 w-6" onClick={toggleVoice}>
+                <Switch>
+                  <Match when={transcribing()}>
+                    <Spinner class="size-4 text-icon-base" />
+                  </Match>
+                  <Match when={recording()}>
+                    <Icon name="stop" size="small" />
+                  </Match>
+                  <Match when={true}>
+                    <Icon name="mic" size="small" />
+                  </Match>
+                </Switch>
+              </Button>
+            </TooltipKeybind>
             <Tooltip
               placement="top"
               inactive={!prompt.dirty() && !working()}
