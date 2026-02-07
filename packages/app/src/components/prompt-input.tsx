@@ -52,6 +52,8 @@ interface PromptInputProps {
   newSessionWorktree?: string
   onNewSessionWorktreeReset?: () => void
   onSubmit?: () => void
+  modelSelectorOpen?: boolean
+  onModelSelectorOpenChange?: (open: boolean) => void
 }
 
 const EXAMPLES = [
@@ -132,6 +134,15 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const queueScroll = () => {
     requestAnimationFrame(scrollCursorIntoView)
+  }
+
+  const handleModelSelectorOpenChange = (open: boolean) => {
+    props.onModelSelectorOpenChange?.(open)
+    if (open) return
+    requestAnimationFrame(() => {
+      if (dialog.active) return
+      editorRef?.focus()
+    })
   }
 
   const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
@@ -289,6 +300,14 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   createEffect(() => {
     if (!isFocused()) setStore("popover", null)
+  })
+
+  createEffect(() => {
+    if (!props.modelSelectorOpen) return
+    if (store.mode === "shell") setStore("mode", "normal")
+    if (providers.paid().length > 0) return
+    props.onModelSelectorOpenChange?.(false)
+    dialog.show(() => <DialogSelectModelUnpaid />)
   })
 
   // Safety: reset composing state on focus change to prevent stuck state
@@ -1061,6 +1080,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     keybind={command.keybind("model.choose")}
                   >
                     <ModelSelectorPopover
+                      open={props.modelSelectorOpen}
+                      onOpenChange={handleModelSelectorOpenChange}
                       triggerAs={Button}
                       triggerProps={{ variant: "ghost", class: "min-w-0 max-w-[240px]" }}
                     >
