@@ -201,6 +201,7 @@ export type AssistantMessage = {
       write: number
     }
   }
+  variant?: string
   finish?: string
 }
 
@@ -1666,6 +1667,10 @@ export type Config = {
      * Additional paths to skill folders
      */
     paths?: Array<string>
+    /**
+     * URLs to fetch skills from (e.g., https://example.com/.well-known/skills/)
+     */
+    urls?: Array<string>
   }
   watcher?: {
     ignore?: Array<string>
