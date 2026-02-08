@@ -116,7 +116,10 @@ function TextBody(props: { title: string; description?: string; icon?: string })
   )
 }
 
-export function PermissionPrompt(props: { request: PermissionRequest }) {
+export function PermissionPrompt(props: {
+  request: PermissionRequest
+  onExpandedChange?: (expanded: boolean) => void
+}) {
   const sdk = useSDK()
   const sync = useSync()
   const [store, setStore] = createStore({
@@ -267,6 +270,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
               options={{ once: "Allow once", always: "Allow always", reject: "Reject" }}
               escapeKey="reject"
               fullscreen
+              onExpandedChange={props.onExpandedChange}
               onSelect={(option) => {
                 if (option === "always") {
                   setStore("stage", "always")
@@ -377,6 +381,7 @@ function Prompt<const T extends Record<string, string>>(props: {
   escapeKey?: keyof T
   fullscreen?: boolean
   onSelect: (option: keyof T) => void
+  onExpandedChange?: (expanded: boolean) => void
 }) {
   const { theme } = useTheme()
   const keybind = useKeybind()
@@ -420,7 +425,9 @@ function Prompt<const T extends Record<string, string>>(props: {
     if (props.fullscreen && diffKey && Keybind.match(diffKey, keybind.parse(evt))) {
       evt.preventDefault()
       evt.stopPropagation()
-      setStore("expanded", (v) => !v)
+      const next = !store.expanded
+      setStore("expanded", next)
+      props.onExpandedChange?.(next)
     }
   })
 
