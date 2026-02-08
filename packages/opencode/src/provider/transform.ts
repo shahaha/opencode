@@ -752,16 +752,17 @@ export namespace ProviderTransform {
       // For Databricks Gemini models, strip $schema and resolve $ref references
       // Gemini API rejects tool schemas containing $schema field
       if (model.id.includes("gemini")) {
-        const sanitizeForGemini = (obj: any, defs?: Record<string, any>): any => {
+        const sanitizeForGemini = (obj: any, defs?: Record<string, any>, resolving?: Set<string>): any => {
           if (obj === null || typeof obj !== "object") {
             return obj
           }
 
           if (Array.isArray(obj)) {
-            return obj.map((item) => sanitizeForGemini(item, defs))
+            return obj.map((item) => sanitizeForGemini(item, defs, resolving))
           }
 
           const result: any = {}
+          const seen = resolving ?? new Set<string>()
 
           // Collect $defs/definitions for reference resolution
           const definitions = obj.$defs ?? obj.definitions ?? defs
@@ -775,17 +776,24 @@ export namespace ProviderTransform {
             // Resolve $ref references inline
             if (key === "$ref" && typeof value === "string" && definitions) {
               const refPath = value.replace(/^#\/(\$defs|definitions)\//, "")
+              // Detect circular references
+              if (seen.has(refPath)) {
+                Object.assign(result, { type: "object" })
+                continue
+              }
               const resolved = definitions[refPath]
               if (resolved) {
+                seen.add(refPath)
                 // Merge resolved reference into result (without the $ref key)
-                const sanitized = sanitizeForGemini(resolved, definitions)
+                const sanitized = sanitizeForGemini(resolved, definitions, seen)
                 Object.assign(result, sanitized)
+                seen.delete(refPath)
                 continue
               }
             }
 
             if (typeof value === "object" && value !== null) {
-              result[key] = sanitizeForGemini(value, definitions)
+              result[key] = sanitizeForGemini(value, definitions, seen)
             } else {
               result[key] = value
             }
