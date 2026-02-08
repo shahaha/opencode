@@ -11,6 +11,7 @@ import { Identifier } from "../id/id"
 import { Installation } from "../installation"
 
 import { Storage } from "../storage/storage"
+import { Lock } from "../util/lock"
 import { Log } from "../util/log"
 import { MessageV2 } from "./message-v2"
 import { Instance } from "../project/instance"
@@ -352,6 +353,8 @@ export namespace Session {
 
   export const remove = fn(Identifier.schema("session"), async (sessionID) => {
     const project = Instance.project
+    const lockKey = `session-remove-${sessionID}`
+    using _lock = await Lock.write(lockKey)
     try {
       const session = await get(sessionID)
       for (const child of await children(sessionID)) {
