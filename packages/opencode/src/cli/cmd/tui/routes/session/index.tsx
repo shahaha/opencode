@@ -149,6 +149,7 @@ export function Session() {
   const [showDetails, setShowDetails] = kv.signal("tool_details_visibility", true)
   const [showAssistantMetadata, setShowAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
   const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", false)
+  const [sidebarOverlayEnabled, setSidebarOverlayEnabled] = kv.signal("sidebar_overlay", true)
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
   const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
 
@@ -159,8 +160,12 @@ export function Session() {
     if (sidebar() === "auto" && wide()) return true
     return false
   })
+  const sidebarOverlay = createMemo(() => {
+    if (!sidebarOverlayEnabled()) return false
+    return sidebarVisible() && !wide()
+  })
   const showTimestamps = createMemo(() => timestamps() === "show")
-  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? 42 : 0) - 4)
+  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() && !sidebarOverlay() ? 42 : 0) - 4)
 
   const scrollAcceleration = createMemo(() => {
     const tui = sync.data.config.tui
@@ -958,7 +963,7 @@ export function Session() {
       <box flexDirection="row">
         <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
           <Show when={session()}>
-            <Show when={!sidebarVisible() || !wide()}>
+            <Show when={!sidebarVisible() || sidebarOverlay()}>
               <Header />
             </Show>
             <scrollbox
@@ -1107,10 +1112,10 @@ export function Session() {
         </box>
         <Show when={sidebarVisible()}>
           <Switch>
-            <Match when={wide()}>
+            <Match when={!sidebarOverlay()}>
               <Sidebar sessionID={route.sessionID} />
             </Match>
-            <Match when={!wide()}>
+            <Match when={sidebarOverlay()}>
               <box
                 position="absolute"
                 top={0}
