@@ -517,7 +517,14 @@ export function Prompt(props: PromptProps) {
     if (autocomplete?.visible) return
     if (!store.prompt.input) return
     const trimmed = store.prompt.input.trim()
-    if (trimmed === "exit" || trimmed === "quit" || trimmed === ":q") {
+    if (
+      trimmed === "exit" ||
+      trimmed === "quit" ||
+      trimmed === ":q" ||
+      trimmed === ":q!" ||
+      trimmed === ":qa" ||
+      trimmed === ":qa!"
+    ) {
       exit()
       return
     }
