@@ -10,6 +10,13 @@ export namespace Keybind {
     leader: boolean // our custom field
   }
 
+  const normalizeKey = (key: ParsedKey): ParsedKey => {
+    if (key.name === "\x00") return { ...key, name: "space", ctrl: true }
+    if (key.name === "\x1F") return { ...key, name: "_", ctrl: true }
+    if (key.name === " ") return { ...key, name: "space" }
+    return key
+  }
+
   export function match(a: Info | undefined, b: Info): boolean {
     if (!a) return false
     const normalizedA = { ...a, super: a.super ?? false }
@@ -22,12 +29,13 @@ export namespace Keybind {
    * This helper ensures all required fields are present and avoids manual object creation.
    */
   export function fromParsedKey(key: ParsedKey, leader = false): Info {
+    const normalized = normalizeKey(key)
     return {
-      name: key.name,
-      ctrl: key.ctrl,
-      meta: key.meta,
-      shift: key.shift,
-      super: key.super ?? false,
+      name: normalized.name ?? "",
+      ctrl: normalized.ctrl,
+      meta: normalized.meta,
+      shift: normalized.shift,
+      super: normalized.super ?? false,
       leader,
     }
   }
@@ -40,9 +48,10 @@ export namespace Keybind {
     if (info.meta) parts.push("alt")
     if (info.super) parts.push("super")
     if (info.shift) parts.push("shift")
-    if (info.name) {
-      if (info.name === "delete") parts.push("del")
-      else parts.push(info.name)
+    const name = info.name === " " ? "space" : info.name
+    if (name) {
+      if (name === "delete") parts.push("del")
+      if (name !== "delete") parts.push(name)
     }
 
     let result = parts.join("+")
