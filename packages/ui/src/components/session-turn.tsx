@@ -86,6 +86,7 @@ function computeStatusFromPart(part: PartType | undefined, t: Translator): strin
   if (part.type === "tool") {
     switch (part.tool) {
       case "task":
+      case "delegate_task":
         return t("ui.sessionTurn.status.delegating")
       case "todowrite":
       case "todoread":
@@ -388,7 +389,7 @@ export function SessionTurn(
 
         if (
           part.type === "tool" &&
-          part.tool === "task" &&
+          (part.tool === "task" || part.tool === "delegate_task") &&
           part.state &&
           "metadata" in part.state &&
           part.state.metadata?.sessionId &&
