@@ -128,18 +128,18 @@ export const dict = {
   "provider.connect.opencodeZen.visit.prefix": "Visitez ",
   "provider.connect.opencodeZen.visit.link": "opencode.ai/zen",
   "provider.connect.opencodeZen.visit.suffix": " pour récupérer votre clé API.",
-  "provider.connect.oauth.code.visit.prefix": "Visitez ",
-  "provider.connect.oauth.code.visit.link": "ce lien",
-  "provider.connect.oauth.code.visit.suffix":
-    " pour récupérer votre code d'autorisation afin de connecter votre compte et utiliser les modèles {{provider}} dans OpenCode.",
+  "provider.connect.oauth.code.visit.description":
+    "Copiez et visitez le lien ci-dessous pour récupérer votre code d'autorisation et utiliser les modèles {{provider}} dans OpenCode.",
+  "provider.connect.oauth.url.label": "URL d'autorisation",
+  "provider.connect.oauth.url.open": "Ouvrir dans le navigateur",
+  "provider.connect.oauth.url.copied": "URL copiée dans le presse-papiers",
+  "provider.connect.oauth.url.copy": "Copier l'URL",
   "provider.connect.oauth.code.label": "Code d'autorisation {{method}}",
   "provider.connect.oauth.code.placeholder": "Code d'autorisation",
   "provider.connect.oauth.code.required": "Le code d'autorisation est requis",
   "provider.connect.oauth.code.invalid": "Code d'autorisation invalide",
-  "provider.connect.oauth.auto.visit.prefix": "Visitez ",
-  "provider.connect.oauth.auto.visit.link": "ce lien",
-  "provider.connect.oauth.auto.visit.suffix":
-    " et entrez le code ci-dessous pour connecter votre compte et utiliser les modèles {{provider}} dans OpenCode.",
+  "provider.connect.oauth.auto.visit.description":
+    "Copiez et visitez le lien ci-dessous, puis entrez le code pour utiliser les modèles {{provider}} dans OpenCode.",
   "provider.connect.oauth.auto.confirmationCode": "Code de confirmation",
   "provider.connect.toast.connected.title": "{{provider}} connecté",
   "provider.connect.toast.connected.description": "Les modèles {{provider}} sont maintenant disponibles.",

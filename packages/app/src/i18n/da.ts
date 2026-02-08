@@ -128,18 +128,18 @@ export const dict = {
   "provider.connect.opencodeZen.visit.prefix": "Besøg ",
   "provider.connect.opencodeZen.visit.link": "opencode.ai/zen",
   "provider.connect.opencodeZen.visit.suffix": " for at hente din API-nøgle.",
-  "provider.connect.oauth.code.visit.prefix": "Besøg ",
-  "provider.connect.oauth.code.visit.link": "dette link",
-  "provider.connect.oauth.code.visit.suffix":
-    " for at hente din godkendelseskode for at forbinde din konto og bruge {{provider}} modeller i OpenCode.",
+  "provider.connect.oauth.code.visit.description":
+    "Kopier og besøg linket nedenfor for at hente din godkendelseskode og bruge {{provider}} modeller i OpenCode.",
+  "provider.connect.oauth.url.label": "Godkendelses-URL",
+  "provider.connect.oauth.url.open": "Åbn i browser",
+  "provider.connect.oauth.url.copied": "URL kopieret til udklipsholder",
+  "provider.connect.oauth.url.copy": "Kopier URL",
   "provider.connect.oauth.code.label": "{{method}} godkendelseskode",
   "provider.connect.oauth.code.placeholder": "Godkendelseskode",
   "provider.connect.oauth.code.required": "Godkendelseskode er påkrævet",
   "provider.connect.oauth.code.invalid": "Ugyldig godkendelseskode",
-  "provider.connect.oauth.auto.visit.prefix": "Besøg ",
-  "provider.connect.oauth.auto.visit.link": "dette link",
-  "provider.connect.oauth.auto.visit.suffix":
-    " og indtast koden nedenfor for at forbinde din konto og bruge {{provider}} modeller i OpenCode.",
+  "provider.connect.oauth.auto.visit.description":
+    "Kopier og besøg linket nedenfor, derefter indtast koden for at bruge {{provider}} modeller i OpenCode.",
   "provider.connect.oauth.auto.confirmationCode": "Bekræftelseskode",
   "provider.connect.toast.connected.title": "{{provider}} forbundet",
   "provider.connect.toast.connected.description": "{{provider}} modeller er nu tilgængelige.",

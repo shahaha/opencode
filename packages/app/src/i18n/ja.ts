@@ -127,18 +127,18 @@ export const dict = {
   "provider.connect.opencodeZen.visit.prefix": " ",
   "provider.connect.opencodeZen.visit.link": "opencode.ai/zen",
   "provider.connect.opencodeZen.visit.suffix": " にアクセスしてAPIキーを取得してください。",
-  "provider.connect.oauth.code.visit.prefix": " ",
-  "provider.connect.oauth.code.visit.link": "このリンク",
-  "provider.connect.oauth.code.visit.suffix":
-    " にアクセスして認証コードを取得し、アカウントを接続してOpenCodeで{{provider}}モデルを使用してください。",
+  "provider.connect.oauth.code.visit.description":
+    "下記のリンクをコピーしてアクセスし、認証コードを取得してOpenCodeで{{provider}}モデルを使用してください。",
+  "provider.connect.oauth.url.label": "認証URL",
+  "provider.connect.oauth.url.open": "ブラウザで開く",
+  "provider.connect.oauth.url.copied": "URLをクリップボードにコピーしました",
+  "provider.connect.oauth.url.copy": "URLをコピー",
   "provider.connect.oauth.code.label": "{{method}} 認証コード",
   "provider.connect.oauth.code.placeholder": "認証コード",
   "provider.connect.oauth.code.required": "認証コードが必要です",
   "provider.connect.oauth.code.invalid": "無効な認証コード",
-  "provider.connect.oauth.auto.visit.prefix": " ",
-  "provider.connect.oauth.auto.visit.link": "このリンク",
-  "provider.connect.oauth.auto.visit.suffix":
-    " にアクセスし、以下のコードを入力してアカウントを接続し、OpenCodeで{{provider}}モデルを使用してください。",
+  "provider.connect.oauth.auto.visit.description":
+    "下記のリンクをコピーしてアクセスし、コードを入力してOpenCodeで{{provider}}モデルを使用してください。",
   "provider.connect.oauth.auto.confirmationCode": "確認コード",
   "provider.connect.toast.connected.title": "{{provider}}が接続されました",
   "provider.connect.toast.connected.description": "{{provider}}モデルが使用可能になりました。",

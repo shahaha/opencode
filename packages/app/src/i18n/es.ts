@@ -128,18 +128,18 @@ export const dict = {
   "provider.connect.opencodeZen.visit.prefix": "Visita ",
   "provider.connect.opencodeZen.visit.link": "opencode.ai/zen",
   "provider.connect.opencodeZen.visit.suffix": " para obtener tu clave API.",
-  "provider.connect.oauth.code.visit.prefix": "Visita ",
-  "provider.connect.oauth.code.visit.link": "este enlace",
-  "provider.connect.oauth.code.visit.suffix":
-    " para obtener tu código de autorización para conectar tu cuenta y usar modelos de {{provider}} en OpenCode.",
+  "provider.connect.oauth.code.visit.description":
+    "Copia y visita el enlace a continuación para obtener tu código de autorización y usar modelos de {{provider}} en OpenCode.",
+  "provider.connect.oauth.url.label": "URL de autorización",
+  "provider.connect.oauth.url.open": "Abrir en el navegador",
+  "provider.connect.oauth.url.copied": "URL copiada al portapapeles",
+  "provider.connect.oauth.url.copy": "Copiar URL",
   "provider.connect.oauth.code.label": "Código de autorización {{method}}",
   "provider.connect.oauth.code.placeholder": "Código de autorización",
   "provider.connect.oauth.code.required": "El código de autorización es obligatorio",
   "provider.connect.oauth.code.invalid": "Código de autorización inválido",
-  "provider.connect.oauth.auto.visit.prefix": "Visita ",
-  "provider.connect.oauth.auto.visit.link": "este enlace",
-  "provider.connect.oauth.auto.visit.suffix":
-    " e introduce el código a continuación para conectar tu cuenta y usar modelos de {{provider}} en OpenCode.",
+  "provider.connect.oauth.auto.visit.description":
+    "Copia y visita el enlace a continuación, luego introduce el código para usar modelos de {{provider}} en OpenCode.",
   "provider.connect.oauth.auto.confirmationCode": "Código de confirmación",
   "provider.connect.toast.connected.title": "{{provider}} conectado",
   "provider.connect.toast.connected.description": "Los modelos de {{provider}} ahora están disponibles para usar.",
