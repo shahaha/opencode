@@ -2800,3 +2800,219 @@ describe("ProviderTransform.schema - Databricks Gemini $schema stripping", () =>
     expect(result.properties.name.description).toBe("The name")
   })
 })
+
+describe("ProviderTransform.schema - Databricks Gemini advanced $ref and $schema handling", () => {
+  const databricksGeminiModel = {
+    id: "databricks-gemini-3-pro",
+    providerID: "databricks",
+    api: {
+      id: "databricks-gemini-3-pro",
+      url: "https://workspace.cloud.databricks.com/serving-endpoints",
+      npm: "@ai-sdk/openai-compatible",
+    },
+    name: "Gemini 3 Pro (Databricks)",
+    capabilities: {
+      temperature: true,
+      reasoning: true,
+      attachment: true,
+      toolcall: true,
+      input: { text: true, audio: true, image: true, video: true, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+      interleaved: false,
+    },
+    cost: { input: 2, output: 12, cache: { read: 0.2, write: 0 } },
+    limit: { context: 1000000, output: 65536 },
+    status: "active",
+    options: {},
+    headers: {},
+  } as any
+
+  const openaiModel = {
+    id: "gpt-5",
+    providerID: "openai",
+    api: {
+      id: "gpt-5",
+      url: "https://api.openai.com",
+      npm: "@ai-sdk/openai",
+    },
+    name: "GPT-5",
+    capabilities: {
+      temperature: true,
+      reasoning: true,
+      attachment: true,
+      toolcall: true,
+      input: { text: true, audio: false, image: true, video: false, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+      interleaved: false,
+    },
+    cost: { input: 1.25, output: 10, cache: { read: 0.125, write: 0 } },
+    limit: { context: 400000, output: 128000 },
+    status: "active",
+    options: {},
+    headers: {},
+  } as any
+
+  test("strips $schema from MCP tool schemas with deeply nested properties", () => {
+    // MCP tools include $schema at root - Gemini rejects this
+    const schema = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        options: {
+          type: "object",
+          properties: {
+            nested: {
+              type: "object",
+              $schema: "https://json-schema.org/draft/2020-12/schema",
+              properties: {
+                deep: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(databricksGeminiModel, schema) as any
+
+    expect(result.$schema).toBeUndefined()
+    // Nested $schema should also be stripped
+    expect(result.properties.options.properties.nested.$schema).toBeUndefined()
+    expect(result.properties.options.properties.nested.type).toBe("object")
+    expect(result.properties.options.properties.nested.properties.deep.type).toBe("string")
+  })
+
+  test("handles circular $ref without infinite loop", () => {
+    // TreeNode references itself - must not infinite loop
+    const schema = {
+      type: "object",
+      $defs: {
+        TreeNode: {
+          type: "object",
+          properties: {
+            value: { type: "string" },
+            children: {
+              type: "array",
+              items: { $ref: "#/$defs/TreeNode" },
+            },
+          },
+        },
+      },
+      properties: {
+        root: { $ref: "#/$defs/TreeNode" },
+      },
+    } as any
+
+    // Should not hang - must complete within reasonable time
+    const result = ProviderTransform.schema(databricksGeminiModel, schema) as any
+
+    // Root should be resolved
+    expect(result.properties.root.type).toBe("object")
+    expect(result.properties.root.properties.value.type).toBe("string")
+    // Circular ref should be replaced with {type: "object"} fallback
+    expect(result.properties.root.properties.children.type).toBe("array")
+    expect(result.properties.root.properties.children.items).toBeDefined()
+    // Should not have $ref remaining
+    expect(result.properties.root.properties.children.items.$ref).toBeUndefined()
+  })
+
+  test("expands $ref with definitions (legacy format)", () => {
+    const schema = {
+      type: "object",
+      definitions: {
+        Color: {
+          type: "string",
+          enum: ["red", "green", "blue"],
+        },
+      },
+      properties: {
+        favoriteColor: { $ref: "#/definitions/Color" },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(databricksGeminiModel, schema) as any
+
+    expect(result.definitions).toBeUndefined()
+    expect(result.properties.favoriteColor.type).toBe("string")
+    expect(result.properties.favoriteColor.enum).toEqual(["red", "green", "blue"])
+    expect(result.properties.favoriteColor.$ref).toBeUndefined()
+  })
+
+  test("preserves description alongside $ref", () => {
+    const schema = {
+      type: "object",
+      $defs: {
+        Address: {
+          type: "object",
+          properties: {
+            street: { type: "string" },
+          },
+        },
+      },
+      properties: {
+        home: {
+          $ref: "#/$defs/Address",
+          description: "Home address override",
+        },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(databricksGeminiModel, schema) as any
+
+    // The resolved ref should be inlined
+    expect(result.properties.home.type).toBe("object")
+    expect(result.properties.home.properties.street.type).toBe("string")
+    expect(result.properties.home.$ref).toBeUndefined()
+    // The local description should be preserved (overrides resolved ref)
+    expect(result.properties.home.description).toBe("Home address override")
+  })
+
+  test("does not expand $ref for non-Databricks providers", () => {
+    const schema = {
+      type: "object",
+      $defs: {
+        Item: { type: "string" },
+      },
+      properties: {
+        name: { $ref: "#/$defs/Item" },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(openaiModel, schema) as any
+
+    // OpenAI provider should keep $ref as-is
+    expect(result.properties.name.$ref).toBe("#/$defs/Item")
+    expect(result.$defs).toBeDefined()
+  })
+
+  test("expands $ref in array items", () => {
+    const schema = {
+      type: "object",
+      $defs: {
+        QuestionOption: {
+          type: "object",
+          properties: {
+            label: { type: "string" },
+            description: { type: "string" },
+          },
+          required: ["label", "description"],
+        },
+      },
+      properties: {
+        options: {
+          type: "array",
+          items: { $ref: "#/$defs/QuestionOption" },
+        },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(databricksGeminiModel, schema) as any
+
+    expect(result.$defs).toBeUndefined()
+    expect(result.properties.options.type).toBe("array")
+    expect(result.properties.options.items.type).toBe("object")
+    expect(result.properties.options.items.properties.label.type).toBe("string")
+    expect(result.properties.options.items.$ref).toBeUndefined()
+  })
+})

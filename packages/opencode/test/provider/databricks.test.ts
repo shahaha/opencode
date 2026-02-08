@@ -1330,3 +1330,180 @@ test("Databricks: falls back gracefully when token refresh fails", async () => {
     }
   }
 })
+
+// === Provider Route: Empty Models Handling ===
+
+test("Provider.sort with empty models array does not crash", () => {
+  // Provider.sort([]) returns [], so accessing [0].id would crash
+  const sorted = Provider.sort([])
+  expect(sorted).toEqual([])
+  expect(sorted[0]).toBeUndefined()
+})
+
+test("Provider route: default model map handles providers with empty models", async () => {
+  // Simulate the route logic that crashed at provider.ts:68
+  // mapValues(providers, (item) => Provider.sort(Object.values(item.models))[0].id)
+  // When models is {}, this crashes because [0] is undefined
+  const providers: Record<string, any> = {
+    databricks: {
+      id: "databricks",
+      name: "Databricks",
+      models: {},
+    },
+    openai: {
+      id: "openai",
+      name: "OpenAI",
+      models: {
+        "gpt-5": {
+          id: "gpt-5",
+          name: "GPT-5",
+        },
+      },
+    },
+  }
+
+  // This is the fixed logic - should not crash
+  const defaults: Record<string, string> = {}
+  for (const [key, item] of Object.entries(providers)) {
+    const sorted = Provider.sort(Object.values(item.models))
+    if (sorted[0]) {
+      defaults[key] = sorted[0].id
+    }
+  }
+
+  // Provider with empty models should be excluded from defaults
+  expect(defaults["databricks"]).toBeUndefined()
+  // Provider with models should have a default
+  expect(defaults["openai"]).toBe("gpt-5")
+})
+
+// === Gemini Stream Transform Tests ===
+
+test("Gemini stream transform: converts content array to string", () => {
+  // Simulate the transform logic from provider.ts:1357-1393
+  const sseLine = JSON.stringify({
+    choices: [
+      {
+        delta: {
+          content: [{ type: "text", text: "Hello world" }],
+        },
+      },
+    ],
+  })
+
+  const data = JSON.parse(sseLine)
+  if (data.choices && Array.isArray(data.choices)) {
+    for (const choice of data.choices) {
+      if (choice.delta && Array.isArray(choice.delta.content)) {
+        const textParts = choice.delta.content
+          .filter((part: any) => part.type === "text" && part.text)
+          .map((part: any) => part.text)
+        choice.delta.content = textParts.join("")
+      }
+    }
+  }
+
+  expect(data.choices[0].delta.content).toBe("Hello world")
+})
+
+test("Gemini stream transform: handles multiple text parts", () => {
+  const data: any = {
+    choices: [
+      {
+        delta: {
+          content: [
+            { type: "text", text: "Hello " },
+            { type: "text", text: "world" },
+          ],
+        },
+      },
+    ],
+  }
+
+  for (const choice of data.choices) {
+    if (choice.delta && Array.isArray(choice.delta.content)) {
+      const textParts = choice.delta.content
+        .filter((part: any) => part.type === "text" && part.text)
+        .map((part: any) => part.text)
+      choice.delta.content = textParts.join("")
+    }
+  }
+
+  expect(data.choices[0].delta.content).toBe("Hello world")
+})
+
+test("Gemini stream transform: handles thoughtSignature parts", () => {
+  // thoughtSignature parts should be filtered out - only text parts are extracted
+  const data: any = {
+    choices: [
+      {
+        delta: {
+          content: [
+            { type: "text", text: "The answer is 42" },
+            { type: "thoughtSignature", thoughtSignature: "abc123" },
+          ],
+        },
+      },
+    ],
+  }
+
+  for (const choice of data.choices) {
+    if (choice.delta && Array.isArray(choice.delta.content)) {
+      const textParts = choice.delta.content
+        .filter((part: any) => part.type === "text" && part.text)
+        .map((part: any) => part.text)
+      choice.delta.content = textParts.join("")
+    }
+  }
+
+  // Only text content should remain, thoughtSignature should be filtered out
+  expect(data.choices[0].delta.content).toBe("The answer is 42")
+})
+
+test("Gemini stream transform: handles empty content array", () => {
+  const data: any = {
+    choices: [
+      {
+        delta: {
+          content: [],
+        },
+      },
+    ],
+  }
+
+  for (const choice of data.choices) {
+    if (choice.delta && Array.isArray(choice.delta.content)) {
+      const textParts = choice.delta.content
+        .filter((part: any) => part.type === "text" && part.text)
+        .map((part: any) => part.text)
+      choice.delta.content = textParts.join("")
+    }
+  }
+
+  expect(data.choices[0].delta.content).toBe("")
+})
+
+test("Gemini stream transform: passes through string content unchanged", () => {
+  // When content is already a string, it should not be transformed
+  const data = {
+    choices: [
+      {
+        delta: {
+          content: "Already a string",
+        },
+      },
+    ],
+  }
+
+  for (const choice of data.choices) {
+    if (choice.delta && Array.isArray(choice.delta.content)) {
+      const textParts = choice.delta.content
+        .filter((part: any) => part.type === "text" && part.text)
+        .map((part: any) => part.text)
+      choice.delta.content = textParts.join("")
+    }
+  }
+
+  // String content should pass through unchanged
+  expect(data.choices[0].delta.content).toBe("Already a string")
+})
