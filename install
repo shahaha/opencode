@@ -231,6 +231,48 @@ unbuffered_sed() {
     fi
 }
 
+# Check CPU capabilities before proceeding (Linux x64 only)
+if [ "$arch" = "x64" ] && [ "$os" = "linux" ]; then
+  cpu_check_failed=false
+  if [ -f /proc/cpuinfo ]; then
+    cpu_flags_line=$(grep "^flags" /proc/cpuinfo | head -n 1 2>/dev/null || echo "")
+
+    if [ -n "$cpu_flags_line" ]; then
+      cpu_flags=$(echo "$cpu_flags_line" | cut -d: -f2- 2>/dev/null || echo "")
+
+      if [ -n "$cpu_flags" ]; then
+        cpu_flags=$(LC_ALL=C echo "$cpu_flags" | tr '[:upper:]' '[:lower:]')
+
+        missing_flags=""
+        # Check for SSSE3 (includes SSE3) or SSE3
+        case "$cpu_flags" in
+          *ssse3*|*sse3*) ;;
+          *) missing_flags=" sse3/ssse3" ;;
+        esac
+
+        if [ -n "$missing_flags" ]; then
+          print_message error "CPU not supported"
+          print_message error "Missing required instruction sets:$missing_flags"
+          exit 1
+        fi
+      else
+        print_message warning "Could not parse CPU flags from /proc/cpuinfo. Proceeding with installation..."
+        cpu_check_failed=true
+      fi
+    else
+      print_message warning "No CPU flags found in /proc/cpuinfo. Proceeding with installation..."
+      cpu_check_failed=true
+    fi
+  else
+    print_message warning "Could not read /proc/cpuinfo. Proceeding with installation..."
+    cpu_check_failed=true
+  fi
+
+  if [ "$cpu_check_failed" = true ]; then
+    print_message warning "Note: This may result in compatibility issues on older CPUs"
+  fi
+fi
+
 print_progress() {
     local bytes="$1"
     local length="$2"
