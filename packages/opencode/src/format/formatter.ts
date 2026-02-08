@@ -364,3 +364,12 @@ export const ormolu: Info = {
     return Bun.which("ormolu") !== null
   },
 }
+
+export const swiftformat: Info = {
+  name: "swift-format",
+  command: ["swift-format", "format", "-i", "$FILE"],
+  extensions: [".swift"],
+  async enabled() {
+    return Bun.which("swift-format") !== null
+  },
+}
