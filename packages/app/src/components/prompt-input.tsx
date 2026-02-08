@@ -2,6 +2,7 @@ import { useFilteredList } from "@opencode-ai/ui/hooks"
 import { createEffect, on, Component, Show, For, onCleanup, Switch, Match, createMemo, createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createFocusSignal } from "@solid-primitives/active-element"
+import { createMediaQuery } from "@solid-primitives/media"
 import { useLocal } from "@/context/local"
 import { useFile } from "@/context/file"
 import {
@@ -96,6 +97,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const providers = useProviders()
   const command = useCommand()
   const permission = usePermission()
+  const isTouchDevice = createMemo(() => {
+    const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches
+    const hasTouchSupport = "ontouchstart" in window || navigator.maxTouchPoints > 0
+    return isCoarsePointer || hasTouchSupport
+  })
   const language = useLanguage()
   let editorRef!: HTMLDivElement
   let fileInputRef!: HTMLInputElement
@@ -916,6 +922,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
     // Note: Shift+Enter is handled earlier, before IME check
     if (event.key === "Enter" && !event.shiftKey) {
+      if (isTouchDevice()) {
+        addPart({ type: "text", content: "\n", start: 0, end: 0 })
+        event.preventDefault()
+        return
+      }
       handleSubmit(event)
     }
     if (event.key === "Escape") {
