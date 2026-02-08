@@ -198,6 +198,7 @@ function App() {
   const sync = useSync()
   const exit = useExit()
   const promptRef = usePromptRef()
+  const [consoleVisible, setConsoleVisible] = createSignal(false)
 
   // Wire up console copy-to-clipboard via opentui's onCopySelection callback
   renderer.console.onCopySelection = async (text: string) => {
@@ -538,11 +539,12 @@ function App() {
       },
     },
     {
-      title: "Toggle console",
+      title: consoleVisible() ? "Hide console" : "Show console",
       category: "System",
       value: "app.console",
       onSelect: (dialog) => {
         renderer.console.toggle()
+        setConsoleVisible((prev) => !prev)
         dialog.clear()
       },
     },
