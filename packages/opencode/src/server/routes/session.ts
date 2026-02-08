@@ -355,6 +355,38 @@ export const SessionRoutes = lazy(() =>
       },
     )
     .post(
+      "/:sessionID/branch",
+      describeRoute({
+        summary: "Branch session",
+        description: "Create a new child session with compacted context from the current session.",
+        operationId: "session.branch",
+        responses: {
+          200: {
+            description: "200",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: Session.branch.schema.shape.sourceSessionID,
+        }),
+      ),
+      validator("json", Session.branch.schema.omit({ sourceSessionID: true })),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const body = c.req.valid("json")
+        const result = await Session.branch({ ...body, sourceSessionID: sessionID })
+        SessionPrompt.loop(result.id)
+        return c.json(result)
+      },
+    )
+    .post(
       "/:sessionID/abort",
       describeRoute({
         summary: "Abort session",
