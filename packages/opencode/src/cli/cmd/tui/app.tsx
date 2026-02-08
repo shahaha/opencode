@@ -1,6 +1,6 @@
 import { render, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
-import { TextAttributes } from "@opentui/core"
+import { TextAttributes, type MouseEvent } from "@opentui/core"
 import { RouteProvider, useRoute } from "@tui/context/route"
 import { Switch, Match, createEffect, untrack, ErrorBoundary, createSignal, onMount, batch, Show, on } from "solid-js"
 import { Installation } from "@/installation"
@@ -687,11 +687,53 @@ function App() {
     })
   })
 
+  // Double-click word selection
+  let click = { time: 0, x: -1, y: -1 }
+
+  const handleMouseDown = (evt: MouseEvent) => {
+    if (Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
+
+    const now = Date.now()
+    const isDouble = now - click.time < 400 && evt.x === click.x && evt.y === click.y
+
+    click = { time: now, x: evt.x, y: evt.y }
+
+    if (!isDouble || !evt.target) return
+    click.time = 0 // Reset to prevent triple-click
+
+    // Find word boundaries from render buffer
+    const buffer = renderer.currentRenderBuffer
+    const width = buffer.width
+    const chars = buffer.buffers.char
+    const row = evt.y * width
+    const idx = row + evt.x
+
+    if (idx < 0 || idx >= chars.length) return
+
+    const isWordChar = (i: number) => {
+      const c = chars[i]
+      if (c === 0 || c === 32) return false
+      return /[\w\-]/.test(String.fromCodePoint(c))
+    }
+
+    if (!isWordChar(idx)) return
+
+    let start = evt.x
+    while (start > 0 && isWordChar(row + start - 1)) start--
+
+    let end = evt.x
+    while (end < width - 1 && isWordChar(row + end + 1)) end++
+
+    renderer.startSelection(evt.target, start, evt.y)
+    renderer.updateSelection(evt.target, end + 1, evt.y)
+  }
+
   return (
     <box
       width={dimensions().width}
       height={dimensions().height}
       backgroundColor={theme.background}
+      onMouseDown={handleMouseDown}
       onMouseUp={async () => {
         if (Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) {
           renderer.clearSelection()
