@@ -65,7 +65,14 @@ export const ProviderRoutes = lazy(() =>
         )
         return c.json({
           all: Object.values(providers),
-          default: mapValues(providers, (item) => Provider.sort(Object.values(item.models))[0].id),
+          default: Object.fromEntries(
+            Object.entries(providers)
+              .map(([key, item]) => {
+                const sorted = Provider.sort(Object.values(item.models))
+                return sorted[0] ? [key, sorted[0].id] : undefined
+              })
+              .filter((entry): entry is [string, string] => entry !== undefined),
+          ),
           connected: Object.keys(connected),
         })
       },
