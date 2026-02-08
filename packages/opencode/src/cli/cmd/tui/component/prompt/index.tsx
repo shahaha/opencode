@@ -681,6 +681,14 @@ export function Prompt(props: PromptProps) {
   }
 
   async function pasteImage(file: { filename?: string; content: string; mime: string }) {
+    if (!local.model.parsed().input?.image) {
+      toast.show({
+        variant: "warning",
+        message: `${local.model.parsed().model} doesn't support image as input`,
+        duration: 3000,
+      })
+      return
+    }
     const currentOffset = input.visualCursor.offset
     const extmarkStart = currentOffset
     const count = store.prompt.parts.filter((x) => x.type === "file").length

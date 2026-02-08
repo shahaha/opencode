@@ -222,6 +222,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
               provider: "Connect a provider",
               model: "No provider selected",
               reasoning: false,
+              input: undefined,
             }
           }
           const provider = sync.data.provider.find((x) => x.id === value.providerID)
@@ -230,6 +231,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             provider: provider?.name ?? value.providerID,
             model: info?.name ?? value.modelID,
             reasoning: info?.capabilities?.reasoning ?? false,
+            input: info?.capabilities?.input,
           }
         }),
         cycle(direction: 1 | -1) {
