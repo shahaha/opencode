@@ -118,6 +118,14 @@ export const TuiThreadCommand = cmd({
       await client.call("reload", undefined)
     })
 
+    // Graceful shutdown on terminal closure or termination
+    const shutdown = async () => {
+      await client.call("shutdown", undefined).catch(() => {})
+      process.exit(0)
+    }
+    process.on("SIGHUP", shutdown)
+    process.on("SIGTERM", shutdown)
+
     const prompt = await iife(async () => {
       const piped = !process.stdin.isTTY ? await Bun.stdin.text() : undefined
       if (!args.prompt) return piped

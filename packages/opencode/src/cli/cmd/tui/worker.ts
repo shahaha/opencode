@@ -32,6 +32,25 @@ process.on("uncaughtException", (e) => {
   })
 })
 
+// Graceful shutdown on terminal closure or termination
+const workerExit = () => rpc.shutdown().finally(() => process.exit(0))
+process.on("SIGHUP", workerExit)
+process.on("SIGTERM", workerExit)
+
+// Detect parent death as safety net for uncatchable signals (e.g. SIGKILL)
+const ppid = process.ppid
+if (ppid > 1) {
+  const monitor = setInterval(() => {
+    try {
+      process.kill(ppid, 0)
+    } catch {
+      clearInterval(monitor)
+      workerExit()
+    }
+  }, 2000)
+  monitor.unref()
+}
+
 // Subscribe to global events and forward them via RPC
 GlobalBus.on("event", (event) => {
   Rpc.emit("global.event", event)
