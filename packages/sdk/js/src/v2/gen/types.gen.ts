@@ -3651,6 +3651,10 @@ export type SessionCommandResponses = {
     info: AssistantMessage
     parts: Array<Part>
   }
+  /**
+   * Command execution was prevented by a plugin
+   */
+  204: void
 }
 
 export type SessionCommandResponse = SessionCommandResponses[keyof SessionCommandResponses]

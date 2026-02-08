@@ -1758,6 +1758,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         : await lastModel(input.sessionID)
       : taskModel
 
+    let defaultPrevented = false
     await Plugin.trigger(
       "command.execute.before",
       {
@@ -1765,8 +1766,15 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         sessionID: input.sessionID,
         arguments: input.arguments,
       },
-      { parts },
+      {
+        parts: parts as any,
+        preventDefault() {
+          defaultPrevented = true
+        },
+      },
     )
+
+    if (defaultPrevented) return undefined
 
     const result = (await prompt({
       sessionID: input.sessionID,

@@ -584,7 +584,7 @@ export function Prompt(props: PromptProps) {
       const restOfInput = firstLineEnd === -1 ? "" : inputText.slice(firstLineEnd + 1)
       const args = firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
 
-      sdk.client.session.command({
+      const result = await sdk.client.session.command({
         sessionID,
         command: command.slice(1),
         arguments: args,
@@ -599,6 +599,8 @@ export function Prompt(props: PromptProps) {
             ...x,
           })),
       })
+      input.clear()
+      if (result.response.status === 204) return
     } else {
       sdk.client.session
         .prompt({
