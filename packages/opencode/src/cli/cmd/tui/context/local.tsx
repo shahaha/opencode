@@ -271,7 +271,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           if (!next) return
           setModelStore("model", agent.current().name, { ...next })
           const uniq = uniqueBy([next, ...modelStore.recent], (x) => `${x.providerID}/${x.modelID}`)
-          if (uniq.length > 10) uniq.pop()
+          const limit = sync.data.config.tui?.recent_models_count ?? 10
+          if (uniq.length > limit) uniq.pop()
           setModelStore(
             "recent",
             uniq.map((x) => ({ providerID: x.providerID, modelID: x.modelID })),
@@ -291,7 +292,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             setModelStore("model", agent.current().name, model)
             if (options?.recent) {
               const uniq = uniqueBy([model, ...modelStore.recent], (x) => `${x.providerID}/${x.modelID}`)
-              if (uniq.length > 10) uniq.pop()
+              const limit = sync.data.config.tui?.recent_models_count ?? 10
+              if (uniq.length > limit) uniq.pop()
               setModelStore(
                 "recent",
                 uniq.map((x) => ({ providerID: x.providerID, modelID: x.modelID })),

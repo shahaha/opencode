@@ -1641,6 +1641,10 @@ export type Config = {
      * Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column
      */
     diff_style?: "auto" | "stacked"
+    /**
+     * Number of recent models to store and display in model selection
+     */
+    recent_models_count?: number
   }
   server?: ServerConfig
   /**
