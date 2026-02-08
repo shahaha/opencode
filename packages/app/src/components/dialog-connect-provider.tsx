@@ -5,6 +5,7 @@ import { Dialog } from "@opencode-ai/ui/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import type { IconName } from "@opencode-ai/ui/icons/provider"
+import { Keybind } from "@opencode-ai/ui/keybind"
 import { List, type ListRef } from "@opencode-ai/ui/list"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { Spinner } from "@opencode-ai/ui/spinner"
@@ -118,6 +119,12 @@ export function DialogConnectProvider(props: { provider: string }) {
 
   let listRef: ListRef | undefined
   function handleKey(e: KeyboardEvent) {
+    if (e.key.toLowerCase() === "c" && store.authorization?.url) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      e.preventDefault()
+      copyAuthorizationUrl(store.authorization.url)
+      return
+    }
     if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
       return
     }
@@ -144,6 +151,23 @@ export function DialogConnectProvider(props: { provider: string }) {
       title: language.t("provider.connect.toast.connected.title", { provider: provider().name }),
       description: language.t("provider.connect.toast.connected.description", { provider: provider().name }),
     })
+  }
+
+  function copyAuthorizationUrl(url: string) {
+    navigator.clipboard
+      .writeText(url)
+      .then(() => {
+        showToast({
+          variant: "success",
+          title: language.t("session.share.copy.copied"),
+        })
+      })
+      .catch(() => {
+        showToast({
+          variant: "error",
+          title: language.t("toast.session.share.copyFailed.title"),
+        })
+      })
   }
 
   function goBack() {
@@ -358,10 +382,20 @@ export function DialogConnectProvider(props: { provider: string }) {
                       <div class="flex flex-col gap-6">
                         <div class="text-14-regular text-text-base">
                           {language.t("provider.connect.oauth.code.visit.prefix")}
-                          <Link href={store.authorization!.url}>
+                          <Link
+                            href={store.authorization!.url}
+                            onContextMenu={(event) => {
+                              event.preventDefault()
+                              copyAuthorizationUrl(store.authorization!.url)
+                            }}
+                          >
                             {language.t("provider.connect.oauth.code.visit.link")}
                           </Link>
                           {language.t("provider.connect.oauth.code.visit.suffix", { provider: provider().name })}
+                        </div>
+                        <div class="text-12-regular text-text-weak flex items-center gap-2">
+                          <Keybind>c</Keybind>
+                          <span>copy authorization link</span>
                         </div>
                         <form onSubmit={handleSubmit} class="flex flex-col items-start gap-4">
                           <TextField
@@ -426,10 +460,20 @@ export function DialogConnectProvider(props: { provider: string }) {
                       <div class="flex flex-col gap-6">
                         <div class="text-14-regular text-text-base">
                           {language.t("provider.connect.oauth.auto.visit.prefix")}
-                          <Link href={store.authorization!.url}>
+                          <Link
+                            href={store.authorization!.url}
+                            onContextMenu={(event) => {
+                              event.preventDefault()
+                              copyAuthorizationUrl(store.authorization!.url)
+                            }}
+                          >
                             {language.t("provider.connect.oauth.auto.visit.link")}
                           </Link>
                           {language.t("provider.connect.oauth.auto.visit.suffix", { provider: provider().name })}
+                        </div>
+                        <div class="text-12-regular text-text-weak flex items-center gap-2">
+                          <Keybind>c</Keybind>
+                          <span>copy authorization link</span>
                         </div>
                         <TextField
                           label={language.t("provider.connect.oauth.auto.confirmationCode")}
