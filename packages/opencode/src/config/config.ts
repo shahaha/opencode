@@ -1042,6 +1042,14 @@ export namespace Config {
         .array(z.string())
         .optional()
         .describe("When set, ONLY these providers will be enabled. All other providers will be ignored"),
+      enabled_models: z
+        .record(z.string(), z.array(z.string()))
+        .optional()
+        .describe("Limit models per provider to the listed allowlist"),
+      disabled_models: z
+        .record(z.string(), z.array(z.string()))
+        .optional()
+        .describe("Disable models per provider using a blacklist (takes priority over enabled_models)"),
       model: ModelId.describe("Model to use in the format of provider/model, eg anthropic/claude-2").optional(),
       small_model: ModelId.describe(
         "Small model to use for tasks like title generation in the format of provider/model",

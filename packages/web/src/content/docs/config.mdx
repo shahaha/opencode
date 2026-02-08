@@ -609,6 +609,45 @@ If a provider appears in both `enabled_providers` and `disabled_providers`, the 
 
 ---
 
+### Disabled models
+
+Use `disabled_models` to remove specific models per provider. Patterns can use `*` and `?` wildcards and match against both the model ID and the API ID.
+
+```json title="opencode.json"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "disabled_models": {
+    "anthropic": ["claude-sonnet-4-5", "claude-haiku-*"]
+  }
+}
+```
+
+:::note
+The `disabled_models` option takes priority over `enabled_models` when both are set.
+:::
+
+---
+
+### Allowlist models
+
+Use `enabled_models` to limit which models are available per provider. Patterns can use `*` and `?` wildcards and match against both the model ID and the API ID. An empty list removes the provider, effectively disabling that provider.
+
+```json title="opencode.json"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "enabled_models": {
+    "anthropic": ["claude-opus-4-5", "claude-sonnet-?"],
+    "openai": []
+  }
+}
+```
+
+:::note
+The `disabled_models` option takes priority over `enabled_models`.
+:::
+
+---
+
 ### Experimental
 
 The `experimental` key contains options that are under active development.
