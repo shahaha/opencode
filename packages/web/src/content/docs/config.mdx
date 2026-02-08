@@ -142,6 +142,67 @@ opencode run "Hello world"
 
 The custom directory is loaded after the global config and `.opencode` directories, so it **can override** their settings.
 
+### Custom data directory
+
+Specify a custom data directory using the `OPENCODE_DATA_DIR`
+environment variable. This controls where OpenCode stores runtime data
+like authentication tokens, logs, cached files, and LSP binaries.
+
+```bash
+export OPENCODE_DATA_DIR=/path/to/my/data-directory
+opencode run "Hello world"
+```
+
+By default, OpenCode stores data in `~/.local/share/opencode` on Linux/macOS
+or `%LOCALAPPDATA%\opencode` on Windows.
+
+---
+
+### Custom cache directory
+
+Specify a custom cache directory using the `OPENCODE_CACHE_DIR`
+environment variable. This controls where OpenCode stores cached data
+like npm plugins and their dependencies.
+
+```bash
+export OPENCODE_CACHE_DIR=/path/to/my/cache-directory
+opencode run "Hello world"
+```
+
+By default, OpenCode stores cache in `~/.cache/opencode` on Linux/macOS
+or `%LOCALAPPDATA%\opencode` on Windows.
+
+---
+
+### Custom log directory
+
+Specify a custom log directory using the `OPENCODE_LOG_DIR`
+environment variable. This controls where OpenCode stores log files.
+
+```bash
+export OPENCODE_LOG_DIR=/path/to/my/log-directory
+opencode run "Hello world"
+```
+
+By default, OpenCode stores logs in the data directory at `$OPENCODE_DATA_DIR/log`
+(or `~/.local/share/opencode/log` if `OPENCODE_DATA_DIR` is not set).
+
+---
+
+### Custom state directory
+
+Specify a custom state directory using the `OPENCODE_STATE_DIR`
+environment variable. This controls where OpenCode stores UI state
+like model selection, prompt history, stashed prompts, and frecency data.
+
+```bash
+export OPENCODE_STATE_DIR=/path/to/my/state-directory
+opencode run "Hello world"
+```
+
+By default, OpenCode stores state in `~/.local/state/opencode` on Linux/macOS
+or `%LOCALAPPDATA%\opencode` on Windows.
+
 ---
 
 ## Schema
