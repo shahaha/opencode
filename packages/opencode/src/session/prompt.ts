@@ -1487,6 +1487,9 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           `
             [[ -f ~/.zshenv ]] && source ~/.zshenv >/dev/null 2>&1 || true
             [[ -f "\${ZDOTDIR:-$HOME}/.zshrc" ]] && source "\${ZDOTDIR:-$HOME}/.zshrc" >/dev/null 2>&1 || true
+            if command -v direnv >/dev/null 2>&1; then
+              eval "$(direnv export zsh)"
+            fi
             eval ${JSON.stringify(input.command)}
           `,
         ],
@@ -1498,6 +1501,9 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           `
             shopt -s expand_aliases
             [[ -f ~/.bashrc ]] && source ~/.bashrc >/dev/null 2>&1 || true
+            if command -v direnv >/dev/null 2>&1; then
+              eval "$(direnv export bash)"
+            fi
             eval ${JSON.stringify(input.command)}
           `,
         ],
