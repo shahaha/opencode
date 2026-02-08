@@ -1618,6 +1618,10 @@ export type Config = {
    * Theme name to use for the interface
    */
   theme?: string
+  /**
+   * Color scheme preference: 'dark', 'light', or 'system' to follow terminal
+   */
+  appearance?: "dark" | "light" | "system"
   keybinds?: KeybindsConfig
   logLevel?: LogLevel
   /**
