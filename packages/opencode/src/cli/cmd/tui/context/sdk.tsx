@@ -69,24 +69,46 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
         return
       }
 
-      // Fall back to SSE
+      // Fall back to SSE with retry backoff
+      let retryDelay = 1000 // Start with 1 second
+      const maxRetryDelay = 30000 // Max 30 seconds
+      let consecutiveFailures = 0
+      const maxConsecutiveFailures = 10 // Give up after 10 consecutive failures
+
       while (true) {
         if (abort.signal.aborted) break
-        const events = await sdk.event.subscribe(
-          {},
-          {
-            signal: abort.signal,
-          },
-        )
 
-        for await (const event of events.stream) {
-          handleEvent(event)
-        }
+        try {
+          const events = await sdk.event.subscribe(
+            {},
+            {
+              signal: abort.signal,
+            },
+          )
 
-        // Flush any remaining events
-        if (timer) clearTimeout(timer)
-        if (queue.length > 0) {
-          flush()
+          // Reset retry state on successful connection
+          retryDelay = 1000
+          consecutiveFailures = 0
+
+          for await (const event of events.stream) {
+            handleEvent(event)
+          }
+        } catch (e) {
+          if (abort.signal.aborted) break
+
+          consecutiveFailures++
+          if (consecutiveFailures >= maxConsecutiveFailures) {
+            // Server seems permanently gone, exit the loop
+            console.error(
+              `[sdk] Failed to connect after ${maxConsecutiveFailures} attempts, giving up. Server may have shut down.`,
+            )
+            break
+          }
+
+          // Exponential backoff with jitter
+          const jitter = Math.random() * 500
+          await new Promise((resolve) => setTimeout(resolve, retryDelay + jitter))
+          retryDelay = Math.min(retryDelay * 2, maxRetryDelay)
         }
       }
     })
