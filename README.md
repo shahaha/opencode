@@ -134,3 +134,9 @@ It's very similar to Claude Code in terms of capability. Here are the key differ
 ---
 
 **Join our community** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+
+---
+
+### Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=anomalyco/opencode&type=date&legend=top-left)](https://www.star-history.com/#anomalyco/opencode&type=date&legend=top-left)
