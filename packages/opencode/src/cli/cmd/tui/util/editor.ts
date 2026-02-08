@@ -22,11 +22,12 @@ export namespace Editor {
       stdout: "inherit",
       stderr: "inherit",
     })
-    await proc.exited
+    const exitCode = await proc.exited
     const content = await Bun.file(filepath).text()
     opts.renderer.currentRenderBuffer.clear()
     opts.renderer.resume()
     opts.renderer.requestRender()
-    return content || undefined
+    if (exitCode !== 0) return
+    return content
   }
 }
