@@ -238,9 +238,20 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
         moveTo((store.selected + 1) % total)
       }
 
-      if (evt.name === "return") {
+      if (evt.name === "space" && multi()) {
         evt.preventDefault()
         selectOption()
+      }
+
+      if (evt.name === "return") {
+        evt.preventDefault()
+        if (multi()) {
+          setStore("tab", store.tab + 1)
+          setStore("selected", 0)
+          return
+        }
+        selectOption()
+        return
       }
 
       if (evt.name === "escape" || keybind.match("app_exit", evt)) {
@@ -449,10 +460,15 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
               {"↑↓"} <span style={{ fg: theme.textMuted }}>select</span>
             </text>
           </Show>
+          <Show when={multi() && !confirm()}>
+            <text fg={theme.text}>
+              space <span style={{ fg: theme.textMuted }}>toggle</span>
+            </text>
+          </Show>
           <text fg={theme.text}>
             enter{" "}
             <span style={{ fg: theme.textMuted }}>
-              {confirm() ? "submit" : multi() ? "toggle" : single() ? "submit" : "confirm"}
+              {confirm() || single() ? "submit" : "confirm"}
             </span>
           </text>
 
