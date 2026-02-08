@@ -283,6 +283,9 @@ export namespace MCP {
     s.clients[name] = result.mcpClient
     s.status[name] = result.status
 
+    // Notify TUI to refresh MCP status
+    Bus.publish(TuiEvent.McpRefresh, {})
+
     return {
       status: s.status,
     }
@@ -503,6 +506,13 @@ export namespace MCP {
     for (const [key, mcp] of Object.entries(config)) {
       if (!isMcpConfigured(mcp)) continue
       result[key] = s.status[key] ?? { status: "disabled" }
+    }
+
+    // Include dynamically registered MCPs not in config
+    for (const [key, status] of Object.entries(s.status)) {
+      if (!(key in result)) {
+        result[key] = status
+      }
     }
 
     return result
