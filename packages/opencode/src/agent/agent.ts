@@ -42,6 +42,15 @@ export namespace Agent {
       prompt: z.string().optional(),
       options: z.record(z.string(), z.any()),
       steps: z.number().int().positive().optional(),
+      fallbackModels: z
+        .array(
+          z.object({
+            modelID: z.string(),
+            providerID: z.string(),
+          }),
+        )
+        .optional(),
+      maxRetriesBeforeFallback: z.number().int().positive().optional(),
     })
     .meta({
       ref: "Agent",
@@ -227,6 +236,10 @@ export namespace Agent {
       item.name = value.name ?? item.name
       item.steps = value.steps ?? item.steps
       item.options = mergeDeep(item.options, value.options ?? {})
+      if (value.fallback_models?.length) {
+        item.fallbackModels = value.fallback_models.map((m: string) => Provider.parseModel(m))
+      }
+      item.maxRetriesBeforeFallback = value.max_retries_before_fallback ?? item.maxRetriesBeforeFallback
       item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(value.permission ?? {}))
     }
 
