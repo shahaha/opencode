@@ -136,6 +136,7 @@ for (const item of targets) {
   // Use platform-specific bunfs root path based on target OS
   const bunfsRoot = item.os === "win32" ? "B:/~BUN/root/" : "/$bunfs/root/"
   const workerRelativePath = path.relative(dir, parserWorker).replaceAll("\\", "/")
+  const autoloadBunfig = false
 
   await Bun.build({
     conditions: ["browser"],
@@ -143,7 +144,7 @@ for (const item of targets) {
     plugins: [solidPlugin],
     sourcemap: "external",
     compile: {
-      autoloadBunfig: false,
+      autoloadBunfig,
       autoloadDotenv: false,
       //@ts-ignore (bun types aren't up to date)
       autoloadTsconfig: true,
@@ -160,6 +161,7 @@ for (const item of targets) {
       OPENCODE_WORKER_PATH: workerPath,
       OPENCODE_CHANNEL: `'${Script.channel}'`,
       OPENCODE_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
+      OPENCODE_AUTOLOAD_BUNFIG: String(autoloadBunfig),
     },
   })
 
