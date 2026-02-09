@@ -18,7 +18,7 @@ import { DialogHelp } from "./ui/dialog-help"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
 import { DialogAgent } from "@tui/component/dialog-agent"
 import { DialogSessionList } from "@tui/component/dialog-session-list"
-import { KeybindProvider } from "@tui/context/keybind"
+import { KeybindProvider, useKeybind } from "@tui/context/keybind"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
 import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
@@ -36,6 +36,7 @@ import { ArgsProvider, useArgs, type Args } from "./context/args"
 import open from "open"
 import { writeHeapSnapshot } from "v8"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
+import { Keybind } from "@/util/keybind"
 
 async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
   // can't set raw mode if not a TTY
@@ -198,6 +199,7 @@ function App() {
   const sync = useSync()
   const exit = useExit()
   const promptRef = usePromptRef()
+  const keybind = useKeybind()
 
   // Wire up console copy-to-clipboard via opentui's onCopySelection callback
   renderer.console.onCopySelection = async (text: string) => {
@@ -611,6 +613,57 @@ function App() {
       },
     },
   ])
+
+  // Handle custom command keybinds
+  useKeyboard((evt) => {
+    if (command.suspended()) return
+    if (dialog.stack.length > 0) return
+    if (evt.defaultPrevented) return
+
+    const keybinds = sync.data.config.keybinds ?? {}
+    for (const [key, value] of Object.entries(keybinds)) {
+      if (!key.startsWith("/")) continue
+      if (!value) continue
+      
+      const commandName = key.slice(1)
+      const commandKeybinds = Keybind.parse(value)
+      const parsed = keybind.parse(evt)
+      
+      for (const kb of commandKeybinds) {
+        if (Keybind.match(kb, parsed)) {
+          evt.preventDefault()
+          
+          // Find the command to verify it exists
+          const cmd = sync.data.command.find((c) => c.name === commandName)
+          if (!cmd) {
+            toast.show({
+              variant: "error",
+              message: `Command not found: ${commandName}`,
+              duration: 3000,
+            })
+            return
+          }
+          
+          // Preserve existing prompt text as command arguments
+          const current = promptRef.current
+          if (current) {
+            const existingInput = current.current.input.trim()
+            const commandInput = existingInput
+              ? `/${commandName} ${existingInput}`
+              : `/${commandName}`
+            
+            current.set({
+              input: commandInput,
+              parts: current.current.parts,
+            })
+            current.submit()
+          }
+          
+          return
+        }
+      }
+    }
+  })
 
   createEffect(() => {
     const currentModel = local.model.current()
