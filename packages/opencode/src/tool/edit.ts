@@ -142,6 +142,10 @@ export const EditTool = Tool.define("edit", {
       output += `\n\nLSP errors detected in this file, please fix:\n<diagnostics file="${filePath}">\n${limited.map(LSP.Diagnostic.pretty).join("\n")}${suffix}\n</diagnostics>`
     }
 
+    if (output) {
+      output = `Edit applied\n${output.trimStart()}`
+    }
+
     return {
       metadata: {
         diagnostics,
