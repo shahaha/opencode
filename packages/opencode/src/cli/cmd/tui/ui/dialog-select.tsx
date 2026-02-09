@@ -1,12 +1,13 @@
 import { InputRenderable, RGBA, ScrollBoxRenderable, TextAttributes } from "@opentui/core"
 import { useTheme, selectedForeground } from "@tui/context/theme"
-import { entries, filter, flatMap, groupBy, pipe, take } from "remeda"
+import { entries, filter, flatMap, groupBy, pipe } from "remeda"
 import { batch, createEffect, createMemo, createSignal, For, Show, type JSX, on } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import * as fuzzysort from "fuzzysort"
 import { isDeepEqual } from "remeda"
 import { useDialog, type DialogContext } from "@tui/ui/dialog"
+import { wrap } from "@tui/ui/dialog-select-budget"
 import { useKeybind } from "@tui/context/keybind"
 import { Keybind } from "@/util/keybind"
 import { Locale } from "@/util/locale"
@@ -20,6 +21,7 @@ export interface DialogSelectProps<T> {
   onFilter?: (query: string) => void
   onSelect?: (option: DialogSelectOption<T>) => void
   skipFilter?: boolean
+  maxLines?: 1 | 2
   keybind?: {
     keybind?: Keybind.Info
     title: string
@@ -119,9 +121,14 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   })
 
   const dimensions = useTerminalDimensions()
+  const lines = createMemo(() => props.maxLines ?? 1)
   const height = createMemo(() =>
-    Math.min(flat().length + grouped().length * 2 - 1, Math.floor(dimensions().height / 2) - 6),
+    Math.min(flat().length * lines() + grouped().length * 2 - 1, Math.floor(dimensions().height / 2) - 6),
   )
+  const width = createMemo(() => {
+    const dialogWidth = dialog.size === "large" ? 80 : 60
+    return Math.max(Math.min(dimensions().width - 2, dialogWidth), 1)
+  })
 
   const selected = createMemo(() => flat()[store.selected])
 
@@ -324,6 +331,8 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                           active={active()}
                           current={current()}
                           gutter={option.gutter}
+                          width={width()}
+                          maxLines={lines()}
                         />
                       </box>
                     )
@@ -360,9 +369,14 @@ function Option(props: {
   footer?: JSX.Element | string
   gutter?: JSX.Element
   onMouseOver?: () => void
+  width: number
+  maxLines: number
 }) {
   const { theme } = useTheme()
   const fg = selectedForeground(theme)
+  const tail = props.maxLines > 1 && typeof props.footer === "string" ? props.footer.length + 1 : 0
+  const mode = props.maxLines > 1 ? "word" : "none"
+  const overflow = props.maxLines === 1 ? "hidden" : undefined
 
   return (
     <>
@@ -380,11 +394,12 @@ function Option(props: {
         flexGrow={1}
         fg={props.active ? fg : props.current ? theme.primary : theme.text}
         attributes={props.active ? TextAttributes.BOLD : undefined}
-        overflow="hidden"
-        wrapMode="none"
-        paddingLeft={3}
+        wrapMode={mode}
+        maxHeight={props.maxLines}
+        overflow={overflow}
+        paddingLeft={props.maxLines > 1 ? undefined : 3}
       >
-        {Locale.truncate(props.title, 61)}
+        {wrap(props.title, props.width, tail, props.maxLines)}
         <Show when={props.description}>
           <span style={{ fg: props.active ? fg : theme.textMuted }}> {props.description}</span>
         </Show>
