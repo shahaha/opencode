@@ -85,6 +85,7 @@ const TIPS = [
   "Add {highlight}$schema{/highlight} to your config for autocomplete in your editor",
   "Configure {highlight}model{/highlight} in config to set your default model",
   "Override any keybind in config via the {highlight}keybinds{/highlight} section",
+  "Set {highlight}tui.session_list_limit{/highlight} to cap sessions shown in the picker",
   "Set any keybind to {highlight}none{/highlight} to disable it completely",
   "Configure local or remote MCP servers in the {highlight}mcp{/highlight} config section",
   "OpenCode auto-handles OAuth for remote MCP servers requiring auth",

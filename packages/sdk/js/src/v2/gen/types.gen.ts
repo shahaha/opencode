@@ -1641,6 +1641,10 @@ export type Config = {
      * Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column
      */
     diff_style?: "auto" | "stacked"
+    /**
+     * Maximum number of sessions to display in session list when not searching (default: 150)
+     */
+    session_list_limit?: number
   }
   server?: ServerConfig
   /**

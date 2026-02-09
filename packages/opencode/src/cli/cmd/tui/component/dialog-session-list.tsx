@@ -31,32 +31,48 @@ export function DialogSessionList() {
   })
 
   const currentSessionID = createMemo(() => (route.data.type === "session" ? route.data.sessionID : undefined))
+  const fallback = 150
 
   const sessions = createMemo(() => searchResults() ?? sync.data.session)
+  const isSearching = createMemo(() => search().length > 0)
 
   const options = createMemo(() => {
     const today = new Date().toDateString()
-    return sessions()
+    const limit = sync.data.config.tui?.session_list_limit ?? fallback
+    const list = sessions()
       .filter((x) => x.parentID === undefined)
       .toSorted((a, b) => b.time.updated - a.time.updated)
-      .map((x) => {
-        const date = new Date(x.time.updated)
-        let category = date.toDateString()
-        if (category === today) {
-          category = "Today"
-        }
-        const isDeleting = toDelete() === x.id
-        const status = sync.data.session_status?.[x.id]
-        const isWorking = status?.type === "busy"
-        return {
-          title: isDeleting ? `Press ${keybind.print("session_delete")} again to confirm` : x.title,
-          bg: isDeleting ? theme.error : undefined,
-          value: x.id,
-          category,
-          footer: Locale.time(x.time.updated),
-          gutter: isWorking ? <Spinner /> : undefined,
-        }
-      })
+    const limited = (() => {
+      if (isSearching()) return list
+      const slice = list.slice(0, limit)
+      const current = currentSessionID()
+      if (!current) return slice
+      if (slice.some((x) => x.id === current)) return slice
+      const item = list.find((x) => x.id === current)
+      if (!item) return slice
+      const trimmed = list.filter((x) => x.id !== current).slice(0, limit - 1)
+      const index = trimmed.findIndex((x) => x.time.updated <= item.time.updated)
+      if (index === -1) return [...trimmed, item]
+      return [...trimmed.slice(0, index), item, ...trimmed.slice(index)]
+    })()
+    return limited.map((x) => {
+      const date = new Date(x.time.updated)
+      let category = date.toDateString()
+      if (category === today) {
+        category = "Today"
+      }
+      const isDeleting = toDelete() === x.id
+      const status = sync.data.session_status?.[x.id]
+      const isWorking = status?.type === "busy"
+      return {
+        title: isDeleting ? `Press ${keybind.print("session_delete")} again to confirm` : x.title,
+        bg: isDeleting ? theme.error : undefined,
+        value: x.id,
+        category,
+        footer: Locale.time(x.time.updated),
+        gutter: isWorking ? <Spinner /> : undefined,
+      }
+    })
   })
 
   onMount(() => {

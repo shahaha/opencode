@@ -9506,6 +9506,12 @@
                 "description": "Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column",
                 "type": "string",
                 "enum": ["auto", "stacked"]
+              },
+              "session_list_limit": {
+                "description": "Maximum number of sessions to display in session list when not searching (default: 150)",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
               }
             }
           },

@@ -928,6 +928,13 @@ export namespace Config {
       .enum(["auto", "stacked"])
       .optional()
       .describe("Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column"),
+    session_list_limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(10000)
+      .optional()
+      .describe("Maximum number of sessions to display in session list when not searching (default: 150)"),
   })
 
   export const Server = z
