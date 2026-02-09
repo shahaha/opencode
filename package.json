@@ -11,8 +11,7 @@
     "dev:web": "bun --cwd packages/app dev",
     "typecheck": "bun turbo typecheck",
     "prepare": "husky",
-    "random": "echo 'Random script'",
-    "hello": "echo 'Hello World!'",
+    "swebench": "bun swebench/run.ts",
     "test": "echo 'do not run tests from root' && exit 1"
   },
   "workspaces": {
