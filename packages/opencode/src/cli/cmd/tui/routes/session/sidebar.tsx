@@ -11,6 +11,7 @@ import { useKeybind } from "../../context/keybind"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { TodoItem } from "../../component/todo-item"
+import { createRunningState, ToolItemView, LLMStatusView } from "../../util/running.tsx"
 
 export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const sync = useSync()
@@ -19,6 +20,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
+
+  const { tick, tools, llmStatus } = createRunningState(() => props.sessionID, sync.data)
 
   const [expanded, setExpanded] = createStore({
     mcp: true,
@@ -98,6 +101,15 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
               <text fg={theme.textMuted}>{context()?.percentage ?? 0}% used</text>
               <text fg={theme.textMuted}>{cost()} spent</text>
             </box>
+            <Show when={tools().length > 0 || llmStatus()}>
+              <box flexDirection="column">
+                <text fg={theme.text}>
+                  <b>Running</b>
+                </text>
+                <Show when={llmStatus()}>{(status) => <LLMStatusView item={status()} now={tick()} />}</Show>
+                <For each={tools()}>{(item) => <ToolItemView item={item} now={tick()} />}</For>
+              </box>
+            </Show>
             <Show when={mcpEntries().length > 0}>
               <box>
                 <box

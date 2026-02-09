@@ -56,13 +56,14 @@ export namespace SessionProcessor {
               input.abort.throwIfAborted()
               switch (value.type) {
                 case "start":
-                  SessionStatus.set(input.sessionID, { type: "busy" })
+                  SessionStatus.set(input.sessionID, { type: "sending" })
                   break
 
                 case "reasoning-start":
                   if (value.id in reasoningMap) {
                     continue
                   }
+                  SessionStatus.set(input.sessionID, { type: "reasoning" })
                   reasoningMap[value.id] = {
                     id: Identifier.ascending("part"),
                     messageID: input.assistantMessage.id,
@@ -101,6 +102,7 @@ export namespace SessionProcessor {
                   break
 
                 case "tool-input-start":
+                  SessionStatus.set(input.sessionID, { type: "planning" })
                   const part = await Session.updatePart({
                     id: toolcalls[value.id]?.id ?? Identifier.ascending("part"),
                     messageID: input.assistantMessage.id,
@@ -126,6 +128,7 @@ export namespace SessionProcessor {
                 case "tool-call": {
                   const match = toolcalls[value.toolCallId]
                   if (match) {
+                    SessionStatus.set(input.sessionID, { type: "busy" })
                     const part = await Session.updatePart({
                       ...match,
                       tool: value.toolName,
@@ -277,6 +280,7 @@ export namespace SessionProcessor {
                   break
 
                 case "text-start":
+                  SessionStatus.set(input.sessionID, { type: "streaming" })
                   currentText = {
                     id: Identifier.ascending("part"),
                     messageID: input.assistantMessage.id,

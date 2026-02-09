@@ -543,13 +543,25 @@ export type SessionStatus =
       type: "idle"
     }
   | {
+      type: "sending"
+    }
+  | {
+      type: "planning"
+    }
+  | {
+      type: "reasoning"
+    }
+  | {
+      type: "streaming"
+    }
+  | {
+      type: "busy"
+    }
+  | {
       type: "retry"
       attempt: number
       message: string
       next: number
-    }
-  | {
-      type: "busy"
     }
 
 export type EventSessionStatus = {

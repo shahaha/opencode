@@ -10,13 +10,25 @@ export namespace SessionStatus {
         type: z.literal("idle"),
       }),
       z.object({
+        type: z.literal("sending"),
+      }),
+      z.object({
+        type: z.literal("planning"),
+      }),
+      z.object({
+        type: z.literal("reasoning"),
+      }),
+      z.object({
+        type: z.literal("streaming"),
+      }),
+      z.object({
+        type: z.literal("busy"),
+      }),
+      z.object({
         type: z.literal("retry"),
         attempt: z.number(),
         message: z.string(),
         next: z.number(),
-      }),
-      z.object({
-        type: z.literal("busy"),
       }),
     ])
     .meta({
