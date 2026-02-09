@@ -45,13 +45,13 @@ export namespace Config {
       case "darwin":
         return "/Library/Application Support/opencode"
       case "win32":
-        return path.join(process.env.ProgramData || "C:\\ProgramData", "opencode")
+        return path.join(Env.get("ProgramData") || "C:\\ProgramData", "opencode")
       default:
         return "/etc/opencode"
     }
   }
 
-  const managedConfigDir = process.env.OPENCODE_TEST_MANAGED_CONFIG_DIR || getManagedConfigDir()
+  const managedConfigDir = Env.get("OPENCODE_TEST_MANAGED_CONFIG_DIR") || getManagedConfigDir()
 
   // Custom merge function that concatenates array fields instead of replacing them
   function mergeConfigConcatArrays(target: Info, source: Info): Info {

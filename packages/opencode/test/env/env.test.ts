@@ -130,7 +130,7 @@ describe("Env", () => {
       delete process.env["TEST_PROD_VAR_2"]
     })
 
-    it("late-set process.env variable is detected by Env.get()", async () => {
+    it("variable set AFTER first Env.get() call is detected on second call (issue #12698)", async () => {
       await using tmp = await tmpdir({
         init: async (dir) => {
           await Bun.write(
@@ -143,13 +143,16 @@ describe("Env", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
+          expect(Env.get("TEST_PROD_LATE_VAR")).toBeUndefined()
+
           process.env["TEST_PROD_LATE_VAR"] = "late-value"
+
           expect(Env.get("TEST_PROD_LATE_VAR")).toBe("late-value")
         },
       })
     })
 
-    it("late-set process.env variable is included in Env.all()", async () => {
+    it("variable set AFTER first Env.all() call is detected on second call (issue #12698)", async () => {
       await using tmp = await tmpdir({
         init: async (dir) => {
           await Bun.write(
@@ -162,9 +165,13 @@ describe("Env", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
+          const all1 = Env.all()
+          expect(all1["TEST_PROD_LATE_VAR"]).toBeUndefined()
+
           process.env["TEST_PROD_LATE_VAR"] = "late-value"
-          const all = Env.all()
-          expect(all["TEST_PROD_LATE_VAR"]).toBe("late-value")
+
+          const all2 = Env.all()
+          expect(all2["TEST_PROD_LATE_VAR"]).toBe("late-value")
         },
       })
     })
@@ -252,6 +259,52 @@ describe("Env", () => {
           expect(all["TEST_PROD_VAR_2"]).toBe("prod-value-2")
         },
       })
+    })
+
+    it("pre-existing env vars are accessible", async () => {
+      await using tmp = await tmpdir({
+        init: async (dir) => {
+          await Bun.write(
+            path.join(dir, "opencode.json"),
+            JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
+          )
+        },
+      })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          expect(Env.get("PATH")).toBe(process.env["PATH"])
+          expect(Env.all()["PATH"]).toBe(process.env["PATH"])
+        },
+      })
+    })
+  })
+
+  describe("test mode without Instance context (fallback)", () => {
+    afterEach(() => {
+      delete process.env["TEST_FALLBACK_VAR"]
+    })
+
+    it("Env.get() falls back to process.env when Instance not initialized", () => {
+      process.env["TEST_FALLBACK_VAR"] = "fallback-value"
+      expect(Env.get("TEST_FALLBACK_VAR")).toBe("fallback-value")
+    })
+
+    it("Env.all() falls back to process.env when Instance not initialized", () => {
+      process.env["TEST_FALLBACK_VAR"] = "fallback-value"
+      expect(Env.all()["TEST_FALLBACK_VAR"]).toBe("fallback-value")
+    })
+
+    it("Env.set() falls back to process.env when Instance not initialized", () => {
+      Env.set("TEST_FALLBACK_VAR", "set-without-instance")
+      expect(process.env["TEST_FALLBACK_VAR"]).toBe("set-without-instance")
+    })
+
+    it("Env.remove() falls back to process.env when Instance not initialized", () => {
+      process.env["TEST_FALLBACK_VAR"] = "will-be-removed"
+      Env.remove("TEST_FALLBACK_VAR")
+      expect(process.env["TEST_FALLBACK_VAR"]).toBeUndefined()
     })
   })
 })
