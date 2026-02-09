@@ -8,7 +8,7 @@ import { DialogPrompt } from "../ui/dialog-prompt"
 import { Link } from "../ui/link"
 import { useTheme } from "../context/theme"
 import { TextAttributes } from "@opentui/core"
-import type { ProviderAuthAuthorization } from "@opencode-ai/sdk/v2"
+import type { ProviderAuthAuthorization, ProviderAuthMethodPrompt } from "@opencode-ai/sdk/v2"
 import { DialogModel } from "./dialog-model"
 import { useKeyboard } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
@@ -26,6 +26,7 @@ export function createDialogProviderOptions() {
   const sync = useSync()
   const dialog = useDialog()
   const sdk = useSDK()
+  const toast = useToast()
   const connected = createMemo(() => new Set(sync.data.provider_next.connected))
   const options = createMemo(() => {
     return pipe(
@@ -71,10 +72,60 @@ export function createDialogProviderOptions() {
             if (index == null) return
             const method = methods[index]
             if (method.type === "oauth") {
+              const inputs: Record<string, string> = {}
+
+              for (const prompt of method.prompts ?? []) {
+                if (prompt.conditional) {
+                  // Format: "key:value" - checks if inputs[key] === value
+                  const [key, value] = prompt.conditional.split(":")
+                  if (!key || !value || inputs[key] !== value) continue
+                }
+
+                if (prompt.type === "select") {
+                  if (!prompt.options?.length) continue
+
+                  const selectedValue = await new Promise<string | null>((resolve) => {
+                    dialog.replace(
+                      () => (
+                        <DialogSelect
+                          title={prompt.message}
+                          options={prompt.options!.map((opt) => ({
+                            title: opt.label,
+                            value: opt.value,
+                            description: opt.hint,
+                          }))}
+                          onSelect={(option) => resolve(option.value)}
+                        />
+                      ),
+                      () => resolve(null),
+                    )
+                  })
+                  if (selectedValue === null) return
+                  inputs[prompt.key] = selectedValue
+                  continue
+                }
+
+                const textValue = await DialogPrompt.show(dialog, prompt.message, {
+                  placeholder: prompt.placeholder ?? "Enter value",
+                })
+                if (textValue === null) return
+                inputs[prompt.key] = textValue
+              }
+
               const result = await sdk.client.provider.oauth.authorize({
                 providerID: provider.id,
                 method: index,
+                inputs,
               })
+              if (result.error) {
+                const errorMessage =
+                  (result.error as { error?: string })?.error ?? "Connection failed. Check the URL or domain."
+                toast.show({
+                  variant: "error",
+                  message: errorMessage,
+                })
+                return
+              }
               if (result.data?.method === "code") {
                 dialog.replace(() => (
                   <CodeMethod
@@ -146,7 +197,8 @@ function AutoMethod(props: AutoMethodProps) {
     }
     await sdk.client.instance.dispose()
     await sync.bootstrap()
-    dialog.replace(() => <DialogModel providerID={props.providerID} />)
+    const actualProvider = result.data?.provider ?? props.providerID
+    dialog.replace(() => <DialogModel providerID={actualProvider} />)
   })
 
   return (
@@ -196,7 +248,7 @@ function CodeMethod(props: CodeMethodProps) {
       title={props.title}
       placeholder="Authorization code"
       onConfirm={async (value) => {
-        const { error } = await sdk.client.provider.oauth.callback({
+        const { error, data } = await sdk.client.provider.oauth.callback({
           providerID: props.providerID,
           method: props.index,
           code: value,
@@ -204,7 +256,8 @@ function CodeMethod(props: CodeMethodProps) {
         if (!error) {
           await sdk.client.instance.dispose()
           await sync.bootstrap()
-          dialog.replace(() => <DialogModel providerID={props.providerID} />)
+          const actualProvider = data?.provider ?? props.providerID
+          dialog.replace(() => <DialogModel providerID={actualProvider} />)
           return
         }
         setError(true)
