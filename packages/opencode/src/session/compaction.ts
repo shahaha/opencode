@@ -14,6 +14,9 @@ import { fn } from "@/util/fn"
 import { Agent } from "@/agent/agent"
 import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
+import { Flag } from "../flag/flag"
+import { SystemPrompt } from "./system"
+import { InstructionPrompt } from "./instruction"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -97,7 +100,8 @@ export namespace SessionCompaction {
     auto: boolean
   }) {
     const userMessage = input.messages.findLast((m) => m.info.id === input.parentID)!.info as MessageV2.User
-    const agent = await Agent.get("compaction")
+    const usePrefixCache = Flag.OPENCODE_EXPERIMENTAL_COMPACTION_PRESERVE_PREFIX
+    const agent = usePrefixCache ? await Agent.get(userMessage.agent) : await Agent.get("compaction")
     const model = agent.model
       ? await Provider.getModel(agent.model.providerID, agent.model.modelID)
       : await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)
@@ -133,22 +137,38 @@ export namespace SessionCompaction {
       model,
       abort: input.abort,
     })
+    const session = usePrefixCache ? await Session.get(input.sessionID) : undefined
+    let tools = {}
+    let system: string[] = []
+    if (usePrefixCache && session) {
+      tools = await SessionPrompt.resolveTools({
+        agent,
+        model,
+        session,
+        tools: userMessage.tools,
+        processor,
+        bypassAgentCheck: false,
+        messages: input.messages,
+      })
+      system = [...(await SystemPrompt.environment(model)), ...(await InstructionPrompt.system())]
+    }
     // Allow plugins to inject context or replace compaction prompt
     const compacting = await Plugin.trigger(
       "experimental.session.compacting",
       { sessionID: input.sessionID },
       { context: [], prompt: undefined },
     )
-    const defaultPrompt =
+    const defaultPrompt = Flag.OPENCODE_EXPERIMENTAL_COMPACTION_PROMPT ??
       "Provide a detailed prompt for continuing our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next considering new session will not have access to our conversation."
+      
     const promptText = compacting.prompt ?? [defaultPrompt, ...compacting.context].join("\n\n")
-    const result = await processor.process({
+    let result = await processor.process({
       user: userMessage,
       agent,
       abort: input.abort,
       sessionID: input.sessionID,
-      tools: {},
-      system: [],
+      tools,
+      system,
       messages: [
         ...MessageV2.toModelMessages(input.messages, model),
         {
@@ -164,6 +184,10 @@ export namespace SessionCompaction {
       model,
     })
 
+    // ignore compact-flag for usePrefixCache 
+    // needsCompact is currently set before context recalc and we don't utilize remove-tools-trick
+    result = usePrefixCache && result == "compact" ? "continue" : result
+      
     if (result === "continue" && input.auto) {
       const continueMsg = await Session.updateMessage({
         id: Identifier.ascending("message"),
