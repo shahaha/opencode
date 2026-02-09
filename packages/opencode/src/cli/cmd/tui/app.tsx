@@ -2,7 +2,19 @@ import { render, useKeyboard, useRenderer, useTerminalDimensions } from "@opentu
 import { Clipboard } from "@tui/util/clipboard"
 import { TextAttributes } from "@opentui/core"
 import { RouteProvider, useRoute } from "@tui/context/route"
-import { Switch, Match, createEffect, untrack, ErrorBoundary, createSignal, onMount, batch, Show, on } from "solid-js"
+import {
+  Switch,
+  Match,
+  createEffect,
+  untrack,
+  ErrorBoundary,
+  createSignal,
+  onMount,
+  onCleanup,
+  batch,
+  Show,
+  on,
+} from "solid-js"
 import { Installation } from "@/installation"
 import { Flag } from "@/flag/flag"
 import { DialogProvider, useDialog } from "@tui/ui/dialog"
@@ -198,6 +210,14 @@ function App() {
   const sync = useSync()
   const exit = useExit()
   const promptRef = usePromptRef()
+
+  // Handle SIGINT (Ctrl+C) to properly cleanup renderer on Windows
+  // Without this, the 60 FPS render loop continues outputting ANSI sequences
+  onMount(() => {
+    const handleSigint = () => exit()
+    process.on("SIGINT", handleSigint)
+    onCleanup(() => process.off("SIGINT", handleSigint))
+  })
 
   // Wire up console copy-to-clipboard via opentui's onCopySelection callback
   renderer.console.onCopySelection = async (text: string) => {
