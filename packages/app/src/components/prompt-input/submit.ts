@@ -49,6 +49,7 @@ type CommentItem = {
   commentID?: string
   commentOrigin?: "review" | "file"
   preview?: string
+  taggedFiles?: string[]
 }
 
 export function createPromptSubmit(input: PromptSubmitInput) {
@@ -99,6 +100,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
         commentID: item.commentID,
         commentOrigin: item.commentOrigin,
         preview: item.preview,
+        taggedFiles: item.taggedFiles,
       })
     }
   }

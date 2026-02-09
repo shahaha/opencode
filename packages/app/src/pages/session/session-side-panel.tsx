@@ -53,9 +53,13 @@ export function SessionSidePanel(props: {
     file: string
     selection: SelectedLineRange
     comment: string
+    taggedFiles?: string[]
     preview?: string
     origin?: "review" | "file"
   }) => void
+  onFileSearch?: (query: string) => Promise<string[]>
+  recentFiles?: string[]
+  agents?: string[]
   activeDraggable: () => string | undefined
   onDragStart: (event: unknown) => void
   onDragEnd: () => void
@@ -210,6 +214,9 @@ export function SessionSidePanel(props: {
                           language={props.language}
                           codeComponent={props.codeComponent}
                           addCommentToContext={props.addCommentToContext}
+                          onFileSearch={props.onFileSearch}
+                          recentFiles={props.recentFiles}
+                          agents={props.agents}
                         />
                       )}
                     </Show>

@@ -155,6 +155,30 @@ export default function Page() {
   const workspaceTabs = createMemo(() => layout.tabs(workspaceKey))
   const tabs = createMemo(() => layout.tabs(sessionKey))
   const view = createMemo(() => layout.view(sessionKey))
+  const recentFiles = createMemo(() => {
+    const all = tabs().all()
+    const active = tabs().active()
+    const order = active ? [active, ...all.filter((x) => x !== active)] : all
+    const seen = new Set<string>()
+    const paths: string[] = []
+    for (const tab of order) {
+      const path = file.pathFromTab(tab)
+      if (!path) continue
+      if (seen.has(path)) continue
+      seen.add(path)
+      paths.push(path)
+    }
+    return paths
+  })
+  const mentionAgents = createMemo(() => {
+    const seen = new Set<string>()
+    return sync.data.agent.flatMap((agent) => {
+      if (agent.hidden || agent.mode === "primary") return []
+      if (seen.has(agent.name)) return []
+      seen.add(agent.name)
+      return [agent.name]
+    })
+  })
 
   createEffect(
     on(
@@ -784,11 +808,13 @@ export default function Page() {
     file: string
     selection: SelectedLineRange
     comment: string
+    taggedFiles?: string[]
     preview?: string
     origin?: "review" | "file"
   }) => {
     const selection = selectionFromLines(input.selection)
     const preview = input.preview ?? selectionPreview(input.file, selection)
+    const taggedFiles = input.taggedFiles?.filter((p, i, arr) => p !== input.file && arr.indexOf(p) === i)
     const saved = comments.add({
       file: input.file,
       selection: input.selection,
@@ -802,6 +828,7 @@ export default function Page() {
       commentID: saved.id,
       commentOrigin: input.origin,
       preview,
+      taggedFiles: taggedFiles?.length ? taggedFiles : undefined,
     })
   }
 
@@ -1000,6 +1027,9 @@ export default function Page() {
           focusedComment={comments.focus()}
           onFocusedCommentChange={comments.setFocus}
           onViewFile={openReviewFile}
+          onFileSearch={(query) => file.searchFilesAndDirectories(query)}
+          recentFiles={recentFiles()}
+          agents={mentionAgents()}
           classes={input.classes}
         />
       </Match>
@@ -1021,6 +1051,9 @@ export default function Page() {
             focusedComment={comments.focus()}
             onFocusedCommentChange={comments.setFocus}
             onViewFile={openReviewFile}
+            onFileSearch={(query) => file.searchFilesAndDirectories(query)}
+            recentFiles={recentFiles()}
+            agents={mentionAgents()}
             classes={input.classes}
           />
         </Show>
@@ -1717,6 +1750,9 @@ export default function Page() {
           handoffFiles={() => handoff.session.get(sessionKey())?.files}
           codeComponent={codeComponent}
           addCommentToContext={addCommentToContext}
+          onFileSearch={(query) => file.searchFilesAndDirectories(query)}
+          recentFiles={recentFiles()}
+          agents={mentionAgents()}
           activeDraggable={() => store.activeDraggable}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}

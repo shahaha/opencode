@@ -16,12 +16,21 @@ export interface SessionReviewTabProps {
   diffStyle: DiffStyle
   onDiffStyleChange?: (style: DiffStyle) => void
   onViewFile?: (file: string) => void
-  onLineComment?: (comment: { file: string; selection: SelectedLineRange; comment: string; preview?: string }) => void
+  onLineComment?: (comment: {
+    file: string
+    selection: SelectedLineRange
+    comment: string
+    taggedFiles?: string[]
+    preview?: string
+  }) => void
   comments?: LineComment[]
   focusedComment?: { file: string; id: string } | null
   onFocusedCommentChange?: (focus: { file: string; id: string } | null) => void
   focusedFile?: string
   onScrollRef?: (el: HTMLDivElement) => void
+  onFileSearch?: (query: string) => Promise<string[]>
+  recentFiles?: string[]
+  agents?: string[]
   classes?: {
     root?: string
     header?: string
@@ -153,6 +162,9 @@ export function SessionReviewTab(props: SessionReviewTabProps) {
       comments={props.comments}
       focusedComment={props.focusedComment}
       onFocusedCommentChange={props.onFocusedCommentChange}
+      onFileSearch={props.onFileSearch}
+      recentFiles={props.recentFiles}
+      agents={props.agents}
     />
   )
 }

@@ -30,6 +30,7 @@ export type SessionReviewLineComment = {
   file: string
   selection: SelectedLineRange
   comment: string
+  taggedFiles?: string[]
   preview?: string
 }
 
@@ -58,6 +59,9 @@ export interface SessionReviewProps {
   diffs: (FileDiff & { preloaded?: PreloadMultiFileDiffResult<any> })[]
   onViewFile?: (file: string) => void
   readFile?: (path: string) => Promise<FileContent | undefined>
+  onFileSearch?: (query: string) => Promise<string[]>
+  recentFiles?: string[]
+  agents?: string[]
 }
 
 const imageExtensions = new Set(["png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "ico", "tif", "tiff", "heic"])
@@ -628,7 +632,6 @@ export const SessionReview = (props: SessionReviewProps) => {
                                   setOpened(null)
                                   return
                                 }
-
                                 openComment(comment)
                               }}
                               open={isCommentOpen(comment)}
@@ -647,15 +650,19 @@ export const SessionReview = (props: SessionReviewProps) => {
                                 selection={selectionLabel(range())}
                                 onInput={setDraft}
                                 onCancel={() => setCommenting(null)}
-                                onSubmit={(comment) => {
+                                onSubmit={(comment, taggedFiles) => {
                                   props.onLineComment?.({
                                     file: diff.file,
                                     selection: range(),
                                     comment,
+                                    taggedFiles,
                                     preview: selectionPreview(diff, range()),
                                   })
                                   setCommenting(null)
                                 }}
+                                onFileSearch={props.onFileSearch}
+                                recentFiles={props.recentFiles}
+                                agents={props.agents}
                               />
                             </Show>
                           )}

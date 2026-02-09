@@ -26,9 +26,13 @@ export function FileTabContent(props: {
     file: string
     selection: SelectedLineRange
     comment: string
+    taggedFiles?: string[]
     preview?: string
     origin?: "review" | "file"
   }) => void
+  onFileSearch?: (query: string) => Promise<string[]>
+  recentFiles?: string[]
+  agents?: string[]
 }) {
   let scroll: HTMLDivElement | undefined
   let scrollFrame: number | undefined
@@ -436,17 +440,21 @@ export function FileTabContent(props: {
               selection={commentLabel(range())}
               onInput={(value) => setDraft(value)}
               onCancel={() => setCommenting(null)}
-              onSubmit={(value) => {
+              onSubmit={(value, taggedFiles) => {
                 const p = path()
                 if (!p) return
                 props.addCommentToContext({
                   file: p,
                   selection: range(),
                   comment: value,
+                  taggedFiles,
                   origin: "file",
                 })
                 setCommenting(null)
               }}
+              onFileSearch={props.onFileSearch}
+              recentFiles={props.recentFiles}
+              agents={props.agents}
               onPopoverFocusOut={(e: FocusEvent) => {
                 const current = e.currentTarget as HTMLDivElement
                 const target = e.relatedTarget

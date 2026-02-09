@@ -37,13 +37,30 @@
   position: absolute;
   top: calc(100% + 4px);
   right: -8px;
-  z-index: var(--line-comment-popover-z, 40);
+  z-index: var(--line-comment-popover-z, 120);
   min-width: 200px;
   max-width: min(320px, calc(100vw - 48px));
   border-radius: 8px;
   background: var(--surface-raised-stronger-non-alpha);
   box-shadow: var(--shadow-lg-border-base);
   padding: 12px;
+}
+
+[data-component="line-comment"][data-overlay] {
+  position: fixed;
+  inset: 0;
+  right: auto;
+  z-index: var(--line-comment-popover-z, 120);
+  pointer-events: none;
+}
+
+[data-component="line-comment"][data-overlay] [data-slot="line-comment-popover"] {
+  position: fixed;
+  top: var(--line-comment-popover-y, 0);
+  left: var(--line-comment-popover-x, 0);
+  right: auto;
+  bottom: auto;
+  pointer-events: auto;
 }
 
 [data-component="line-comment"][data-variant="editor"] [data-slot="line-comment-popover"] {
@@ -86,6 +103,10 @@
   gap: 8px;
 }
 
+[data-component="line-comment"] [data-slot="line-comment-editor-main"] {
+  position: relative;
+}
+
 [data-component="line-comment"] [data-slot="line-comment-textarea"] {
   width: 100%;
   resize: vertical;
@@ -99,7 +120,7 @@
   line-height: var(--line-height-large);
 }
 
-[data-component="line-comment"] [data-slot="line-comment-textarea"]:focus {
+[data-component="line-comment"] [data-slot="line-comment-textarea"]:focus:not([contenteditable]) {
   outline: none;
   box-shadow: var(--shadow-xs-border-select);
 }
@@ -112,4 +133,97 @@
 
 [data-component="line-comment"] [data-slot="line-comment-editor-label"] {
   margin-right: auto;
+}
+
+[data-component="line-comment"] [data-slot="line-comment-editor-scroll"] {
+  position: relative;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-large);
+  min-height: calc(var(--line-comment-rows, 3) * 1.5em + 16px);
+  min-height: calc(var(--line-comment-rows, 3) * 1lh + 16px);
+  max-height: 150px;
+  overflow-y: auto;
+  border-radius: var(--radius-md);
+  background: var(--surface-base);
+  border: 1px solid var(--border-base);
+  resize: vertical;
+}
+
+[data-component="line-comment"] [data-slot="line-comment-editor-scroll"]:focus-within {
+  box-shadow: var(--shadow-xs-border-select);
+}
+
+[data-component="line-comment"] [data-slot="line-comment-textarea"][contenteditable] {
+  display: block;
+  width: 100%;
+  min-height: calc(var(--line-comment-rows, 3) * 1lh + 16px);
+  padding: 8px;
+  box-sizing: border-box;
+  color: var(--text-strong);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-large);
+  outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  /* Reset styles inherited from base textarea rule */
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  resize: none;
+}
+
+[data-component="line-comment"] [data-slot="line-comment-textarea"] [data-type="file"] {
+  color: var(--syntax-property);
+}
+
+[data-component="line-comment"] [data-slot="line-comment-placeholder"] {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  color: var(--text-weak);
+  pointer-events: none;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-large);
+}
+
+[data-component="line-comment"] [data-slot="line-comment-file-picker"] {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 30;
+  max-height: var(--line-comment-picker-max-height, 142px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  background: var(--surface-raised-stronger-non-alpha);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 4px;
+}
+
+[data-component="line-comment"] [data-slot="line-comment-file-picker"]::-webkit-scrollbar {
+  display: none;
+}
+
+[data-component="line-comment"] [data-slot="line-comment-file-picker"] button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--font-size-small);
+  color: var(--text-strong);
+}
+
+[data-component="line-comment"] [data-slot="line-comment-file-picker"] button:hover,
+[data-component="line-comment"] [data-slot="line-comment-file-picker"] button[data-active] {
+  background: var(--surface-raised-base-hover);
 }

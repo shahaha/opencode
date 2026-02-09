@@ -15,6 +15,7 @@ type ContextFile = {
   commentID?: string
   commentOrigin?: "review" | "file"
   preview?: string
+  taggedFiles?: string[]
 }
 
 type BuildRequestPartsInput = {
@@ -147,28 +148,45 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
     const path = absolute(input.sessionDirectory, item.path)
     const url = `file://${encodeFilePath(path)}${fileQuery(item.selection)}`
     const comment = item.comment?.trim()
-    if (!comment && used.has(url)) return []
-    used.add(url)
+    const contextParts: PromptRequestPart[] = []
 
-    const filePart = {
-      id: Identifier.ascending("part"),
-      type: "file",
-      mime: "text/plain",
-      url,
-      filename: getFilename(item.path),
-    } satisfies PromptRequestPart
-
-    if (!comment) return [filePart]
-
-    return [
-      {
+    const includeCurrent = !!comment || !used.has(url)
+    if (includeCurrent) {
+      used.add(url)
+      if (comment) {
+        contextParts.push({
+          id: Identifier.ascending("part"),
+          type: "text",
+          text: commentNote(item.path, item.selection, comment),
+          synthetic: true,
+        } satisfies PromptRequestPart)
+      }
+      contextParts.push({
         id: Identifier.ascending("part"),
-        type: "text",
-        text: commentNote(item.path, item.selection, comment),
-        synthetic: true,
-      } satisfies PromptRequestPart,
-      filePart,
-    ]
+        type: "file",
+        mime: "text/plain",
+        url,
+        filename: getFilename(item.path),
+      } satisfies PromptRequestPart)
+    }
+
+    const tagged = (item.taggedFiles ?? []).flatMap((taggedPath) => {
+      const taggedAbsolute = absolute(input.sessionDirectory, taggedPath)
+      const taggedUrl = `file://${taggedAbsolute}`
+      if (used.has(taggedUrl)) return []
+      used.add(taggedUrl)
+      return [
+        {
+          id: Identifier.ascending("part"),
+          type: "file",
+          mime: "text/plain",
+          url: taggedUrl,
+          filename: getFilename(taggedPath),
+        } satisfies PromptRequestPart,
+      ]
+    })
+
+    return [...contextParts, ...tagged]
   })
 
   const images = input.images.map((attachment) => {
