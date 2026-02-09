@@ -7,6 +7,7 @@ import { Switch } from "@opencode-ai/ui/switch"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme"
 import { showToast } from "@opencode-ai/ui/toast"
+import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { useSettings, monoFontFamily } from "@/context/settings"
@@ -33,6 +34,7 @@ const playDemoSound = (src: string) => {
 }
 
 export const SettingsGeneral: Component = () => {
+  const globalSync = useGlobalSync()
   const theme = useTheme()
   const language = useLanguage()
   const platform = usePlatform()
@@ -98,9 +100,12 @@ export const SettingsGeneral: Component = () => {
       .finally(() => setStore("checking", false))
   }
 
-  const themeOptions = createMemo(() =>
-    Object.entries(theme.themes()).map(([id, def]) => ({ id, name: def.name ?? id })),
-  )
+  const themeOptions = createMemo(() => {
+    const entries = Object.entries(theme.themes())
+    const enabled = globalSync.data.config.enabled_themes
+    const filtered = !enabled || enabled.length === 0 ? entries : entries.filter(([id]) => enabled.includes(id))
+    return filtered.map(([id, def]) => ({ id, name: def.name ?? id }))
+  })
 
   const colorSchemeOptions = createMemo((): { value: ColorScheme; label: string }[] => [
     { value: "system", label: language.t("theme.scheme.system") },
