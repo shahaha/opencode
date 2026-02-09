@@ -1,4 +1,5 @@
 import { Auth } from "../../auth"
+import { Env } from "@/env"
 import { cmd } from "./cmd"
 import * as prompts from "@clack/prompts"
 import { UI } from "../ui"
@@ -192,7 +193,7 @@ export const AuthListCommand = cmd({
 
     for (const [providerID, provider] of Object.entries(database)) {
       for (const envVar of provider.env) {
-        if (process.env[envVar]) {
+        if (Env.get(envVar)) {
           activeEnvVars.push({
             provider: provider.name || providerID,
             envVar,

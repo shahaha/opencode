@@ -3,6 +3,7 @@ import path from "path"
 import { pathToFileURL } from "url"
 import os from "os"
 import z from "zod"
+import { Env } from "../env"
 import { Filesystem } from "../util/filesystem"
 import { ModelsDev } from "../provider/models"
 import { mergeDeep, pipe, unique } from "remeda"
@@ -78,7 +79,7 @@ export namespace Config {
     let result: Info = {}
     for (const [key, value] of Object.entries(auth)) {
       if (value.type === "wellknown") {
-        process.env[value.key] = value.token
+        Env.set(value.key, value.token)
         log.debug("fetching remote config", { url: `${key}/.well-known/opencode` })
         const response = await fetch(`${key}/.well-known/opencode`)
         if (!response.ok) {
@@ -1236,7 +1237,7 @@ export namespace Config {
   async function load(text: string, configFilepath: string) {
     const original = text
     text = text.replace(/\{env:([^}]+)\}/g, (_, varName) => {
-      return process.env[varName] || ""
+      return Env.get(varName) || ""
     })
 
     const fileMatches = text.match(/\{file:[^}]+\}/g)

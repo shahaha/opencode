@@ -7,22 +7,33 @@ export namespace Env {
     return { ...process.env } as Record<string, string | undefined>
   })
 
+  function isTestMode() {
+    return !!process.env["OPENCODE_TEST_HOME"]
+  }
+
   export function get(key: string) {
-    const env = state()
-    return env[key]
+    if (!isTestMode()) return process.env[key]
+    return state()[key]
   }
 
   export function all() {
+    if (!isTestMode()) return process.env as Record<string, string | undefined>
     return state()
   }
 
   export function set(key: string, value: string) {
-    const env = state()
-    env[key] = value
+    if (!isTestMode()) {
+      process.env[key] = value
+      return
+    }
+    state()[key] = value
   }
 
   export function remove(key: string) {
-    const env = state()
-    delete env[key]
+    if (!isTestMode()) {
+      delete process.env[key]
+      return
+    }
+    delete state()[key]
   }
 }
