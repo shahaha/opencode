@@ -4,6 +4,7 @@ import clipboardy from "clipboardy"
 import { lazy } from "../../../../util/lazy.js"
 import { tmpdir } from "os"
 import path from "path"
+import { Config } from "../../../../config/config.js"
 
 /**
  * Writes text to clipboard via OSC 52 escape sequence.
@@ -87,15 +88,29 @@ export namespace Clipboard {
       if (process.env["WAYLAND_DISPLAY"] && Bun.which("wl-copy")) {
         console.log("clipboard: using wl-copy")
         return async (text: string) => {
+          const config = await Config.get().catch(() => ({}))
+          const enablePrimary = (config as Config.Info).clipboard?.linux?.enablePrimaryCopy ?? false
           const proc = Bun.spawn(["wl-copy"], { stdin: "pipe", stdout: "ignore", stderr: "ignore" })
           proc.stdin.write(text)
           proc.stdin.end()
           await proc.exited.catch(() => {})
+          if (enablePrimary) {
+            const procPrimary = Bun.spawn(["wl-copy", "--primary"], {
+              stdin: "pipe",
+              stdout: "ignore",
+              stderr: "ignore",
+            })
+            procPrimary.stdin.write(text)
+            procPrimary.stdin.end()
+            await procPrimary.exited.catch(() => {})
+          }
         }
       }
       if (Bun.which("xclip")) {
         console.log("clipboard: using xclip")
         return async (text: string) => {
+          const config = await Config.get().catch(() => ({}))
+          const enablePrimary = (config as Config.Info).clipboard?.linux?.enablePrimaryCopy ?? false
           const proc = Bun.spawn(["xclip", "-selection", "clipboard"], {
             stdin: "pipe",
             stdout: "ignore",
@@ -104,11 +119,23 @@ export namespace Clipboard {
           proc.stdin.write(text)
           proc.stdin.end()
           await proc.exited.catch(() => {})
+          if (enablePrimary) {
+            const procPrimary = Bun.spawn(["xclip", "-selection", "primary"], {
+              stdin: "pipe",
+              stdout: "ignore",
+              stderr: "ignore",
+            })
+            procPrimary.stdin.write(text)
+            procPrimary.stdin.end()
+            await procPrimary.exited.catch(() => {})
+          }
         }
       }
       if (Bun.which("xsel")) {
         console.log("clipboard: using xsel")
         return async (text: string) => {
+          const config = await Config.get().catch(() => ({}))
+          const enablePrimary = (config as Config.Info).clipboard?.linux?.enablePrimaryCopy ?? false
           const proc = Bun.spawn(["xsel", "--clipboard", "--input"], {
             stdin: "pipe",
             stdout: "ignore",
@@ -117,6 +144,16 @@ export namespace Clipboard {
           proc.stdin.write(text)
           proc.stdin.end()
           await proc.exited.catch(() => {})
+          if (enablePrimary) {
+            const procPrimary = Bun.spawn(["xsel", "--primary", "--input"], {
+              stdin: "pipe",
+              stdout: "ignore",
+              stderr: "ignore",
+            })
+            procPrimary.stdin.write(text)
+            procPrimary.stdin.end()
+            await procPrimary.exited.catch(() => {})
+          }
         }
       }
     }
