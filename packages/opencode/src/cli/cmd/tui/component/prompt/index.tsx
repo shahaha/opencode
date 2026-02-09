@@ -252,7 +252,7 @@ export function Prompt(props: PromptProps) {
 
           const value = text
           const content = await Editor.open({ value, renderer })
-          if (!content) return
+          if (content === undefined) return
 
           input.setText(content)
 
