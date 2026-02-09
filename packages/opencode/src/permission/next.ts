@@ -85,7 +85,7 @@ export namespace PermissionNext {
 
   export type Request = z.infer<typeof Request>
 
-  export const Reply = z.enum(["once", "always", "reject"])
+  export const Reply = z.enum(["once", "always", "reject", "interject"])
   export type Reply = z.infer<typeof Reply>
 
   export const Approval = z.object({
@@ -101,6 +101,7 @@ export namespace PermissionNext {
         sessionID: z.string(),
         requestID: z.string(),
         reply: Reply,
+        interjection: z.string().optional(),
       }),
     ),
   }
@@ -160,6 +161,7 @@ export namespace PermissionNext {
     z.object({
       requestID: Identifier.schema("permission"),
       reply: Reply,
+      interjection: z.string().optional(),
       message: z.string().optional(),
     }),
     async (input) => {
@@ -171,7 +173,12 @@ export namespace PermissionNext {
         sessionID: existing.info.sessionID,
         requestID: existing.info.id,
         reply: input.reply,
+        interjection: input.interjection,
       })
+      if (input.reply === "interject") {
+        existing.reject(new RejectedError(true, input.interjection))
+        return
+      }
       if (input.reply === "reject") {
         existing.reject(input.message ? new CorrectedError(input.message) : new RejectedError())
         // Reject all other pending permissions for this session
@@ -253,8 +260,15 @@ export namespace PermissionNext {
 
   /** User rejected without message - halts execution */
   export class RejectedError extends Error {
-    constructor() {
-      super(`The user rejected permission to use this specific tool call.`)
+    public readonly isInterjection: boolean
+    public readonly interjection?: string
+    constructor(isInterjection = false, interjection?: string) {
+      const message = isInterjection && interjection
+        ? `The user interjected with a suggestion: ${interjection}`
+        : `The user rejected permission to use this specific tool call. You may try again with different parameters.`
+      super(message)
+      this.isInterjection = isInterjection
+      this.interjection = interjection
     }
   }
 

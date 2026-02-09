@@ -56,6 +56,7 @@ import { TodoItem } from "../../component/todo-item"
 import { DialogMessage } from "./dialog-message"
 import type { PromptInfo } from "../../component/prompt/history"
 import { DialogConfirm } from "@tui/ui/dialog-confirm"
+import { DialogPrompt } from "@tui/ui/dialog-prompt"
 import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
@@ -72,6 +73,7 @@ import { Footer } from "./footer.tsx"
 import { usePromptRef } from "../../context/prompt"
 import { useExit } from "../../context/exit"
 import { Filesystem } from "@/util/filesystem"
+import { iife } from "@/util/iife"
 import { Global } from "@/global"
 import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
@@ -288,6 +290,49 @@ export function Session() {
     if (child) scroll.scrollBy(child.y - scroll.y - 1)
     dialog.clear()
   }
+
+  useKeyboard(async (evt) => {
+    if (dialog.stack.length > 0) return
+
+    const first = permissions()[0]
+    if (first) {
+      if (evt.ctrl || evt.meta) return
+
+      // Handle interject with "i" key - opens prompt for user suggestion
+      if (evt.name === "i") {
+        const interjection = await DialogPrompt.show(dialog, "Interject", {
+          placeholder: "Enter your suggestion...",
+          description: () => (
+            <text fg={theme.textMuted}>
+              Provide a suggestion or correction for the model to consider
+            </text>
+          ),
+        })
+        if (interjection !== null && interjection.trim()) {
+          sdk.client.permission.reply({
+            requestID: first.id,
+            reply: "interject",
+            message: interjection.trim(),
+          })
+        }
+        return
+      }
+
+      const response = iife(() => {
+        if (evt.name === "return") return "once"
+        if (evt.name === "a") return "always"
+        if (evt.name === "d") return "reject"
+        if (evt.name === "escape") return "reject"
+        return
+      })
+      if (response) {
+        sdk.client.permission.reply({
+          requestID: first.id,
+          reply: response,
+        })
+      }
+    }
+  })
 
   function toBottom() {
     setTimeout(() => {

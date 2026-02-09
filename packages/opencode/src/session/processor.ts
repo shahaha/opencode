@@ -209,10 +209,13 @@ export namespace SessionProcessor {
                       },
                     })
 
-                    if (
-                      value.error instanceof PermissionNext.RejectedError ||
-                      value.error instanceof Question.RejectedError
-                    ) {
+                    if (value.error instanceof PermissionNext.RejectedError) {
+                      // Only block processing for actual denials, not interjections
+                      // Interjections contain user suggestions and should allow model to continue
+                      if (!value.error.isInterjection) {
+                        blocked = shouldBreak
+                      }
+                    } else if (value.error instanceof Question.RejectedError) {
                       blocked = shouldBreak
                     }
                     delete toolcalls[value.toolCallId]
