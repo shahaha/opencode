@@ -34,6 +34,10 @@ export function FileTabContent(props: {
   let scrollFrame: number | undefined
   let pending: { x: number; y: number } | undefined
   let codeScroll: HTMLElement[] = []
+  let hScrollbar: HTMLDivElement | undefined
+  let hScrollContent: HTMLDivElement | undefined
+  let syncingHScroll = false
+  let shadowObserver: MutationObserver | undefined
 
   const path = createMemo(() => props.file.pathFromTab(props.tab))
   const state = createMemo(() => {
@@ -108,12 +112,21 @@ export function FileTabContent(props: {
 
   const commentedLines = createMemo(() => fileComments().map((comment) => comment.selection))
 
+  const commentAnchors = createMemo(() =>
+    fileComments().map((comment) => ({
+      id: comment.id,
+      line: Math.max(comment.selection.start, comment.selection.end),
+    })),
+  )
+
   const [note, setNote] = createStore({
     openedComment: null as string | null,
     commenting: null as SelectedLineRange | null,
     draft: "",
     positions: {} as Record<string, number>,
     draftTop: undefined as number | undefined,
+    viewportWidth: 0,
+    codeScrollLeft: 0,
   })
 
   const openedComment = () => note.openedComment
@@ -136,6 +149,9 @@ export function FileTabContent(props: {
   const draftTop = () => note.draftTop
   const setDraftTop = (value: typeof note.draftTop | ((value: typeof note.draftTop) => typeof note.draftTop)) =>
     setNote("draftTop", value)
+
+  const viewportWidth = () => note.viewportWidth
+  const codeScrollLeft = () => note.codeScrollLeft
 
   const commentLabel = (range: SelectedLineRange) => {
     const start = Math.min(range.start, range.end)
@@ -167,7 +183,7 @@ export function FileTabContent(props: {
   const markerTop = (wrapper: HTMLElement, marker: HTMLElement) => {
     const wrapperRect = wrapper.getBoundingClientRect()
     const rect = marker.getBoundingClientRect()
-    return rect.top - wrapperRect.top + Math.max(0, (rect.height - 20) / 2)
+    return rect.top - wrapperRect.top + Math.max(0, rect.height)
   }
 
   const updateComments = () => {
@@ -235,6 +251,8 @@ export function FileTabContent(props: {
     requestAnimationFrame(() => props.comments.clearFocus())
   })
 
+  let wrapResizeObserver: ResizeObserver | undefined
+
   const getCodeScroll = () => {
     const el = scroll
     if (!el) return []
@@ -266,16 +284,22 @@ export function FileTabContent(props: {
   }
 
   const handleCodeScroll = (event: Event) => {
-    const el = scroll
-    if (!el) return
-
     const target = event.currentTarget
     if (!(target instanceof HTMLElement)) return
 
     queueScrollUpdate({
       x: target.scrollLeft,
-      y: el.scrollTop,
+      y: scroll?.scrollTop ?? 0,
     })
+
+    // Track horizontal scroll for anchor positioning
+    setNote("codeScrollLeft", target.scrollLeft)
+
+    if (!syncingHScroll && hScrollbar) {
+      syncingHScroll = true
+      hScrollbar.scrollLeft = target.scrollLeft
+      syncingHScroll = false
+    }
   }
 
   const syncCodeScroll = () => {
@@ -293,22 +317,51 @@ export function FileTabContent(props: {
     }
   }
 
+  // Watch for DOM changes (e.g. syntax highlighting) that may recreate [data-code] elements
+  const setupShadowObserver = () => {
+    if (shadowObserver) return
+
+    const el = scroll
+    if (!el) return
+
+    const host = el.querySelector("diffs-container")
+    if (!(host instanceof HTMLElement)) return
+
+    const root = host.shadowRoot
+    if (!root) return
+
+    shadowObserver = new MutationObserver(() => {
+      syncCodeScroll()
+      updateHScrollbarWidth()
+    })
+    shadowObserver.observe(root, { childList: true, subtree: true })
+  }
+
   const restoreScroll = () => {
     const el = scroll
     if (!el) return
 
+    syncCodeScroll()
+
     const s = props.view()?.scroll(props.tab)
     if (!s) return
-
-    syncCodeScroll()
 
     if (codeScroll.length > 0) {
       for (const item of codeScroll) {
         if (item.scrollLeft !== s.x) item.scrollLeft = s.x
       }
+      if (hScrollbar && hScrollbar.scrollLeft !== s.x) {
+        hScrollbar.scrollLeft = s.x
+      }
+
+      // Track initial horizontal scroll position
+      setNote("codeScrollLeft", s.x)
     }
 
+    // Always restore vertical scroll
     if (el.scrollTop !== s.y) el.scrollTop = s.y
+
+    // Only set horizontal scroll on container if no code scroll elements
     if (codeScroll.length > 0) return
     if (el.scrollLeft !== s.x) el.scrollLeft = s.x
   }
@@ -320,6 +373,29 @@ export function FileTabContent(props: {
       x: codeScroll[0]?.scrollLeft ?? event.currentTarget.scrollLeft,
       y: event.currentTarget.scrollTop,
     })
+  }
+
+  const updateHScrollbarWidth = () => {
+    if (!hScrollContent) return
+    const code = codeScroll[0]
+    if (!code) {
+      hScrollContent.style.width = "0"
+      return
+    }
+    hScrollContent.style.width = `${code.scrollWidth}px`
+  }
+
+  const handleHScrollbarScroll = () => {
+    if (syncingHScroll || !hScrollbar) return
+    syncingHScroll = true
+    for (const item of codeScroll) {
+      item.scrollLeft = hScrollbar.scrollLeft
+    }
+    queueScrollUpdate({
+      x: hScrollbar.scrollLeft,
+      y: scroll?.scrollTop ?? 0,
+    })
+    syncingHScroll = false
   }
 
   createEffect(
@@ -360,8 +436,14 @@ export function FileTabContent(props: {
       item.removeEventListener("scroll", handleCodeScroll)
     }
 
-    if (scrollFrame === undefined) return
-    cancelAnimationFrame(scrollFrame)
+    shadowObserver?.disconnect()
+    shadowObserver = undefined
+
+    wrapResizeObserver?.disconnect()
+
+    if (scrollFrame !== undefined) {
+      cancelAnimationFrame(scrollFrame)
+    }
   })
 
   const renderCode = (source: string, wrapperClass: string) => (
@@ -369,8 +451,17 @@ export function FileTabContent(props: {
       ref={(el) => {
         wrap = el
         scheduleComments()
+
+        // Track viewport width for anchor positioning
+        wrapResizeObserver?.disconnect()
+        wrapResizeObserver = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            setNote("viewportWidth", entry.contentRect.width)
+          }
+        })
+        wrapResizeObserver.observe(el)
       }}
-      class={`relative overflow-hidden ${wrapperClass}`}
+      class={`relative ${wrapperClass}`}
     >
       <Dynamic
         component={props.codeComponent}
@@ -382,8 +473,16 @@ export function FileTabContent(props: {
         enableLineSelection
         selectedLines={selectedLines()}
         commentedLines={commentedLines()}
+        commentAnchors={commentAnchors()}
+        anchorViewportWidth={viewportWidth()}
+        anchorScrollLeft={codeScrollLeft()}
         onRendered={() => {
-          requestAnimationFrame(restoreScroll)
+          requestAnimationFrame(() => {
+            syncCodeScroll()
+            restoreScroll()
+            updateHScrollbarWidth()
+            setupShadowObserver()
+          })
           requestAnimationFrame(scheduleComments)
         }}
         onLineSelected={(range: SelectedLineRange | null) => {
@@ -401,6 +500,23 @@ export function FileTabContent(props: {
           setOpenedComment(null)
           setCommenting(range)
         }}
+        onCommentAnchorClick={(id: string) => {
+          const p = path()
+          if (!p) return
+          const comment = fileComments().find((c) => c.id === id)
+          if (!comment) return
+          setCommenting(null)
+          setOpenedComment((current) => (current === id ? null : id))
+          props.file.setSelectedLines(p, comment.selection)
+        }}
+        onCommentAnchorHover={(id: string | null) => {
+          const p = path()
+          if (!p) return
+          if (id) {
+            const comment = fileComments().find((c) => c.id === id)
+            if (comment) props.file.setSelectedLines(p, comment.selection)
+          }
+        }}
         overflow="scroll"
         class="select-text"
       />
@@ -410,6 +526,7 @@ export function FileTabContent(props: {
             id={comment.id}
             top={positions()[comment.id]}
             open={openedComment() === comment.id}
+            hideAnchor
             comment={comment.comment}
             selection={commentLabel(comment.selection)}
             onMouseEnter={() => {
@@ -468,7 +585,7 @@ export function FileTabContent(props: {
   return (
     <Tabs.Content
       value={props.tab}
-      class="mt-3 relative"
+      class="mt-3 relative session-scroller"
       ref={(el: HTMLDivElement) => {
         scroll = el
         restoreScroll()
@@ -511,6 +628,16 @@ export function FileTabContent(props: {
         </Match>
         <Match when={state()?.error}>{(err) => <div class="px-6 py-4 text-text-weak">{err()}</div>}</Match>
       </Switch>
+      <Show when={state()?.loaded && !isImage() && !isSvg() && !isBinary()}>
+        <div
+          ref={(el) => (hScrollbar = el)}
+          onScroll={handleHScrollbarScroll}
+          class="session-scroller sticky bottom-0 z-10 overflow-x-auto overflow-y-hidden bg-background-base"
+          style={{ height: "12px" }}
+        >
+          <div ref={(el) => (hScrollContent = el)} style={{ height: "1px" }} />
+        </div>
+      </Show>
     </Tabs.Content>
   )
 }

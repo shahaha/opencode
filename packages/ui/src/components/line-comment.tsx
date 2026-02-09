@@ -10,11 +10,13 @@ export type LineCommentAnchorProps = {
   top?: number
   open: boolean
   variant?: LineCommentVariant
+  hideAnchor?: boolean
   onClick?: JSX.EventHandlerUnion<HTMLButtonElement, MouseEvent>
   onMouseEnter?: JSX.EventHandlerUnion<HTMLButtonElement, MouseEvent>
   onPopoverFocusOut?: JSX.EventHandlerUnion<HTMLDivElement, FocusEvent>
   class?: string
   popoverClass?: string
+  style?: JSX.CSSProperties
   children: JSX.Element
 }
 
@@ -35,11 +37,14 @@ export const LineCommentAnchor = (props: LineCommentAnchorProps) => {
         top: `${props.top ?? 0}px`,
         opacity: hidden() ? 0 : 1,
         "pointer-events": hidden() ? "none" : "auto",
+        ...props.style,
       }}
     >
-      <button type="button" data-slot="line-comment-button" onClick={props.onClick} onMouseEnter={props.onMouseEnter}>
-        <Icon name="comment" size="small" />
-      </button>
+      <Show when={!props.hideAnchor}>
+        <button type="button" data-slot="line-comment-button" onClick={props.onClick} onMouseEnter={props.onMouseEnter}>
+          <Icon name="comment" size="small" />
+        </button>
+      </Show>
       <Show when={props.open}>
         <div
           data-slot="line-comment-popover"
