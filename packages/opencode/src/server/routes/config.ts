@@ -3,6 +3,7 @@ import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Config } from "../../config/config"
 import { Provider } from "../../provider/provider"
+import { Logo } from "../../cli/logo"
 import { mapValues } from "remeda"
 import { errors } from "../error"
 import { Log } from "../../util/log"
@@ -56,6 +57,36 @@ export const ConfigRoutes = lazy(() =>
         const config = c.req.valid("json")
         await Config.update(config)
         return c.json(config)
+      },
+    )
+    .get(
+      "/logo",
+      describeRoute({
+        summary: "Get custom logo",
+        description: "Get the custom logo content if configured, or null to use the default logo.",
+        operationId: "config.logo",
+        responses: {
+          200: {
+            description: "Logo content",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    content: z.string().nullable().describe("Custom logo content, or null to use default"),
+                    disabled: z.boolean().describe("Whether the logo is disabled"),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const custom = await Logo.load()
+        return c.json({
+          content: custom === false ? null : (custom ?? null),
+          disabled: custom === false,
+        })
       },
     )
     .get(

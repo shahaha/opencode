@@ -1638,6 +1638,10 @@ export type Config = {
    * Theme name to use for the interface
    */
   theme?: string
+  /**
+   * Custom logo configuration. Set to false to disable, or provide a path to a text file containing the logo (supports ANSI escape codes).
+   */
+  logo?: false | string
   keybinds?: KeybindsConfig
   logLevel?: LogLevel
   /**
@@ -2649,6 +2653,33 @@ export type ConfigUpdateResponses = {
 }
 
 export type ConfigUpdateResponse = ConfigUpdateResponses[keyof ConfigUpdateResponses]
+
+export type ConfigLogoData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/config/logo"
+}
+
+export type ConfigLogoResponses = {
+  /**
+   * Logo content
+   */
+  200: {
+    /**
+     * Custom logo content, or null to use default
+     */
+    content: string | null
+    /**
+     * Whether the logo is disabled
+     */
+    disabled: boolean
+  }
+}
+
+export type ConfigLogoResponse = ConfigLogoResponses[keyof ConfigLogoResponses]
 
 export type ConfigProvidersData = {
   body?: never

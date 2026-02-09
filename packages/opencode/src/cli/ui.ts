@@ -1,7 +1,7 @@
 import z from "zod"
 import { EOL } from "os"
 import { NamedError } from "@opencode-ai/util/error"
-import { logo as glyphs } from "./logo"
+import { Logo } from "./logo"
 
 export namespace UI {
   export const CancelledError = NamedError.create("UICancelledError", z.void())
@@ -40,7 +40,32 @@ export namespace UI {
     blank = true
   }
 
+  /**
+   * Render the default OpenCode logo (sync version for CLI help).
+   */
   export function logo(pad?: string) {
+    return renderDefaultLogo(pad)
+  }
+
+  /**
+   * Load and render logo based on config (async version).
+   * Uses custom logo if configured, otherwise falls back to default.
+   * Returns empty string if logo is disabled.
+   */
+  export async function logoAsync(pad?: string): Promise<string> {
+    const custom = await Logo.load()
+    if (custom === false) return ""
+    if (custom) return renderCustomLogo(custom, pad)
+    return renderDefaultLogo(pad)
+  }
+
+  function renderCustomLogo(content: string, pad?: string): string {
+    const lines = content.split("\n")
+    if (!pad) return lines.join(EOL)
+    return lines.map((line) => pad + line).join(EOL)
+  }
+
+  function renderDefaultLogo(pad?: string): string {
     const result: string[] = []
     const reset = "\x1b[0m"
     const left = {
@@ -77,11 +102,11 @@ export namespace UI {
       }
       return parts.join("")
     }
-    glyphs.left.forEach((row, index) => {
+    Logo.glyphs.left.forEach((row, index) => {
       if (pad) result.push(pad)
       result.push(draw(row, left.fg, left.shadow, left.bg))
       result.push(gap)
-      const other = glyphs.right[index] ?? ""
+      const other = Logo.glyphs.right[index] ?? ""
       result.push(draw(other, right.fg, right.shadow, right.bg))
       result.push(EOL)
     })
