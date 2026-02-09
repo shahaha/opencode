@@ -1135,6 +1135,10 @@ export type KeybindsConfig = {
    */
   command_list?: string
   /**
+   * Show all keybindings
+   */
+  keybindings_list?: string
+  /**
    * List agents
    */
   agent_list?: string

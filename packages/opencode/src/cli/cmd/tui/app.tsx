@@ -15,6 +15,7 @@ import { DialogMcp } from "@tui/component/dialog-mcp"
 import { DialogStatus } from "@tui/component/dialog-status"
 import { DialogThemeList } from "@tui/component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
+import { DialogKeybindings } from "@tui/component/dialog-keybindings"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
 import { DialogAgent } from "@tui/component/dialog-agent"
 import { DialogSessionList } from "@tui/component/dialog-session-list"
@@ -506,6 +507,15 @@ function App() {
       },
       onSelect: () => {
         dialog.replace(() => <DialogHelp />)
+      },
+      category: "System",
+    },
+    {
+      title: "Show keybindings",
+      value: "help.keybindings",
+      keybind: "keybindings_list",
+      onSelect: () => {
+        dialog.replace(() => <DialogKeybindings />)
       },
       category: "System",
     },
