@@ -11,6 +11,17 @@ import { Identifier } from "@/id/id"
 import { createStore, produce } from "solid-js/store"
 import { useKeybind } from "@tui/context/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
+import {
+  createPastePlaceholder,
+  shiftRange,
+  rewriteRange,
+  cursorAfterNonText,
+  cursorAfterReplacement,
+  updateTextPart,
+  shiftFilePart,
+  shiftAgentPart,
+  replacePart,
+} from "./paste-summary"
 import { usePromptStash } from "./stash"
 import { DialogStash } from "../dialog-stash"
 import { type AutocompleteRef, Autocomplete } from "./autocomplete"
@@ -74,6 +85,15 @@ export function Prompt(props: PromptProps) {
   const renderer = useRenderer()
   const { theme, syntax } = useTheme()
   const kv = useKV()
+  const [disablePasteSummaryOverride, setDisablePasteSummaryOverride] = kv.signal<boolean | null>(
+    "disable_paste_summary_override",
+    null,
+  )
+  const disablePasteSummary = createMemo(() => {
+    const override = disablePasteSummaryOverride()
+    if (override !== null) return override
+    return sync.data.config.experimental?.disable_paste_summary ?? false
+  })
 
   function promptModelWarning() {
     toast.show({
@@ -155,6 +175,89 @@ export function Prompt(props: PromptProps) {
     }
   })
 
+  function applyPasteSummaryMode(summaryDisabled: boolean) {
+    if (!store.prompt.parts.length) return
+    if (promptPartTypeId === 0) return
+
+    const extmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
+    if (!extmarks.length) return
+
+    const sortedExtmarks = extmarks.sort((a: { start: number }, b: { start: number }) => a.start - b.start)
+    const result = sortedExtmarks.reduce(
+      (state, extmark) => {
+        const partIndex = store.extmarkToPartIndex.get(extmark.id)
+        if (partIndex === undefined) return state
+        const part = state.parts[partIndex]
+        if (!part) return state
+
+        const range = shiftRange(extmark, state.delta)
+        const cursor = cursorAfterNonText(state.cursor, range.start, range.end)
+
+        if (part.type === "text" && part.source?.text) {
+          const content = summaryDisabled ? (part.text ?? "") : state.text.slice(range.start, range.end)
+          const replacement = summaryDisabled ? content : createPastePlaceholder(content)
+          const update = rewriteRange(state.text, range.start, range.end, replacement)
+          const nextPart = updateTextPart(part, content, range.start, replacement)
+          const nextParts = replacePart(state.parts, partIndex, nextPart)
+          const nextCursor = cursorAfterReplacement(cursor, range.start, range.end, update.diff, replacement.length)
+          return {
+            text: update.nextText,
+            delta: state.delta + update.diff,
+            cursor: nextCursor,
+            parts: nextParts,
+          }
+        }
+
+        if (part.type === "file" && part.source?.text) {
+          const nextParts = replacePart(state.parts, partIndex, shiftFilePart(part, range.start, range.end))
+          return {
+            text: state.text,
+            delta: state.delta,
+            cursor,
+            parts: nextParts,
+          }
+        }
+
+        if (part.type === "agent" && part.source) {
+          const nextParts = replacePart(state.parts, partIndex, shiftAgentPart(part, range.start, range.end))
+          return {
+            text: state.text,
+            delta: state.delta,
+            cursor,
+            parts: nextParts,
+          }
+        }
+
+        return state
+      },
+      {
+        text: store.prompt.input,
+        delta: 0,
+        cursor: input.cursorOffset,
+        parts: store.prompt.parts.slice(),
+      },
+    )
+
+    input.setText(result.text)
+    setStore("prompt", {
+      input: result.text,
+      parts: result.parts,
+    })
+    restoreExtmarksFromParts(result.parts)
+    input.cursorOffset = Math.min(result.cursor, Bun.stringWidth(result.text))
+  }
+
+  function togglePasteSummary() {
+    const next = !disablePasteSummary()
+    setDisablePasteSummaryOverride(() => next)
+    applyPasteSummaryMode(next)
+    toast.show({
+      variant: "info",
+      message: next ? "Paste summary disabled" : "Paste summary enabled",
+      duration: 2500,
+    })
+  }
+
   command.register(() => {
     return [
       {
@@ -195,6 +298,16 @@ export function Prompt(props: PromptProps) {
               content: content.data,
             })
           }
+        },
+      },
+      {
+        title: disablePasteSummary() ? "Enable paste summary" : "Disable paste summary",
+        value: "prompt.paste.summary.toggle",
+        keybind: "toggle_paste_summary",
+        category: "Prompt",
+        onSelect: (dialog) => {
+          togglePasteSummary()
+          dialog.clear()
         },
       },
       {
@@ -388,6 +501,7 @@ export function Prompt(props: PromptProps) {
       let end = 0
       let virtualText = ""
       let styleId: number | undefined
+      let virtual = true
 
       if (part.type === "file" && part.source?.text) {
         start = part.source.text.start
@@ -404,13 +518,14 @@ export function Prompt(props: PromptProps) {
         end = part.source.text.end
         virtualText = part.source.text.value
         styleId = pasteStyleId
+        virtual = part.text !== part.source.text.value
       }
 
       if (virtualText) {
         const extmarkId = input.extmarks.create({
           start,
           end,
-          virtual: true,
+          virtual,
           styleId,
           typeId: promptPartTypeId,
         })
@@ -535,18 +650,20 @@ export function Prompt(props: PromptProps) {
     const messageID = Identifier.ascending("message")
     let inputText = store.prompt.input
 
-    // Expand pasted text inline before submitting
-    const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
-    const sortedExtmarks = allExtmarks.sort((a: { start: number }, b: { start: number }) => b.start - a.start)
+    if (!disablePasteSummary()) {
+      // Expand pasted text inline before submitting
+      const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
+      const sortedExtmarks = allExtmarks.sort((a: { start: number }, b: { start: number }) => b.start - a.start)
 
-    for (const extmark of sortedExtmarks) {
-      const partIndex = store.extmarkToPartIndex.get(extmark.id)
-      if (partIndex !== undefined) {
-        const part = store.prompt.parts[partIndex]
-        if (part?.type === "text" && part.text) {
-          const before = inputText.slice(0, extmark.start)
-          const after = inputText.slice(extmark.end)
-          inputText = before + part.text + after
+      for (const extmark of sortedExtmarks) {
+        const partIndex = store.extmarkToPartIndex.get(extmark.id)
+        if (partIndex !== undefined) {
+          const part = store.prompt.parts[partIndex]
+          if (part?.type === "text" && part.text) {
+            const before = inputText.slice(0, extmark.start)
+            const after = inputText.slice(extmark.end)
+            inputText = before + part.text + after
+          }
         }
       }
     }
@@ -650,13 +767,14 @@ export function Prompt(props: PromptProps) {
     const currentOffset = input.visualCursor.offset
     const extmarkStart = currentOffset
     const extmarkEnd = extmarkStart + virtualText.length
+    const virtual = virtualText !== text
 
     input.insertText(virtualText + " ")
 
     const extmarkId = input.extmarks.create({
       start: extmarkStart,
       end: extmarkEnd,
-      virtual: true,
+      virtual,
       styleId: pasteStyleId,
       typeId: promptPartTypeId,
     })
@@ -939,12 +1057,11 @@ export function Prompt(props: PromptProps) {
                 }
 
                 const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
-                if (
-                  (lineCount >= 3 || pastedContent.length > 150) &&
-                  !sync.data.config.experimental?.disable_paste_summary
-                ) {
+                const isLargePaste = lineCount >= 3 || pastedContent.length > 150
+                if (isLargePaste) {
                   event.preventDefault()
-                  pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
+                  const display = disablePasteSummary() ? pastedContent : createPastePlaceholder(pastedContent)
+                  pasteText(pastedContent, display)
                   return
                 }
 
