@@ -1159,6 +1159,14 @@ export type KeybindsConfig = {
    */
   input_paste?: string
   /**
+   * Copy selected text from input
+   */
+  input_copy?: string
+  /**
+   * Cut selected text from input
+   */
+  input_cut?: string
+  /**
    * Submit input
    */
   input_submit?: string
