@@ -447,6 +447,7 @@ export const dict = {
   "session.tab.session": "Sesija",
   "session.tab.review": "Pregled",
   "session.tab.context": "Kontekst",
+  "session.tab.closeOthers": "Zatvori ostale",
   "session.panel.reviewAndFiles": "Pregled i datoteke",
   "session.review.filesChanged": "Izmijenjeno {{count}} datoteka",
   "session.review.change.one": "Izmjena",
@@ -458,6 +459,7 @@ export const dict = {
   "session.files.selectToOpen": "Odaberi datoteku za otvaranje",
   "session.files.all": "Sve datoteke",
   "session.files.binaryContent": "Binarna datoteka (sadržaj se ne može prikazati)",
+  "session.files.mention": "Spomeni",
 
   "session.messages.renderEarlier": "Prikaži ranije poruke",
   "session.messages.loadingEarlier": "Učitavanje ranijih poruka...",
@@ -517,6 +519,7 @@ export const dict = {
   "common.archive": "Arhiviraj",
   "common.delete": "Izbriši",
   "common.close": "Zatvori",
+  "common.open": "Otvori",
   "common.edit": "Uredi",
   "common.loadMore": "Učitaj još",
   "common.key.esc": "ESC",

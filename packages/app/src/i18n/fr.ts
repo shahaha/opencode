@@ -429,6 +429,7 @@ export const dict = {
   "session.tab.session": "Session",
   "session.tab.review": "Revue",
   "session.tab.context": "Contexte",
+  "session.tab.closeOthers": "Fermer les autres",
   "session.panel.reviewAndFiles": "Revue et fichiers",
   "session.review.filesChanged": "{{count}} fichiers modifiés",
   "session.review.change.one": "Modification",
@@ -439,6 +440,7 @@ export const dict = {
   "session.files.selectToOpen": "Sélectionnez un fichier à ouvrir",
   "session.files.all": "Tous les fichiers",
   "session.files.binaryContent": "Fichier binaire (le contenu ne peut pas être affiché)",
+  "session.files.mention": "Mentionner",
   "session.messages.renderEarlier": "Afficher les messages précédents",
   "session.messages.loadingEarlier": "Chargement des messages précédents...",
   "session.messages.loadEarlier": "Charger les messages précédents",
@@ -499,6 +501,7 @@ export const dict = {
   "common.archive": "Archiver",
   "common.delete": "Supprimer",
   "common.close": "Fermer",
+  "common.open": "Ouvrir",
   "common.edit": "Modifier",
   "common.loadMore": "Charger plus",
 

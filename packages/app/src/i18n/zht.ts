@@ -457,6 +457,7 @@ export const dict = {
   "session.tab.session": "工作階段",
   "session.tab.review": "審查",
   "session.tab.context": "上下文",
+  "session.tab.closeOthers": "關閉其他",
   "session.panel.reviewAndFiles": "審查與檔案",
   "session.review.filesChanged": "{{count}} 個檔案變更",
   "session.review.change.one": "變更",
@@ -467,6 +468,7 @@ export const dict = {
   "session.files.selectToOpen": "選取要開啟的檔案",
   "session.files.all": "所有檔案",
   "session.files.binaryContent": "二進位檔案（無法顯示內容）",
+  "session.files.mention": "提及",
   "session.messages.renderEarlier": "顯示更早的訊息",
   "session.messages.loadingEarlier": "正在載入更早的訊息...",
   "session.messages.loadEarlier": "載入更早的訊息",
@@ -524,6 +526,7 @@ export const dict = {
   "common.archive": "封存",
   "common.delete": "刪除",
   "common.close": "關閉",
+  "common.open": "開啟",
   "common.edit": "編輯",
   "common.loadMore": "載入更多",
 

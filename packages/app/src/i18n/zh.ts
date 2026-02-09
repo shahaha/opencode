@@ -460,6 +460,7 @@ export const dict = {
   "session.tab.session": "会话",
   "session.tab.review": "审查",
   "session.tab.context": "上下文",
+  "session.tab.closeOthers": "关闭其他",
   "session.panel.reviewAndFiles": "审查和文件",
   "session.review.filesChanged": "{{count}} 个文件变更",
   "session.review.change.one": "更改",
@@ -470,6 +471,7 @@ export const dict = {
   "session.files.selectToOpen": "选择要打开的文件",
   "session.files.all": "所有文件",
   "session.files.binaryContent": "二进制文件（无法显示内容）",
+  "session.files.mention": "提及",
   "session.messages.renderEarlier": "显示更早的消息",
   "session.messages.loadingEarlier": "正在加载更早的消息...",
   "session.messages.loadEarlier": "加载更早的消息",
@@ -527,6 +529,7 @@ export const dict = {
   "common.archive": "归档",
   "common.delete": "删除",
   "common.close": "关闭",
+  "common.open": "打开",
   "common.edit": "编辑",
   "common.loadMore": "加载更多",
 

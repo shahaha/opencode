@@ -416,6 +416,7 @@ export const dict = {
   "session.tab.session": "セッション",
   "session.tab.review": "レビュー",
   "session.tab.context": "コンテキスト",
+  "session.tab.closeOthers": "他のタブを閉じる",
   "session.panel.reviewAndFiles": "レビューとファイル",
   "session.review.filesChanged": "{{count}} ファイル変更",
   "session.review.change.one": "変更",
@@ -426,6 +427,7 @@ export const dict = {
   "session.files.selectToOpen": "開くファイルを選択",
   "session.files.all": "すべてのファイル",
   "session.files.binaryContent": "バイナリファイル（内容を表示できません）",
+  "session.files.mention": "メンション",
   "session.messages.renderEarlier": "以前のメッセージを表示",
   "session.messages.loadingEarlier": "以前のメッセージを読み込み中...",
   "session.messages.loadEarlier": "以前のメッセージを読み込む",
@@ -486,6 +488,7 @@ export const dict = {
   "common.archive": "アーカイブ",
   "common.delete": "削除",
   "common.close": "閉じる",
+  "common.open": "開く",
   "common.edit": "編集",
   "common.loadMore": "さらに読み込む",
 

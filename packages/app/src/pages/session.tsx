@@ -780,6 +780,40 @@ export default function Page() {
     prompt.context.add({ type: "file", path, selection, preview })
   }
 
+  const mentionFile = (path: string) => {
+    const current = prompt.current()
+    const isDirty = prompt.dirty()
+
+    const parts: typeof current = []
+    const images: typeof current = []
+    let pos = 0
+
+    for (const part of current) {
+      if (part.type === "image") {
+        images.push(part)
+        continue
+      }
+      if (isDirty) {
+        parts.push(part)
+        pos = part.end
+      }
+    }
+
+    if (isDirty) {
+      parts.push({ type: "text", content: " ", start: pos, end: pos + 1 })
+      pos += 1
+    }
+
+    const content = "@" + path
+    parts.push({ type: "file", path, content, start: pos, end: pos + content.length })
+    pos += content.length
+
+    parts.push({ type: "text", content: " ", start: pos, end: pos + 1 })
+    pos += 1
+
+    prompt.set([...parts, ...images], pos)
+  }
+
   const addCommentToContext = (input: {
     file: string
     selection: SelectedLineRange
@@ -887,6 +921,18 @@ export default function Page() {
       .all()
       .filter((tab) => tab !== "context" && tab !== "review"),
   )
+
+  const closeOtherTabs = (currentTab: string) => {
+    const others = openedTabs().filter((tab) => tab !== currentTab)
+    for (const tab of others) {
+      tabs().close(tab)
+    }
+  }
+
+  const mentionTab = (tab: string) => {
+    const path = file.pathFromTab(tab)
+    if (path) mentionFile(path)
+  }
 
   const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
   const reviewTab = createMemo(() => isDesktop() && !layout.fileTree.opened())
@@ -1728,6 +1774,9 @@ export default function Page() {
           kinds={kinds()}
           activeDiff={tree.activeDiff}
           focusReviewDiff={focusReviewDiff}
+          onFileMention={mentionFile}
+          onCloseOthers={closeOtherTabs}
+          onMention={mentionTab}
         />
       </div>
 
