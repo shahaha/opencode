@@ -78,6 +78,7 @@ import { QuestionPrompt } from "./question"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatTranscript } from "../../util/transcript"
 import { UI } from "@/cli/ui.ts"
+import { edgeHints, olderScrollTarget, queueBoundaryLoad } from "@tui/util/pagination"
 
 addDefaultParsers(parsers.parsers)
 
@@ -123,6 +124,7 @@ export function Session() {
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   })
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
+  const paging = createMemo(() => sync.data.message_page[route.sessionID])
   const permissions = createMemo(() => {
     if (session()?.parentID) return []
     return children().flatMap((x) => sync.data.permission[x.id] ?? [])
@@ -131,6 +133,67 @@ export function Session() {
     if (session()?.parentID) return []
     return children().flatMap((x) => sync.data.question[x.id] ?? [])
   })
+
+  const LOAD_MORE_THRESHOLD = 5
+
+  const loadOlder = () => {
+    const page = paging()
+    if (!page?.hasOlder || page.loading || !scroll) return
+    if (scroll.scrollTop > LOAD_MORE_THRESHOLD) return
+
+    const anchor = (() => {
+      const scrollTop = scroll.scrollTop
+      const children = scroll.getChildren()
+      for (const child of children) {
+        if (!child.id) continue
+        if (child.y + child.height > scrollTop) {
+          return { id: child.id, offset: scrollTop - child.y }
+        }
+      }
+      return undefined
+    })()
+
+    const height = scroll.scrollHeight
+    const scrollTop = scroll.scrollTop
+    sync.session.loadOlder(route.sessionID).then(() => {
+      queueMicrotask(() => {
+        requestAnimationFrame(() => {
+          if (!scroll || scroll.isDestroyed) return
+          const nextTop = olderScrollTarget(scroll.getChildren(), scroll.scrollHeight, height, scrollTop, anchor)
+          if (nextTop !== undefined) scroll.scrollTo(nextTop)
+          refreshEdges()
+        })
+      })
+    })
+  }
+
+  const loadNewer = () => {
+    const page = paging()
+    if (!page?.hasNewer || page.loading || !scroll) return
+    const bottomDistance = scroll.scrollHeight - scroll.scrollTop - scroll.viewport.height
+    if (bottomDistance > LOAD_MORE_THRESHOLD) return
+    sync.session.loadNewer(route.sessionID).then(() => {
+      queueMicrotask(() => {
+        requestAnimationFrame(() => {
+          refreshEdges()
+        })
+      })
+    })
+  }
+
+  const refreshEdges = () => {
+    if (!scroll || scroll.isDestroyed) return
+    const edges = edgeHints(scroll.scrollTop, scroll.scrollHeight, scroll.viewport.height, HINT_THRESHOLD)
+    setNearTop(edges.nearTop)
+    setNearBottom(edges.nearBottom)
+  }
+
+  const scrollMove = (delta: number) => {
+    if (!scroll || scroll.isDestroyed) return
+    scroll.scrollBy(delta)
+    refreshEdges()
+    queueBoundaryLoad(delta, loadOlder, loadNewer)
+  }
 
   const pending = createMemo(() => {
     return messages().findLast((x) => x.role === "assistant" && !x.time.completed)?.id
@@ -151,6 +214,9 @@ export function Session() {
   const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", false)
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
   const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
+  const [nearTop, setNearTop] = createSignal(false)
+  const [nearBottom, setNearBottom] = createSignal(false)
+  const HINT_THRESHOLD = 20
 
   const wide = createMemo(() => dimensions().width > 120)
   const sidebarVisible = createMemo(() => {
@@ -178,7 +244,9 @@ export function Session() {
     await sync.session
       .sync(route.sessionID)
       .then(() => {
-        if (scroll) scroll.scrollBy(100_000)
+        if (!scroll || scroll.isDestroyed) return
+        scroll.scrollBy(100_000)
+        refreshEdges()
       })
       .catch((e) => {
         console.error(e)
@@ -247,7 +315,7 @@ export function Session() {
   const findNextVisibleMessage = (direction: "next" | "prev"): string | null => {
     const children = scroll.getChildren()
     const messagesList = messages()
-    const scrollTop = scroll.y
+    const scrollTop = scroll.scrollTop
 
     // Get visible messages sorted by position, filtering for valid non-synthetic, non-ignored content
     const visibleMessages = children
@@ -279,13 +347,16 @@ export function Session() {
     const targetID = findNextVisibleMessage(direction)
 
     if (!targetID) {
-      scroll.scrollBy(direction === "next" ? scroll.height : -scroll.height)
+      scrollMove(direction === "next" ? scroll.height : -scroll.height)
       dialog.clear()
       return
     }
 
     const child = scroll.getChildren().find((c) => c.id === targetID)
-    if (child) scroll.scrollBy(child.y - scroll.y - 1)
+    if (child) {
+      scroll.scrollBy(child.y - scroll.scrollTop - 1)
+      refreshEdges()
+    }
     dialog.clear()
   }
 
@@ -293,6 +364,9 @@ export function Session() {
     setTimeout(() => {
       if (!scroll || scroll.isDestroyed) return
       scroll.scrollTo(scroll.scrollHeight)
+      requestAnimationFrame(() => {
+        refreshEdges()
+      })
     }, 50)
   }
 
@@ -365,7 +439,10 @@ export function Session() {
               const child = scroll.getChildren().find((child) => {
                 return child.id === messageID
               })
-              if (child) scroll.scrollBy(child.y - scroll.y - 1)
+              if (child) {
+                scroll.scrollBy(child.y - scroll.scrollTop - 1)
+                refreshEdges()
+              }
             }}
             sessionID={route.sessionID}
             setPrompt={(promptInfo) => prompt.set(promptInfo)}
@@ -388,7 +465,10 @@ export function Session() {
               const child = scroll.getChildren().find((child) => {
                 return child.id === messageID
               })
-              if (child) scroll.scrollBy(child.y - scroll.y - 1)
+              if (child) {
+                scroll.scrollBy(child.y - scroll.scrollTop - 1)
+                refreshEdges()
+              }
             }}
             sessionID={route.sessionID}
           />
@@ -584,7 +664,7 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(-scroll.height / 2)
+        scrollMove(-scroll.height / 2)
         dialog.clear()
       },
     },
@@ -595,7 +675,7 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(scroll.height / 2)
+        scrollMove(scroll.height / 2)
         dialog.clear()
       },
     },
@@ -606,7 +686,7 @@ export function Session() {
       category: "Session",
       disabled: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(-1)
+        scrollMove(-1)
         dialog.clear()
       },
     },
@@ -617,7 +697,7 @@ export function Session() {
       category: "Session",
       disabled: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(1)
+        scrollMove(1)
         dialog.clear()
       },
     },
@@ -628,7 +708,7 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(-scroll.height / 4)
+        scrollMove(-scroll.height / 4)
         dialog.clear()
       },
     },
@@ -639,7 +719,7 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(scroll.height / 4)
+        scrollMove(scroll.height / 4)
         dialog.clear()
       },
     },
@@ -650,7 +730,23 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollTo(0)
+        const page = paging()
+        if (page?.hasOlder && !page.loading) {
+          sync.session.jumpToOldest(route.sessionID).then(() => {
+            requestAnimationFrame(() => {
+              if (!scroll || scroll.isDestroyed) return
+              scroll.scrollTo(0)
+              refreshEdges()
+            })
+          })
+        } else {
+          if (!scroll || scroll.isDestroyed) {
+            dialog.clear()
+            return
+          }
+          scroll.scrollTo(0)
+          refreshEdges()
+        }
         dialog.clear()
       },
     },
@@ -661,7 +757,23 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollTo(scroll.scrollHeight)
+        const page = paging()
+        if (page?.hasNewer && !page.loading) {
+          sync.session.jumpToLatest(route.sessionID).then(() => {
+            requestAnimationFrame(() => {
+              if (!scroll || scroll.isDestroyed) return
+              scroll.scrollTo(scroll.scrollHeight)
+              refreshEdges()
+            })
+          })
+        } else {
+          if (!scroll || scroll.isDestroyed) {
+            dialog.clear()
+            return
+          }
+          scroll.scrollTo(scroll.scrollHeight)
+          refreshEdges()
+        }
         dialog.clear()
       },
     },
@@ -691,7 +803,10 @@ export function Session() {
             const child = scroll.getChildren().find((child) => {
               return child.id === message.id
             })
-            if (child) scroll.scrollBy(child.y - scroll.y - 1)
+            if (child) {
+              scroll.scrollBy(child.y - scroll.scrollTop - 1)
+              refreshEdges()
+            }
             break
           }
         }
@@ -961,8 +1076,45 @@ export function Session() {
             <Show when={!sidebarVisible() || !wide()}>
               <Header />
             </Show>
+            <Show when={paging()?.loading && paging()?.loadingDirection === "older"}>
+              <box flexShrink={0} paddingLeft={1}>
+                <text fg={theme.textMuted}>Loading older messages...</text>
+              </box>
+            </Show>
+            <Show when={!paging()?.loading && paging()?.hasOlder && nearTop()}>
+              <box flexShrink={0} paddingLeft={1}>
+                <text fg={theme.textMuted}>(scroll up for more)</text>
+              </box>
+            </Show>
+            <Show when={paging()?.error}>
+              <box flexShrink={0} paddingLeft={1}>
+                <text fg={theme.error}>Failed to load: {paging()?.error}</text>
+                <text fg={theme.textMuted}> (scroll to retry)</text>
+              </box>
+            </Show>
             <scrollbox
               ref={(r) => (scroll = r)}
+              onMouseScroll={() => {
+                refreshEdges()
+                loadOlder()
+                loadNewer()
+              }}
+              onKeyDown={(e) => {
+                // Standard scroll triggers incremental load
+                if (["up", "pageup", "home"].includes(e.name)) {
+                  setTimeout(() => {
+                    refreshEdges()
+                    loadOlder()
+                  }, 0)
+                }
+                if (["down", "pagedown", "end"].includes(e.name)) {
+                  setTimeout(() => {
+                    refreshEdges()
+                    loadNewer()
+                  }, 0)
+                }
+              }}
+              viewportCulling={true}
               viewportOptions={{
                 paddingRight: showScrollbar() ? 1 : 0,
               }}
@@ -1075,6 +1227,16 @@ export function Session() {
                 )}
               </For>
             </scrollbox>
+            <Show when={paging()?.loading && paging()?.loadingDirection === "newer"}>
+              <box flexShrink={0} paddingLeft={1}>
+                <text fg={theme.textMuted}>Loading newer messages...</text>
+              </box>
+            </Show>
+            <Show when={!paging()?.loading && paging()?.hasNewer && nearBottom()}>
+              <box flexShrink={0} paddingLeft={1}>
+                <text fg={theme.textMuted}>(scroll down for more)</text>
+              </box>
+            </Show>
             <box flexShrink={0}>
               <Show when={permissions().length > 0}>
                 <PermissionPrompt request={permissions()[0]} />
