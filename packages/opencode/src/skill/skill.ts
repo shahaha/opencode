@@ -94,7 +94,6 @@ export namespace Skill {
           absolute: true,
           onlyFiles: true,
           followSymlinks: true,
-          dot: true,
         }),
       )
         .then((matches) => Promise.all(matches.map(addSkill)))

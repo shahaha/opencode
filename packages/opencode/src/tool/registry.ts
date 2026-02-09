@@ -36,7 +36,7 @@ export namespace ToolRegistry {
     const glob = new Bun.Glob("{tool,tools}/*.{js,ts}")
 
     const matches = await Config.directories().then((dirs) =>
-      dirs.flatMap((dir) => [...glob.scanSync({ cwd: dir, absolute: true, followSymlinks: true, dot: true })]),
+      dirs.flatMap((dir) => [...glob.scanSync({ cwd: dir, absolute: true, followSymlinks: true })]),
     )
     if (matches.length) await Config.waitForDependencies()
     for (const match of matches) {
