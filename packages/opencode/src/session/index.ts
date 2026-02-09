@@ -71,6 +71,7 @@ export namespace Session {
         .optional(),
       title: z.string(),
       version: z.string(),
+      cost: z.number().optional(),
       time: z.object({
         created: z.number(),
         updated: z.number(),
@@ -218,6 +219,7 @@ export namespace Session {
       directory: input.directory,
       parentID: input.parentID,
       title: input.title ?? createDefaultTitle(!!input.parentID),
+      cost: 0,
       permission: input.permission,
       time: {
         created: Date.now(),
@@ -260,6 +262,11 @@ export namespace Session {
 
   export const getShare = fn(Identifier.schema("session"), async (id) => {
     return Storage.read<ShareInfo>(["share", id])
+  })
+
+  export const getCost = fn(Identifier.schema("session"), async (id) => {
+    const read = await Storage.read<Info>(["session", Instance.project.id, id])
+    return read.cost
   })
 
   export const share = fn(Identifier.schema("session"), async (id) => {
@@ -306,6 +313,13 @@ export namespace Session {
       info: result,
     })
     return result
+  }
+
+  export async function addCost(sessionID: string, amount: number) {
+    if (amount === 0) return
+    await update(sessionID, (draft) => {
+      draft.cost = (draft.cost ?? 0) + amount
+    })
   }
 
   export const diff = fn(Identifier.schema("session"), async (sessionID) => {
