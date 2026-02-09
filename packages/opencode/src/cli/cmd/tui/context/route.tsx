@@ -19,13 +19,8 @@ export type Route = HomeRoute | SessionRoute
 export const { use: useRoute, provider: RouteProvider } = createSimpleContext({
   name: "Route",
   init: () => {
-    const [store, setStore] = createStore<Route>(
-      Env.get("OPENCODE_ROUTE")
-        ? JSON.parse(Env.get("OPENCODE_ROUTE")!)
-        : {
-            type: "home",
-          },
-    )
+    const initial = Env.get("OPENCODE_ROUTE")
+    const [store, setStore] = createStore<Route>(initial ? JSON.parse(initial) : { type: "home" })
 
     return {
       get data() {
