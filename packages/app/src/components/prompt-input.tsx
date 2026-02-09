@@ -277,6 +277,16 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const isFocused = createFocusSignal(() => editorRef)
 
+  // tauri/wkwebview doesn't always remove cursor when focus moves to another element
+  createEffect(() => {
+    if (!isFocused() && document.activeElement !== editorRef) {
+      const selection = window.getSelection()
+      if (selection && editorRef.contains(selection.anchorNode)) {
+        selection.removeAllRanges()
+      }
+    }
+  })
+
   createEffect(() => {
     params.id
     if (params.id) return
