@@ -720,6 +720,22 @@ export namespace ProviderTransform {
 
   export function providerOptions(model: Provider.Model, options: { [x: string]: any }) {
     const key = sdkKey(model.api.npm) ?? model.providerID
+
+    // The @ai-sdk/openai-compatible SDK does not convert camelCase to snake_case
+    // for custom providerOptions (only for its own schema fields like reasoningEffort).
+    // When thinking.budgetTokens is set, we must convert it to budget_tokens so that
+    // OpenAI-compatible proxies (LiteLLM, OpenRouter, etc.) can forward it correctly.
+    if (model.api.npm === "@ai-sdk/openai-compatible" && options?.thinking?.budgetTokens != null) {
+      const { budgetTokens, ...thinkingRest } = options.thinking
+      options = {
+        ...options,
+        thinking: {
+          ...thinkingRest,
+          budget_tokens: budgetTokens,
+        },
+      }
+    }
+
     return { [key]: options }
   }
 

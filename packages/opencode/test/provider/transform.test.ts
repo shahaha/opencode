@@ -267,6 +267,71 @@ describe("ProviderTransform.maxOutputTokens", () => {
       expect(result).toBe(OUTPUT_TOKEN_MAX)
     })
   })
+
+})
+
+describe("ProviderTransform.providerOptions - openai-compatible snake_case conversion", () => {
+  test("converts thinking.budgetTokens to budget_tokens for openai-compatible", () => {
+    const model = {
+      providerID: "litellm",
+      api: { npm: "@ai-sdk/openai-compatible" },
+    } as any
+    const options = {
+      thinking: {
+        type: "enabled",
+        budgetTokens: 16000,
+      },
+    }
+    const result = ProviderTransform.providerOptions(model, options)
+    expect(result.litellm.thinking.budget_tokens).toBe(16000)
+    expect(result.litellm.thinking.budgetTokens).toBeUndefined()
+    expect(result.litellm.thinking.type).toBe("enabled")
+  })
+
+  test("does not convert for @ai-sdk/anthropic (SDK handles it)", () => {
+    const model = {
+      providerID: "anthropic",
+      api: { npm: "@ai-sdk/anthropic" },
+    } as any
+    const options = {
+      thinking: {
+        type: "enabled",
+        budgetTokens: 16000,
+      },
+    }
+    const result = ProviderTransform.providerOptions(model, options)
+    expect(result.anthropic.thinking.budgetTokens).toBe(16000)
+    expect(result.anthropic.thinking.budget_tokens).toBeUndefined()
+  })
+
+  test("passes through options without thinking unchanged", () => {
+    const model = {
+      providerID: "litellm",
+      api: { npm: "@ai-sdk/openai-compatible" },
+    } as any
+    const options = {
+      reasoningEffort: "high",
+    }
+    const result = ProviderTransform.providerOptions(model, options)
+    expect(result.litellm.reasoningEffort).toBe("high")
+    expect(result.litellm.thinking).toBeUndefined()
+  })
+
+  test("passes through thinking without budgetTokens unchanged", () => {
+    const model = {
+      providerID: "litellm",
+      api: { npm: "@ai-sdk/openai-compatible" },
+    } as any
+    const options = {
+      thinking: {
+        type: "enabled",
+        budget_tokens: 16000,
+      },
+    }
+    const result = ProviderTransform.providerOptions(model, options)
+    expect(result.litellm.thinking.budget_tokens).toBe(16000)
+    expect(result.litellm.thinking.type).toBe("enabled")
+  })
 })
 
 describe("ProviderTransform.schema - gemini array items", () => {
