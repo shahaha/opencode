@@ -68,6 +68,7 @@ import { Toast, useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv.tsx"
 import { Editor } from "../../util/editor"
 import stripAnsi from "strip-ansi"
+import { SearchInput, type SearchInputRef } from "../../component/prompt/search.tsx"
 import { Footer } from "./footer.tsx"
 import { usePromptRef } from "../../context/prompt"
 import { useExit } from "../../context/exit"
@@ -91,6 +92,14 @@ class CustomSpeedScroll implements ScrollAcceleration {
   reset(): void {}
 }
 
+type SearchMatch = {
+  messageID: string
+  partID?: string
+  text: string
+  index: number
+  charOffset: number
+}
+
 const context = createContext<{
   width: number
   sessionID: string
@@ -100,6 +109,9 @@ const context = createContext<{
   showDetails: () => boolean
   diffWrapMode: () => "word" | "none"
   sync: ReturnType<typeof useSync>
+  searchQuery: () => string
+  currentMatchIndex: () => number
+  matches: () => SearchMatch[]
 }>()
 
 function use() {
@@ -219,7 +231,140 @@ export function Session() {
 
   let scroll: ScrollBoxRenderable
   let prompt: PromptRef
+  let search: SearchInputRef
+  const [searchMode, setSearchMode] = createSignal(false)
+  const [searchQuery, setSearchQuery] = createSignal("")
+  const [currentMatchIndex, setCurrentMatchIndex] = createSignal(0)
   const keybind = useKeybind()
+
+  const matches = createMemo(() => {
+    const query = searchQuery().toLowerCase().trim()
+    if (!query) return []
+
+    const result: SearchMatch[] = []
+    let matchIndex = 0
+
+    for (const message of messages()) {
+      const parts = sync.data.part[message.id] ?? []
+      for (const part of parts) {
+        if (part.type === "text" && !part.synthetic) {
+          const text = part.text.toLowerCase()
+          let pos = 0
+          while ((pos = text.indexOf(query, pos)) !== -1) {
+            result.push({
+              messageID: message.id,
+              partID: part.id,
+              text: part.text.slice(pos, pos + query.length),
+              index: matchIndex++,
+              charOffset: pos,
+            })
+            pos += query.length
+          }
+        }
+      }
+    }
+    return result
+  })
+
+  createEffect(() => {
+    const m = matches()
+    if (m.length === 0) {
+      setCurrentMatchIndex(0)
+    } else if (currentMatchIndex() >= m.length) {
+      setCurrentMatchIndex(m.length - 1)
+    }
+  })
+
+  function handleNextMatch() {
+    const m = matches()
+    if (m.length === 0) return
+    const current = currentMatchIndex()
+    const next = (current + 1) % m.length
+    setCurrentMatchIndex(next)
+    scrollToMatch(next)
+  }
+
+  function handlePrevMatch() {
+    const m = matches()
+    if (m.length === 0) return
+    const current = currentMatchIndex()
+    const next = current === 0 ? m.length - 1 : current - 1
+    setCurrentMatchIndex(next)
+    scrollToMatch(next)
+  }
+
+  function scrollToMatch(index: number) {
+    const m = matches()
+    if (index < 0 || index >= m.length) return
+    const match = m[index]
+
+    if (!scroll) return
+
+    // Find the message containing the match
+    const child = scroll.getChildren?.()?.find((c) => c.id === match.messageID)
+    if (!child) return
+
+    // Get the part to calculate text metrics
+    const part = sync.data.part[match.messageID]?.find((p) => p.id === match.partID)
+    if (!part || part.type !== "text") {
+      // Fallback to message-level scrolling
+      const relativeY = child.y - scroll.y
+      if (relativeY < 0 || relativeY >= scroll.height) {
+        scroll.scrollBy(relativeY - Math.floor(scroll.height / 3))
+      }
+      return
+    }
+
+    // Estimate line number based on character offset
+    // Assume ~80 chars per line as a reasonable estimate for wrapped text
+    const charsPerLine = Math.max(40, contentWidth() - 10) // Account for padding and wrapping
+    const estimatedLine = Math.floor(match.charOffset / charsPerLine)
+
+    // Estimate Y offset within the message box (each line is ~1 unit tall)
+    const estimatedYOffset = estimatedLine
+
+    // Calculate target scroll position
+    const targetY = child.y + estimatedYOffset
+    const relativeY = targetY - scroll.y
+
+    // Scroll if the estimated match position is not in viewport
+    if (relativeY < 0 || relativeY >= scroll.height) {
+      scroll.scrollBy(relativeY - Math.floor(scroll.height / 3))
+    }
+  }
+
+  useKeyboard((evt) => {
+    if (dialog.stack.length > 0) return
+
+    if (evt.ctrl && evt.name === "f") {
+      setSearchMode(!searchMode())
+      evt.preventDefault()
+      return
+    }
+
+    const first = permissions()[0]
+    if (first) {
+      const response = iife(() => {
+        if (evt.ctrl || evt.meta) return
+        if (evt.name === "return") return "once"
+        if (evt.name === "a") return "always"
+        if (evt.name === "d") return "reject"
+        if (evt.name === "escape") return "reject"
+        return
+      })
+      if (response) {
+        sdk.client.postSessionIdPermissionsPermissionId({
+          path: {
+            permissionID: first.id,
+            id: route.sessionID,
+          },
+          body: {
+            response: response,
+          },
+        })
+      }
+    }
+  })
 
   // Allow exit when in child session (prompt is hidden)
   const exit = useExit()
@@ -948,6 +1093,9 @@ export function Session() {
         },
         sessionID: route.sessionID,
         conceal,
+        searchQuery,
+        currentMatchIndex,
+        matches,
         showThinking,
         showTimestamps,
         showDetails,
@@ -1076,28 +1224,52 @@ export function Session() {
               </For>
             </scrollbox>
             <box flexShrink={0}>
+
+              <Show when={searchMode()}>
+                <SearchInput
+                  ref={(r) => (search = r)}
+                  sessionID={route.sessionID}
+                  disabled={permissions().length > 0}
+                  onInput={(query) => {
+                    setSearchQuery(query)
+                    setCurrentMatchIndex(0)
+                  }}
+                  onNext={handleNextMatch}
+                  onPrevious={handlePrevMatch}
+                  matchInfo={
+                    matches().length > 0 ? { current: currentMatchIndex(), total: matches().length } : undefined
+                  }
+                  onExit={() => {
+                    setSearchMode(false)
+                    setSearchQuery("")
+                    setCurrentMatchIndex(0)
+                  }}
+                />
+              </Show>
               <Show when={permissions().length > 0}>
                 <PermissionPrompt request={permissions()[0]} />
               </Show>
               <Show when={permissions().length === 0 && questions().length > 0}>
                 <QuestionPrompt request={questions()[0]} />
               </Show>
-              <Prompt
-                visible={!session()?.parentID && permissions().length === 0 && questions().length === 0}
-                ref={(r) => {
-                  prompt = r
-                  promptRef.set(r)
-                  // Apply initial prompt when prompt component mounts (e.g., from fork)
-                  if (route.initialPrompt) {
-                    r.set(route.initialPrompt)
-                  }
-                }}
-                disabled={permissions().length > 0 || questions().length > 0}
-                onSubmit={() => {
-                  toBottom()
-                }}
-                sessionID={route.sessionID}
-              />
+              <Show when={!searchMode()}>
+                <Prompt
+                  visible={!session()?.parentID && permissions().length === 0 && questions().length === 0}
+                  ref={(r) => {
+                    prompt = r
+                    promptRef.set(r)
+                    // Apply initial prompt when prompt component mounts (e.g., from fork)
+                    if (route.initialPrompt) {
+                      r.set(route.initialPrompt)
+                    }
+                  }}
+                  disabled={permissions().length > 0 || questions().length > 0}
+                  onSubmit={() => {
+                    toBottom()
+                  }}
+                  sessionID={route.sessionID}
+                />
+              </Show>
             </box>
             <Show when={!sidebarVisible() || !wide()}>
               <Footer />
@@ -1138,6 +1310,72 @@ const MIME_BADGE: Record<string, string> = {
   "image/webp": "img",
   "application/pdf": "pdf",
   "application/x-directory": "dir",
+}
+
+function SearchHighlighter(props: { text: string; query: string; messageID: string; partID?: string; fg?: any }) {
+  const ctx = use()
+  const { theme } = useTheme()
+
+  const segments = createMemo(() => {
+    const query = props.query.toLowerCase()
+    if (!query) return [{ text: props.text, highlight: false, isActive: false, matchIndex: -1 }]
+
+    const result: { text: string; highlight: boolean; isActive: boolean; matchIndex: number }[] = []
+    const text = props.text
+    const lower = text.toLowerCase()
+    let lastIndex = 0
+    let matchCount = 0
+
+    // Pre-filter matches for this message/part
+    const partMatches = ctx
+      .matches()
+      .filter((m) => m.messageID === props.messageID && (!props.partID || m.partID === props.partID))
+
+    let pos = 0
+    while ((pos = lower.indexOf(query, pos)) !== -1) {
+      if (pos > lastIndex) {
+        result.push({ text: text.slice(lastIndex, pos), highlight: false, isActive: false, matchIndex: -1 })
+      }
+
+      const globalMatch = partMatches[matchCount]
+      const isActive = globalMatch?.index === ctx.currentMatchIndex()
+
+      result.push({
+        text: text.slice(pos, pos + query.length),
+        highlight: true,
+        isActive,
+        matchIndex: globalMatch?.index ?? -1,
+      })
+      lastIndex = pos + query.length
+      pos = lastIndex
+      matchCount++
+    }
+
+    if (lastIndex < text.length) {
+      result.push({ text: text.slice(lastIndex), highlight: false, isActive: false, matchIndex: -1 })
+    }
+
+    return result
+  })
+
+  return (
+    <text fg={props.fg ?? theme.text}>
+      <For each={segments()}>
+        {(segment) => (
+          <Show when={segment.highlight} fallback={<>{segment.text}</>}>
+            <span
+              style={{
+                bg: theme.primary,
+                fg: theme.background,
+              }}
+            >
+              {segment.text}
+            </span>
+          </Show>
+        )}
+      </For>
+    </text>
+  )
 }
 
 function UserMessage(props: {
@@ -1184,7 +1422,14 @@ function UserMessage(props: {
             backgroundColor={hover() ? theme.backgroundElement : theme.backgroundPanel}
             flexShrink={0}
           >
-            <text fg={theme.text}>{text()?.text}</text>
+            <Show when={ctx.searchQuery()} fallback={<text fg={theme.text}>{text()?.text}</text>}>
+              <SearchHighlighter
+                text={text()?.text ?? ""}
+                query={ctx.searchQuery()}
+                messageID={props.message.id}
+                partID={text()?.id}
+              />
+            </Show>
             <Show when={files().length}>
               <box flexDirection="row" paddingBottom={metadataVisible() ? 1 : 0} paddingTop={1} gap={1} flexWrap="wrap">
                 <For each={files()}>
@@ -1254,8 +1499,9 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
     return props.message.time.completed - user.time.created
   })
 
+  // We need to provide Assistant messages with ID to be able to scrolled to when searched
   return (
-    <>
+    <box id={props.message.id} flexDirection="column" flexShrink={0}>
       <For each={props.parts}>
         {(part, index) => {
           const component = createMemo(() => PART_MAPPING[part.type as keyof typeof PART_MAPPING])
@@ -1311,7 +1557,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
           </box>
         </Match>
       </Switch>
-    </>
+    </box>
   )
 }
 
@@ -1354,12 +1600,102 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
   )
 }
 
+function MarkdownSearchHighlighter(props: {
+  text: string
+  query: string
+  messageID: string
+  partID?: string
+  syntaxStyle: any
+  conceal: boolean
+}) {
+  const ctx = use()
+  const { theme } = useTheme()
+
+  // const content = createMemo(() => {
+  //   if (!props.query) return props.text
+  //   const escapedQuery = props.query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  //   // Use ~~ for strikethrough to represent the highlighted system
+  //   return props.text.replace(new RegExp(escapedQuery, "gi"), "~~$&~~")
+  // })
+
+  const content = createMemo(() => {
+    if (!props.query) return props.text
+    const escapedQuery = props.query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+
+    // Regex to find:
+    // 1. Fenced code blocks (```...```)
+    // 2. Inline code blocks (`...`)
+    // 3. The query text (when outside code blocks)
+    const regex = new RegExp(`(\`{3,}[\\s\\S]*?\`{3,}|\`[^\`]*\`)|(${escapedQuery})`, "gi")
+
+    return props.text.replace(regex, (match, codeBlock, queryText) => {
+      if (codeBlock) {
+        // If the code block doesn't contain the query, leave it alone
+        if (!new RegExp(escapedQuery, "gi").test(codeBlock)) {
+          return match
+        }
+
+        // Determine delimiter (``` or `) based on the start of the match
+        const delimiterMatch = match.match(/^`+/)
+        const delimiter = delimiterMatch ? delimiterMatch[0] : "`"
+
+        // Extract the inner text (remove wrapping backticks)
+        const innerContent = match.slice(delimiter.length, -delimiter.length)
+
+        // Split content by query, using capturing group () to keep the matched text
+        const parts = innerContent.split(new RegExp(`(${escapedQuery})`, "gi"))
+
+        return parts
+          .map((part, index) => {
+            // Even indices: Content parts (code)
+            // Odd indices: Matched query (highlight)
+            if (index % 2 === 0) {
+              // If this code segment is empty (e.g. match at start/end), return nothing
+              // This prevents creating empty `` blocks
+              if (!part) return ""
+              return `${delimiter}${part}${delimiter}`
+            } else {
+              // This is the match -> Apply highlight style
+              return `~~${part}~~`
+            }
+          })
+          .join("")
+      }
+
+      // Match found outside of any code block
+      return `~~${match}~~`
+    })
+  })
+
+  return (
+    <code
+      filetype="markdown"
+      drawUnstyledText={false}
+      streaming={true}
+      syntaxStyle={props.syntaxStyle}
+      content={content()}
+      conceal={props.conceal}
+      fg={theme.text}
+    />
+  )
+}
+
 function TextPart(props: { last: boolean; part: TextPart; message: AssistantMessage }) {
   const ctx = use()
   const { theme, syntax } = useTheme()
+
+  const hasMatch = createMemo(() => {
+    const query = ctx.searchQuery().toLowerCase()
+    if (!query) return false
+    return props.part.text.toLowerCase().includes(query)
+  })
+
   return (
     <Show when={props.part.text.trim()}>
       <box id={"text-" + props.part.id} paddingLeft={3} marginTop={1} flexShrink={0}>
+        <Show
+          when={hasMatch()}
+          fallback={
         <Switch>
           <Match when={Flag.OPENCODE_EXPERIMENTAL_MARKDOWN}>
             <markdown
@@ -1379,6 +1715,17 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
               conceal={ctx.conceal()}
               fg={theme.text}
             />
+          }
+        >
+          <MarkdownSearchHighlighter
+            text={props.part.text.trim()}
+            query={ctx.searchQuery()}
+            messageID={props.message.id}
+            partID={props.part.id}
+            syntaxStyle={syntax()}
+            conceal={ctx.conceal()}
+          />
+        </Show>
           </Match>
         </Switch>
       </box>
