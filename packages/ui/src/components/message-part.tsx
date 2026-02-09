@@ -47,6 +47,8 @@ import { getDirectory as _getDirectory, getFilename } from "@opencode-ai/util/pa
 import { checksum } from "@opencode-ai/util/encode"
 import { Tooltip } from "./tooltip"
 import { IconButton } from "./icon-button"
+import { Dialog } from "./dialog"
+import { showToast } from "./toast"
 import { createAutoScroll } from "../hooks"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 
@@ -608,6 +610,26 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
       <Switch>
         <Match when={part.state.status === "error" && part.state.error}>
           {(error) => {
+            const err = error()
+            const denied =
+              err.includes("rejected permission") || err.includes("specified a rule") || err.includes("user dismissed")
+            if (denied) {
+              return (
+                <Dynamic
+                  component={render}
+                  input={input()}
+                  tool={part.tool}
+                  metadata={metadata()}
+                  // @ts-expect-error
+                  output={part.state.output}
+                  status="denied"
+                  hideDetails={props.hideDetails}
+                  forceOpen={forceOpen()}
+                  locked={showPermission() || showQuestion()}
+                  defaultOpen={props.defaultOpen}
+                />
+              )
+            }
             const cleaned = error().replace("Error: ", "")
             const [title, ...rest] = cleaned.split(": ")
             return (
@@ -1346,6 +1368,7 @@ ToolRegistry.register({
 function QuestionPrompt(props: { request: QuestionRequest }) {
   const data = useData()
   const i18n = useI18n()
+  const dialog = useDialog()
   const questions = createMemo(() => props.request.questions)
   const single = createMemo(() => questions().length === 1 && questions()[0]?.multiple !== true)
 
@@ -1361,6 +1384,7 @@ function QuestionPrompt(props: { request: QuestionRequest }) {
   const options = createMemo(() => question()?.options ?? [])
   const input = createMemo(() => store.custom[store.tab] ?? "")
   const multi = createMemo(() => question()?.multiple === true)
+  const custom = createMemo(() => question()?.custom !== false)
   const customPicked = createMemo(() => {
     const value = input()
     if (!value) return false
@@ -1416,6 +1440,25 @@ function QuestionPrompt(props: { request: QuestionRequest }) {
     setStore("editing", false)
   }
 
+  async function openReviewDialog(path: string) {
+    if (!data.readFile) {
+      showToast({ title: "Unable to review file", description: "File reading not available", variant: "error" })
+      return
+    }
+    const content = await data.readFile(path)
+    if (!content) {
+      showToast({ title: "Unable to review file", description: `Could not read: ${path}`, variant: "error" })
+      return
+    }
+    dialog.show(() => (
+      <Dialog title="Review Plan" size="x-large">
+        <div data-slot="review-dialog-content">
+          <Markdown text={content} />
+        </div>
+      </Dialog>
+    ))
+  }
+
   function selectOption(optIndex: number) {
     if (optIndex === options().length) {
       setStore("editing", true)
@@ -1423,6 +1466,14 @@ function QuestionPrompt(props: { request: QuestionRequest }) {
     }
     const opt = options()[optIndex]
     if (!opt) return
+    if (opt.action?.type === "review") {
+      if (!opt.action.path) {
+        showToast({ title: "Unable to review file", description: "No file path provided", variant: "error" })
+      } else {
+        openReviewDialog(opt.action.path)
+      }
+      return
+    }
     if (multi()) {
       toggle(opt.label)
       return
@@ -1500,40 +1551,42 @@ function QuestionPrompt(props: { request: QuestionRequest }) {
                 )
               }}
             </For>
-            <button
-              data-slot="question-option"
-              data-picked={customPicked()}
-              onClick={() => selectOption(options().length)}
-            >
-              <span data-slot="option-label">{i18n.t("ui.messagePart.option.typeOwnAnswer")}</span>
-              <Show when={!store.editing && input()}>
-                <span data-slot="option-description">{input()}</span>
+            <Show when={custom()}>
+              <button
+                data-slot="question-option"
+                data-picked={customPicked()}
+                onClick={() => selectOption(options().length)}
+              >
+                <span data-slot="option-label">{i18n.t("ui.messagePart.option.typeOwnAnswer")}</span>
+                <Show when={!store.editing && input()}>
+                  <span data-slot="option-description">{input()}</span>
+                </Show>
+                <Show when={customPicked()}>
+                  <Icon name="check-small" size="normal" />
+                </Show>
+              </button>
+              <Show when={store.editing}>
+                <form data-slot="custom-input-form" onSubmit={handleCustomSubmit}>
+                  <input
+                    ref={(el) => setTimeout(() => el.focus(), 0)}
+                    type="text"
+                    data-slot="custom-input"
+                    placeholder={i18n.t("ui.question.custom.placeholder")}
+                    value={input()}
+                    onInput={(e) => {
+                      const inputs = [...store.custom]
+                      inputs[store.tab] = e.currentTarget.value
+                      setStore("custom", inputs)
+                    }}
+                  />
+                  <Button type="submit" variant="primary" size="small">
+                    {multi() ? i18n.t("ui.common.add") : i18n.t("ui.common.submit")}
+                  </Button>
+                  <Button type="button" variant="ghost" size="small" onClick={() => setStore("editing", false)}>
+                    {i18n.t("ui.common.cancel")}
+                  </Button>
+                </form>
               </Show>
-              <Show when={customPicked()}>
-                <Icon name="check-small" size="normal" />
-              </Show>
-            </button>
-            <Show when={store.editing}>
-              <form data-slot="custom-input-form" onSubmit={handleCustomSubmit}>
-                <input
-                  ref={(el) => setTimeout(() => el.focus(), 0)}
-                  type="text"
-                  data-slot="custom-input"
-                  placeholder={i18n.t("ui.question.custom.placeholder")}
-                  value={input()}
-                  onInput={(e) => {
-                    const inputs = [...store.custom]
-                    inputs[store.tab] = e.currentTarget.value
-                    setStore("custom", inputs)
-                  }}
-                />
-                <Button type="submit" variant="primary" size="small">
-                  {multi() ? i18n.t("ui.common.add") : i18n.t("ui.common.submit")}
-                </Button>
-                <Button type="button" variant="ghost" size="small" onClick={() => setStore("editing", false)}>
-                  {i18n.t("ui.common.cancel")}
-                </Button>
-              </form>
             </Show>
           </div>
         </div>

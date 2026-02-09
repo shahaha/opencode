@@ -26,6 +26,7 @@ export interface BasicToolProps {
   defaultOpen?: boolean
   forceOpen?: boolean
   locked?: boolean
+  status?: string
   onSubtitleClick?: () => void
 }
 
@@ -57,6 +58,7 @@ export function BasicTool(props: BasicToolProps) {
                           data-slot="basic-tool-tool-title"
                           classList={{
                             [trigger().titleClass ?? ""]: !!trigger().titleClass,
+                            "line-through text-text-weaker": props.status === "denied",
                           }}
                         >
                           {trigger().title}
@@ -113,6 +115,6 @@ export function BasicTool(props: BasicToolProps) {
   )
 }
 
-export function GenericTool(props: { tool: string; hideDetails?: boolean }) {
-  return <BasicTool icon="mcp" trigger={{ title: props.tool }} hideDetails={props.hideDetails} />
+export function GenericTool(props: { tool: string; status?: string; hideDetails?: boolean }) {
+  return <BasicTool icon="mcp" trigger={{ title: props.tool }} status={props.status} hideDetails={props.hideDetails} />
 }
