@@ -8,6 +8,10 @@ export const ServeCommand = cmd({
   builder: (yargs) => withNetworkOptions(yargs),
   describe: "starts a headless opencode server",
   handler: async (args) => {
+    // Exit on terminal closure or termination
+    process.on("SIGHUP", () => process.exit(0))
+    process.on("SIGTERM", () => process.exit(0))
+
     if (!Flag.OPENCODE_SERVER_PASSWORD) {
       console.log("Warning: OPENCODE_SERVER_PASSWORD is not set; server is unsecured.")
     }

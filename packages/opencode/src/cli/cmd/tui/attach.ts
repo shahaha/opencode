@@ -26,6 +26,10 @@ export const AttachCommand = cmd({
         describe: "basic auth password (defaults to OPENCODE_SERVER_PASSWORD)",
       }),
   handler: async (args) => {
+    // Exit on terminal closure or termination
+    process.on("SIGHUP", () => process.exit(0))
+    process.on("SIGTERM", () => process.exit(0))
+
     const directory = (() => {
       if (!args.dir) return undefined
       try {

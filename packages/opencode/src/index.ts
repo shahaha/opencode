@@ -39,6 +39,12 @@ process.on("uncaughtException", (e) => {
   })
 })
 
+// Safety net: force exit on terminal closure or termination signals.
+// Command-specific handlers (tui, attach, serve) may exit earlier with graceful cleanup.
+const forceExit = () => setTimeout(() => process.exit(0), 3000).unref()
+process.on("SIGHUP", forceExit)
+process.on("SIGTERM", forceExit)
+
 const cli = yargs(hideBin(process.argv))
   .parserConfiguration({ "populate--": true })
   .scriptName("opencode")
