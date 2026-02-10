@@ -625,6 +625,7 @@ export namespace SessionPrompt {
         agent,
         abort,
         sessionID,
+        sessionPermission: session.permission,
         system: [...(await SystemPrompt.environment(model)), ...(await InstructionPrompt.system())],
         messages: [
           ...MessageV2.toModelMessages(sessionMessages, model),
