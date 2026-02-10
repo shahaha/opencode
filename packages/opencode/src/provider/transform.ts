@@ -599,9 +599,6 @@ export namespace ProviderTransform {
       result["usage"] = {
         include: true,
       }
-      if (input.model.api.id.includes("gemini-3")) {
-        result["reasoning"] = { effort: "high" }
-      }
     }
 
     if (
@@ -622,14 +619,6 @@ export namespace ProviderTransform {
       result["promptCacheKey"] = input.sessionID
     }
 
-    if (input.model.api.npm === "@ai-sdk/google" || input.model.api.npm === "@ai-sdk/google-vertex") {
-      result["thinkingConfig"] = {
-        includeThoughts: true,
-      }
-      if (input.model.api.id.includes("gemini-3")) {
-        result["thinkingConfig"]["thinkingLevel"] = "high"
-      }
-    }
 
     // Enable thinking by default for kimi-k2.5/k2p5 models using anthropic SDK
     const modelId = input.model.api.id.toLowerCase()
