@@ -50,16 +50,9 @@ export function DialogStatus() {
         <text fg={theme.text} attributes={TextAttributes.BOLD}>
           Status
         </text>
-        <box
-          paddingLeft={1}
-          paddingRight={1}
-          backgroundColor={hover() ? theme.primary : undefined}
-          onMouseOver={() => setHover(true)}
-          onMouseOut={() => setHover(false)}
-          onMouseUp={() => dialog.clear()}
-        >
-          <text fg={hover() ? theme.selectedListItemText : theme.textMuted}>esc</text>
-        </box>
+        <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
+          esc
+        </text>
       </box>
       <scrollbox flexGrow={1} gap={1} maxHeight={maxHeight()}>
         <text fg={theme.textMuted}>OpenCode v{Installation.VERSION}</text>
@@ -116,6 +109,17 @@ export function DialogStatus() {
                     flexShrink={0}
                     style={{
                       fg: {
+      <Show when={Object.keys(sync.data.mcp).length > 0} fallback={<text fg={theme.text}>No MCP Servers</text>}>
+        <box>
+          <text fg={theme.text}>{Object.keys(sync.data.mcp).length} MCP Servers</text>
+          <For each={Object.entries(sync.data.mcp)}>
+            {([key, item]) => (
+              <box flexDirection="row" gap={1}>
+                <text
+                  flexShrink={0}
+                  style={{
+                    fg: (
+                      {
                         connected: theme.success,
                         error: theme.error,
                       }[item.status],
