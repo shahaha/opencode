@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test"
 import { $ } from "bun"
+import path from "path"
 import { Snapshot } from "../../src/snapshot"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
@@ -1035,6 +1036,533 @@ test("diffFull with whitespace changes", async () => {
       const whitespaceDiff = diffs[0]
       expect(whitespaceDiff.file).toBe("whitespace.txt")
       expect(whitespaceDiff.additions).toBeGreaterThan(0)
+    },
+  })
+})
+
+test("patch returns absolute paths and revert handles them correctly", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await Bun.write(`${tmp.path}/newfile.txt`, "new content")
+      await Bun.write(`${tmp.path}/b.txt`, "modified content")
+
+      const patch = await Snapshot.patch(before!)
+
+      expect(patch.files.length).toBe(2)
+      for (const file of patch.files) {
+        expect(path.isAbsolute(file)).toBe(true)
+        expect(file.startsWith(tmp.path)).toBe(true)
+      }
+
+      await Snapshot.revert([patch])
+
+      expect(await Bun.file(`${tmp.path}/newfile.txt`).exists()).toBe(false)
+      expect(await Bun.file(`${tmp.path}/b.txt`).text()).toBe(tmp.extra.bContent)
+    },
+  })
+})
+
+test("revert restores modified file content correctly", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      const originalA = tmp.extra.aContent
+      const originalB = tmp.extra.bContent
+      await Bun.write(`${tmp.path}/a.txt`, "COMPLETELY DIFFERENT CONTENT A")
+      await Bun.write(`${tmp.path}/b.txt`, "COMPLETELY DIFFERENT CONTENT B")
+
+      expect(await Bun.file(`${tmp.path}/a.txt`).text()).toBe("COMPLETELY DIFFERENT CONTENT A")
+      expect(await Bun.file(`${tmp.path}/b.txt`).text()).toBe("COMPLETELY DIFFERENT CONTENT B")
+
+      await Snapshot.revert([await Snapshot.patch(before!)])
+
+      expect(await Bun.file(`${tmp.path}/a.txt`).text()).toBe(originalA)
+      expect(await Bun.file(`${tmp.path}/b.txt`).text()).toBe(originalB)
+    },
+  })
+})
+
+test("revert handles deeply nested files with absolute paths", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await $`mkdir -p ${tmp.path}/level1/level2/level3`.quiet()
+      await Bun.write(`${tmp.path}/level1/level2/level3/existing.txt`, "original nested content")
+
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await Bun.write(`${tmp.path}/level1/level2/level3/existing.txt`, "MODIFIED")
+      await Bun.write(`${tmp.path}/level1/level2/level3/new.txt`, "new nested file")
+      await Bun.write(`${tmp.path}/level1/level2/another.txt`, "another new file")
+
+      const patch = await Snapshot.patch(before!)
+
+      for (const file of patch.files) {
+        expect(path.isAbsolute(file)).toBe(true)
+      }
+
+      await Snapshot.revert([patch])
+
+      expect(await Bun.file(`${tmp.path}/level1/level2/level3/existing.txt`).text()).toBe("original nested content")
+      expect(await Bun.file(`${tmp.path}/level1/level2/level3/new.txt`).exists()).toBe(false)
+      expect(await Bun.file(`${tmp.path}/level1/level2/another.txt`).exists()).toBe(false)
+    },
+  })
+})
+
+test("revert handles files with spaces in names", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Bun.write(`${tmp.path}/file with spaces.txt`, "original spaces")
+      await Bun.write(`${tmp.path}/file-with-dashes.txt`, "original dashes")
+
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await Bun.write(`${tmp.path}/file with spaces.txt`, "MODIFIED spaces")
+      await Bun.write(`${tmp.path}/new file with spaces.txt`, "new file")
+      await $`mkdir -p "${tmp.path}/dir with spaces"`.quiet()
+      await Bun.write(`${tmp.path}/dir with spaces/nested file.txt`, "nested in space dir")
+
+      await Snapshot.revert([await Snapshot.patch(before!)])
+
+      expect(await Bun.file(`${tmp.path}/file with spaces.txt`).text()).toBe("original spaces")
+      expect(await Bun.file(`${tmp.path}/file-with-dashes.txt`).text()).toBe("original dashes")
+      expect(await Bun.file(`${tmp.path}/new file with spaces.txt`).exists()).toBe(false)
+      expect(await Bun.file(`${tmp.path}/dir with spaces/nested file.txt`).exists()).toBe(false)
+    },
+  })
+})
+
+test("revert handles multiple sequential patches correctly", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const snapshot1 = await Snapshot.track()
+      expect(snapshot1).toBeTruthy()
+
+      await Bun.write(`${tmp.path}/a.txt`, "version 2")
+      await Bun.write(`${tmp.path}/new1.txt`, "new file 1")
+
+      const patch1 = await Snapshot.patch(snapshot1!)
+      const snapshot2 = await Snapshot.track()
+
+      await Bun.write(`${tmp.path}/a.txt`, "version 3")
+      await Bun.write(`${tmp.path}/new2.txt`, "new file 2")
+
+      const patch2 = await Snapshot.patch(snapshot2!)
+
+      expect(await Bun.file(`${tmp.path}/a.txt`).text()).toBe("version 3")
+      expect(await Bun.file(`${tmp.path}/new1.txt`).exists()).toBe(true)
+      expect(await Bun.file(`${tmp.path}/new2.txt`).exists()).toBe(true)
+
+      await Snapshot.revert([patch2])
+      expect(await Bun.file(`${tmp.path}/a.txt`).text()).toBe("version 2")
+      expect(await Bun.file(`${tmp.path}/new2.txt`).exists()).toBe(false)
+
+      await Snapshot.revert([patch1])
+      expect(await Bun.file(`${tmp.path}/a.txt`).text()).toBe(tmp.extra.aContent)
+      expect(await Bun.file(`${tmp.path}/new1.txt`).exists()).toBe(false)
+    },
+  })
+})
+
+test("revert with patches array containing multiple items", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const snapshot1 = await Snapshot.track()
+      expect(snapshot1).toBeTruthy()
+
+      await Bun.write(`${tmp.path}/file1.txt`, "content 1")
+      const patch1 = await Snapshot.patch(snapshot1!)
+
+      const snapshot2 = await Snapshot.track()
+      await Bun.write(`${tmp.path}/file2.txt`, "content 2")
+      const patch2 = await Snapshot.patch(snapshot2!)
+
+      await Snapshot.revert([patch2, patch1])
+
+      expect(await Bun.file(`${tmp.path}/file1.txt`).exists()).toBe(false)
+      expect(await Bun.file(`${tmp.path}/file2.txt`).exists()).toBe(false)
+    },
+  })
+})
+
+test("revert deletes file created after snapshot", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await $`mkdir -p ${tmp.path}/newdir/subdir`.quiet()
+      await Bun.write(`${tmp.path}/newdir/subdir/created.txt`, "created after snapshot")
+
+      const patch = await Snapshot.patch(before!)
+      expect(patch.files).toContain(`${tmp.path}/newdir/subdir/created.txt`)
+
+      await Snapshot.revert([patch])
+
+      expect(await Bun.file(`${tmp.path}/newdir/subdir/created.txt`).exists()).toBe(false)
+    },
+  })
+})
+
+test("revert restores deleted file", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await $`rm ${tmp.path}/a.txt`.quiet()
+      expect(await Bun.file(`${tmp.path}/a.txt`).exists()).toBe(false)
+
+      await Snapshot.revert([await Snapshot.patch(before!)])
+
+      expect(await Bun.file(`${tmp.path}/a.txt`).exists()).toBe(true)
+      expect(await Bun.file(`${tmp.path}/a.txt`).text()).toBe(tmp.extra.aContent)
+    },
+  })
+})
+
+test("patch files relative path computation is correct", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await Bun.write(`${tmp.path}/test.txt`, "test")
+
+      const patch = await Snapshot.patch(before!)
+
+      for (const file of patch.files) {
+        const relativePath = path.relative(tmp.path, file)
+        expect(relativePath).not.toContain("..")
+        expect(path.isAbsolute(relativePath)).toBe(false)
+      }
+    },
+  })
+})
+
+test("revert works when process cwd differs from worktree", async () => {
+  await using tmp = await bootstrap()
+  await using otherDir = await tmpdir({ git: false })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await Bun.write(`${tmp.path}/modified.txt`, "modified content")
+      await Bun.write(`${tmp.path}/new.txt`, "new content")
+
+      const patch = await Snapshot.patch(before!)
+
+      const originalCwd = process.cwd()
+      try {
+        process.chdir(otherDir.path)
+        await Snapshot.revert([patch])
+      } finally {
+        process.chdir(originalCwd)
+      }
+
+      expect(await Bun.file(`${tmp.path}/modified.txt`).exists()).toBe(false)
+      expect(await Bun.file(`${tmp.path}/new.txt`).exists()).toBe(false)
+    },
+  })
+})
+
+test("revert skips files outside worktree", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await Bun.write(`${tmp.path}/safe.txt`, "safe content")
+
+      const patch = await Snapshot.patch(before!)
+      patch.files.push("/tmp/outside-worktree.txt")
+      patch.files.push(`${tmp.path}/../escape-attempt.txt`)
+
+      await Snapshot.revert([patch])
+
+      expect(await Bun.file(`${tmp.path}/safe.txt`).exists()).toBe(false)
+    },
+  })
+})
+
+test("revert skips patch with empty relativePath", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await Bun.write(`${tmp.path}/normal.txt`, "normal content")
+
+      const patch = await Snapshot.patch(before!)
+      patch.files.push(tmp.path)
+
+      await Snapshot.revert([patch])
+
+      expect(await Bun.file(`${tmp.path}/normal.txt`).exists()).toBe(false)
+    },
+  })
+})
+
+test("revert creates parent directory when using fallback", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await $`mkdir -p ${tmp.path}/deep/nested/dir`.quiet()
+      await Bun.write(`${tmp.path}/deep/nested/dir/file.txt`, "original content")
+
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await Bun.write(`${tmp.path}/deep/nested/dir/file.txt`, "modified content")
+
+      const patch = await Snapshot.patch(before!)
+
+      await $`rm -rf ${tmp.path}/deep`.quiet()
+      expect(await Bun.file(`${tmp.path}/deep/nested/dir/file.txt`).exists()).toBe(false)
+
+      await Snapshot.revert([patch])
+
+      expect(await Bun.file(`${tmp.path}/deep/nested/dir/file.txt`).exists()).toBe(true)
+      expect(await Bun.file(`${tmp.path}/deep/nested/dir/file.txt`).text()).toBe("original content")
+    },
+  })
+})
+
+test("revert handles files with unicode and chinese characters in names", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Bun.write(`${tmp.path}/中文文件.txt`, "original chinese content")
+      await Bun.write(`${tmp.path}/日本語ファイル.txt`, "original japanese content")
+      await Bun.write(`${tmp.path}/한국어파일.txt`, "original korean content")
+
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await Bun.write(`${tmp.path}/中文文件.txt`, "MODIFIED chinese")
+      await Bun.write(`${tmp.path}/日本語ファイル.txt`, "MODIFIED japanese")
+      await Bun.write(`${tmp.path}/新建中文文件.txt`, "new chinese file")
+
+      await Snapshot.revert([await Snapshot.patch(before!)])
+
+      expect(await Bun.file(`${tmp.path}/中文文件.txt`).text()).toBe("original chinese content")
+      expect(await Bun.file(`${tmp.path}/日本語ファイル.txt`).text()).toBe("original japanese content")
+      expect(await Bun.file(`${tmp.path}/한국어파일.txt`).text()).toBe("original korean content")
+      expect(await Bun.file(`${tmp.path}/新建中文文件.txt`).exists()).toBe(false)
+    },
+  })
+})
+
+test("revert handles files with emoji in names", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Bun.write(`${tmp.path}/readme-🚀.txt`, "original rocket content")
+      await Bun.write(`${tmp.path}/config-⚙️.txt`, "original config content")
+
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await Bun.write(`${tmp.path}/readme-🚀.txt`, "MODIFIED rocket")
+      await Bun.write(`${tmp.path}/new-file-✨.txt`, "new sparkle file")
+
+      await Snapshot.revert([await Snapshot.patch(before!)])
+
+      expect(await Bun.file(`${tmp.path}/readme-🚀.txt`).text()).toBe("original rocket content")
+      expect(await Bun.file(`${tmp.path}/config-⚙️.txt`).text()).toBe("original config content")
+      expect(await Bun.file(`${tmp.path}/new-file-✨.txt`).exists()).toBe(false)
+    },
+  })
+})
+
+test("revert handles symlinks correctly", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      // Create a target file and symlink
+      await Bun.write(`${tmp.path}/target.txt`, "target content")
+      await $`ln -s target.txt ${tmp.path}/link.txt`.quiet().nothrow()
+
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      // Modify the target file (symlink should reflect changes)
+      await Bun.write(`${tmp.path}/target.txt`, "MODIFIED target")
+
+      const patch = await Snapshot.patch(before!)
+
+      await Snapshot.revert([patch])
+
+      expect(await Bun.file(`${tmp.path}/target.txt`).text()).toBe("target content")
+    },
+  })
+})
+
+test("revert handles large files correctly", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      // Create a large file (1MB of repeated content)
+      const largeContent = "x".repeat(1024 * 1024)
+      await Bun.write(`${tmp.path}/large-file.txt`, largeContent)
+
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      // Modify the large file
+      const modifiedContent = "y".repeat(1024 * 1024)
+      await Bun.write(`${tmp.path}/large-file.txt`, modifiedContent)
+
+      expect(await Bun.file(`${tmp.path}/large-file.txt`).text()).toBe(modifiedContent)
+
+      await Snapshot.revert([await Snapshot.patch(before!)])
+
+      expect(await Bun.file(`${tmp.path}/large-file.txt`).text()).toBe(largeContent)
+    },
+  })
+})
+
+test("revert handles binary files correctly", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      // Create a binary file with specific byte pattern
+      const originalBytes = new Uint8Array([0x00, 0x01, 0x02, 0x03, 0xff, 0xfe, 0xfd, 0x89, 0x50, 0x4e, 0x47])
+      await Bun.write(`${tmp.path}/binary.bin`, originalBytes)
+
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      // Modify binary file
+      const modifiedBytes = new Uint8Array([0xff, 0xff, 0x00, 0x00, 0xab, 0xcd, 0xef])
+      await Bun.write(`${tmp.path}/binary.bin`, modifiedBytes)
+
+      await Snapshot.revert([await Snapshot.patch(before!)])
+
+      const restoredContent = await Bun.file(`${tmp.path}/binary.bin`).arrayBuffer()
+      const restoredBytes = new Uint8Array(restoredContent)
+      expect(restoredBytes).toEqual(originalBytes)
+    },
+  })
+})
+
+test("revert handles concurrent operations correctly", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      // Create multiple files
+      await Bun.write(`${tmp.path}/file1.txt`, "content1")
+      await Bun.write(`${tmp.path}/file2.txt`, "content2")
+      await Bun.write(`${tmp.path}/file3.txt`, "content3")
+
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      // Modify all files
+      await Bun.write(`${tmp.path}/file1.txt`, "modified1")
+      await Bun.write(`${tmp.path}/file2.txt`, "modified2")
+      await Bun.write(`${tmp.path}/file3.txt`, "modified3")
+      await Bun.write(`${tmp.path}/file4.txt`, "new file")
+      await Bun.write(`${tmp.path}/file5.txt`, "another new file")
+
+      // Get multiple patches
+      const patch1 = await Snapshot.patch(before!)
+
+      // Simulate concurrent revert calls (though they run sequentially in practice)
+      await Promise.all([
+        Snapshot.revert([patch1]),
+      ])
+
+      expect(await Bun.file(`${tmp.path}/file1.txt`).text()).toBe("content1")
+      expect(await Bun.file(`${tmp.path}/file2.txt`).text()).toBe("content2")
+      expect(await Bun.file(`${tmp.path}/file3.txt`).text()).toBe("content3")
+      expect(await Bun.file(`${tmp.path}/file4.txt`).exists()).toBe(false)
+      expect(await Bun.file(`${tmp.path}/file5.txt`).exists()).toBe(false)
+    },
+  })
+})
+
+test("revert handles empty files correctly", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      // Create an empty file
+      await Bun.write(`${tmp.path}/empty.txt`, "")
+
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      // Add content to the empty file
+      await Bun.write(`${tmp.path}/empty.txt`, "now has content")
+
+      expect(await Bun.file(`${tmp.path}/empty.txt`).text()).toBe("now has content")
+
+      await Snapshot.revert([await Snapshot.patch(before!)])
+
+      expect(await Bun.file(`${tmp.path}/empty.txt`).text()).toBe("")
+    },
+  })
+})
+
+test("revert restores file to empty state when originally empty", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      // Start with a file that has content
+      await Bun.write(`${tmp.path}/will-be-emptied.txt`, "some content")
+
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      // Empty the file
+      await Bun.write(`${tmp.path}/will-be-emptied.txt`, "")
+
+      const patch = await Snapshot.patch(before!)
+
+      await Snapshot.revert([patch])
+
+      expect(await Bun.file(`${tmp.path}/will-be-emptied.txt`).text()).toBe("some content")
     },
   })
 })
