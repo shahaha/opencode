@@ -108,6 +108,11 @@ export const TuiThreadCommand = cmd({
       Log.Default.error(e)
     }
     const client = Rpc.client<typeof rpc>(worker)
+
+    // Ensure the worker's event stream and instance context use the intended directory.
+    await client.call("setDirectory", { directory: cwd }).catch((error) => {
+      Log.Default.error("failed to set worker directory", { error })
+    })
     process.on("uncaughtException", (e) => {
       Log.Default.error(e)
     })
@@ -115,7 +120,9 @@ export const TuiThreadCommand = cmd({
       Log.Default.error(e)
     })
     process.on("SIGUSR2", async () => {
-      await client.call("reload", undefined)
+      await client.call("reload", undefined).catch((error) => {
+        Log.Default.error("reload failed", { error })
+      })
     })
 
     const prompt = await iife(async () => {
@@ -153,6 +160,7 @@ export const TuiThreadCommand = cmd({
       url,
       fetch: customFetch,
       events,
+      directory: cwd,
       args: {
         continue: args.continue,
         sessionID: args.session,
