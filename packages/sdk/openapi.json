@@ -4040,6 +4040,128 @@
         ]
       }
     },
+    "/provider/codex/usage": {
+      "get": {
+        "operationId": "provider.codex.usage",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Get Codex usage",
+        "description": "Fetch usage limits for all Codex (ChatGPT) accounts.",
+        "responses": {
+          "200": {
+            "description": "Codex account usage information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accounts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "isActive": {
+                            "type": "boolean"
+                          },
+                          "usage": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "planType": {
+                                    "type": "string"
+                                  },
+                                  "primary": {
+                                    "type": "object",
+                                    "properties": {
+                                      "usedPercent": {
+                                        "type": "number"
+                                      },
+                                      "windowMinutes": {
+                                        "type": "number"
+                                      },
+                                      "resetAt": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": ["usedPercent", "windowMinutes", "resetAt"]
+                                  },
+                                  "secondary": {
+                                    "type": "object",
+                                    "properties": {
+                                      "usedPercent": {
+                                        "type": "number"
+                                      },
+                                      "windowMinutes": {
+                                        "type": "number"
+                                      },
+                                      "resetAt": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": ["usedPercent", "windowMinutes", "resetAt"]
+                                  },
+                                  "credits": {
+                                    "type": "object",
+                                    "properties": {
+                                      "hasCredits": {
+                                        "type": "boolean"
+                                      },
+                                      "unlimited": {
+                                        "type": "boolean"
+                                      },
+                                      "balance": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["hasCredits", "unlimited"]
+                                  },
+                                  "fetchedAt": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": ["fetchedAt"]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "error": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["id", "email", "isActive", "usage"]
+                      }
+                    }
+                  },
+                  "required": ["accounts"]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.provider.codex.usage({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/find": {
       "get": {
         "operationId": "find.text",
@@ -10008,6 +10130,119 @@
         },
         "required": ["type", "key", "token"]
       },
+      "CodexMultiAccount": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "codex-multi"
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "refresh": {
+                  "type": "string"
+                },
+                "access": {
+                  "type": "string"
+                },
+                "expires": {
+                  "type": "number"
+                },
+                "accountId": {
+                  "type": "string"
+                },
+                "rateLimit": {
+                  "type": "object",
+                  "properties": {
+                    "limited": {
+                      "type": "boolean"
+                    },
+                    "resetAt": {
+                      "type": "number"
+                    },
+                    "lastError": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["limited"]
+                },
+                "usage": {
+                  "type": "object",
+                  "properties": {
+                    "planType": {
+                      "type": "string"
+                    },
+                    "primary": {
+                      "type": "object",
+                      "properties": {
+                        "usedPercent": {
+                          "type": "number"
+                        },
+                        "windowMinutes": {
+                          "type": "number"
+                        },
+                        "resetAt": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["usedPercent", "windowMinutes", "resetAt"]
+                    },
+                    "secondary": {
+                      "type": "object",
+                      "properties": {
+                        "usedPercent": {
+                          "type": "number"
+                        },
+                        "windowMinutes": {
+                          "type": "number"
+                        },
+                        "resetAt": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["usedPercent", "windowMinutes", "resetAt"]
+                    },
+                    "credits": {
+                      "type": "object",
+                      "properties": {
+                        "hasCredits": {
+                          "type": "boolean"
+                        },
+                        "unlimited": {
+                          "type": "boolean"
+                        },
+                        "balance": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["hasCredits", "unlimited"]
+                    },
+                    "fetchedAt": {
+                      "type": "number"
+                    }
+                  },
+                  "required": ["fetchedAt"]
+                }
+              },
+              "required": ["id", "email", "refresh", "access", "expires"]
+            }
+          },
+          "activeIndex": {
+            "default": 0,
+            "type": "number"
+          }
+        },
+        "required": ["type", "accounts"]
+      },
       "Auth": {
         "anyOf": [
           {
@@ -10018,6 +10253,9 @@
           },
           {
             "$ref": "#/components/schemas/WellKnownAuth"
+          },
+          {
+            "$ref": "#/components/schemas/CodexMultiAccount"
           }
         ]
       },

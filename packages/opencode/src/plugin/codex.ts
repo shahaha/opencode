@@ -2,6 +2,8 @@ import type { Hooks, PluginInput } from "@opencode-ai/plugin"
 import { Log } from "../util/log"
 import { Installation } from "../installation"
 import { Auth, OAUTH_DUMMY_KEY } from "../auth"
+import { Bus } from "../bus"
+import { TuiEvent } from "../cli/cmd/tui/event"
 import os from "os"
 import { ProviderTransform } from "@/provider/transform"
 
@@ -10,6 +12,7 @@ const log = Log.create({ service: "plugin.codex" })
 const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 const ISSUER = "https://auth.openai.com"
 const CODEX_API_ENDPOINT = "https://chatgpt.com/backend-api/codex/responses"
+const CODEX_USAGE_ENDPOINT = "https://chatgpt.com/backend-api/wham/usage"
 const OAUTH_PORT = 1455
 const OAUTH_POLLING_SAFETY_MARGIN_MS = 3000
 
@@ -85,6 +88,46 @@ export function extractAccountId(tokens: TokenResponse): string | undefined {
   return undefined
 }
 
+export function extractEmail(tokens: TokenResponse): string | undefined {
+  if (tokens.id_token) {
+    const claims = parseJwtClaims(tokens.id_token)
+    if (claims?.email) return claims.email
+  }
+  if (tokens.access_token) {
+    const claims = parseJwtClaims(tokens.access_token)
+    if (claims?.email) return claims.email
+  }
+  return undefined
+}
+
+function isCodexRateLimitError(response: Response, body?: string): boolean {
+  if (response.status === 429) return true
+  if (!body) return false
+  const lower = body.toLowerCase()
+  return (
+    lower.includes("5-hour message limit") ||
+    lower.includes("weekly cap") ||
+    lower.includes("quota exhausted") ||
+    lower.includes("rate limit") ||
+    lower.includes("usage limit")
+  )
+}
+
+function parseCodexResetTime(body?: string): number | undefined {
+  if (!body) return undefined
+  // Parse "try again in Xh Ym" or "try again in X hours"
+  const hourMatch = body.match(/try again in (\d+)\s*h/i)
+  if (hourMatch) {
+    return Date.now() + parseInt(hourMatch[1]) * 60 * 60 * 1000
+  }
+  const minuteMatch = body.match(/try again in (\d+)\s*m/i)
+  if (minuteMatch) {
+    return Date.now() + parseInt(minuteMatch[1]) * 60 * 1000
+  }
+  // Default to 5 hours if we can't parse
+  return Date.now() + 5 * 60 * 60 * 1000
+}
+
 function buildAuthorizeUrl(redirectUri: string, pkce: PkceCodes, state: string): string {
   const params = new URLSearchParams({
     response_type: "code",
@@ -140,6 +183,149 @@ async function refreshAccessToken(refreshToken: string): Promise<TokenResponse> 
     throw new Error(`Token refresh failed: ${response.status}`)
   }
   return response.json()
+}
+
+interface CodexUsageApiResponse {
+  plan_type?: string
+  rate_limit?: {
+    allowed?: boolean
+    limit_reached?: boolean
+    primary_window?: {
+      used_percent: number
+      limit_window_seconds: number
+      reset_after_seconds?: number
+      reset_at?: number
+    }
+    secondary_window?: {
+      used_percent: number
+      limit_window_seconds: number
+      reset_after_seconds?: number
+      reset_at?: number
+    }
+  }
+  credits?: {
+    has_credits?: boolean
+    unlimited?: boolean
+    balance?: string
+  }
+}
+
+function parseUsageFromHeaders(headers: Headers): Auth.CodexAccountUsage | undefined {
+  const primaryUsed = headers.get("x-codex-primary-used-percent")
+  const primaryWindow = headers.get("x-codex-primary-window-minutes")
+  const primaryReset = headers.get("x-codex-primary-reset-at")
+
+  if (!primaryUsed || !primaryWindow || !primaryReset) return undefined
+
+  const secondaryUsed = headers.get("x-codex-secondary-used-percent")
+  const secondaryWindow = headers.get("x-codex-secondary-window-minutes")
+  const secondaryReset = headers.get("x-codex-secondary-reset-at")
+
+  const hasCredits = headers.get("x-codex-credits-has-credits")
+  const creditsBalance = headers.get("x-codex-credits-balance")
+
+  const usage: Auth.CodexAccountUsage = {
+    fetchedAt: Date.now(),
+    primary: {
+      usedPercent: parseInt(primaryUsed, 10),
+      windowMinutes: parseInt(primaryWindow, 10),
+      resetAt: parseInt(primaryReset, 10) * 1000,
+    },
+  }
+
+  if (secondaryUsed && secondaryWindow && secondaryReset) {
+    usage.secondary = {
+      usedPercent: parseInt(secondaryUsed, 10),
+      windowMinutes: parseInt(secondaryWindow, 10),
+      resetAt: parseInt(secondaryReset, 10) * 1000,
+    }
+  }
+
+  if (hasCredits !== null) {
+    usage.credits = {
+      hasCredits: hasCredits === "true",
+      unlimited: false,
+      balance: creditsBalance ?? undefined,
+    }
+  }
+
+  return usage
+}
+
+function parseUsageFromApiResponse(response: CodexUsageApiResponse): Auth.CodexAccountUsage {
+  const usage: Auth.CodexAccountUsage = {
+    planType: response.plan_type,
+    fetchedAt: Date.now(),
+  }
+
+  if (response.rate_limit?.primary_window) {
+    const pw = response.rate_limit.primary_window
+    usage.primary = {
+      usedPercent: pw.used_percent,
+      windowMinutes: Math.round(pw.limit_window_seconds / 60),
+      resetAt: pw.reset_at ? pw.reset_at * 1000 : Date.now() + (pw.reset_after_seconds ?? 0) * 1000,
+    }
+  }
+
+  if (response.rate_limit?.secondary_window) {
+    const sw = response.rate_limit.secondary_window
+    usage.secondary = {
+      usedPercent: sw.used_percent,
+      windowMinutes: Math.round(sw.limit_window_seconds / 60),
+      resetAt: sw.reset_at ? sw.reset_at * 1000 : Date.now() + (sw.reset_after_seconds ?? 0) * 1000,
+    }
+  }
+
+  if (response.credits) {
+    usage.credits = {
+      hasCredits: response.credits.has_credits ?? false,
+      unlimited: response.credits.unlimited ?? false,
+      balance: response.credits.balance,
+    }
+  }
+
+  return usage
+}
+
+export async function fetchCodexUsage(account: Auth.CodexAccount): Promise<Auth.CodexAccountUsage> {
+  let access = account.access
+  let refresh = account.refresh
+
+  // Refresh token if expired
+  if (account.expires < Date.now()) {
+    log.info("refreshing codex token for usage fetch", { email: account.email })
+    const tokens = await refreshAccessToken(account.refresh)
+    access = tokens.access_token
+    refresh = tokens.refresh_token ?? account.refresh
+    const expiresAt = Date.now() + (tokens.expires_in ?? 3600) * 1000
+    const accountId = extractAccountId(tokens) || account.accountId
+    await Auth.updateCodexAccountTokens(account.id, {
+      access,
+      refresh,
+      expires: expiresAt,
+      accountId,
+    })
+  }
+
+  const headers: HeadersInit = {
+    Authorization: `Bearer ${access}`,
+  }
+  if (account.accountId) {
+    headers["ChatGPT-Account-Id"] = account.accountId
+  }
+
+  const response = await fetch(CODEX_USAGE_ENDPOINT, { headers })
+  if (!response.ok) {
+    throw new Error(`Usage fetch failed: ${response.status}`)
+  }
+
+  const data: CodexUsageApiResponse = await response.json()
+  const usage = parseUsageFromApiResponse(data)
+
+  // Persist usage to storage
+  await Auth.updateCodexAccountUsage(account.id, usage)
+
+  return usage
 }
 
 const HTML_SUCCESS = `<!doctype html>
@@ -354,7 +540,13 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
       provider: "openai",
       async loader(getAuth, provider) {
         const auth = await getAuth()
-        if (auth.type !== "oauth") return {}
+        // Check for Codex multi-account first
+        const codexAuth = await Auth.getCodexAuth()
+        const hasCodexAccounts = !!codexAuth?.accounts.length
+        const hasLegacyOAuth = auth?.type === "oauth"
+
+        // Support both legacy oauth and new codex-multi format
+        if (!hasLegacyOAuth && !hasCodexAccounts) return {}
 
         // Filter models to only allowed Codex models for OAuth
         const allowedModels = new Set([
@@ -412,86 +604,159 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
           }
         }
 
+        const codexFetch = async (requestInput: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+          // Remove dummy API key authorization header
+          if (init?.headers) {
+            if (init.headers instanceof Headers) {
+              init.headers.delete("authorization")
+              init.headers.delete("Authorization")
+            } else if (Array.isArray(init.headers)) {
+              init.headers = init.headers.filter(([key]) => key.toLowerCase() !== "authorization")
+            } else {
+              delete init.headers["authorization"]
+              delete init.headers["Authorization"]
+            }
+          }
+
+          // Get active account from multi-account storage
+          let account = await Auth.getActiveCodexAccount()
+          if (!account) {
+            // Fallback to legacy single-account mode
+            const currentAuth = await getAuth()
+            if (!currentAuth || currentAuth.type !== "oauth") return fetch(requestInput, init)
+            account = {
+              id: "legacy",
+              email: "unknown",
+              refresh: currentAuth.refresh,
+              access: currentAuth.access,
+              expires: currentAuth.expires,
+              accountId: (currentAuth as any).accountId,
+            }
+          }
+
+          // Check if token needs refresh
+          if (!account.access || account.expires < Date.now()) {
+            log.info("refreshing codex access token", { email: account.email })
+            const tokens = await refreshAccessToken(account.refresh)
+            const newAccountId = extractAccountId(tokens) || account.accountId
+            const expiresAt = Date.now() + (tokens.expires_in ?? 3600) * 1000
+            const refresh = tokens.refresh_token ?? account.refresh
+            await Auth.updateCodexAccountTokens(account.id, {
+              access: tokens.access_token,
+              refresh,
+              expires: expiresAt,
+              accountId: newAccountId,
+            })
+            account.access = tokens.access_token
+            account.refresh = refresh
+            account.expires = expiresAt
+            account.accountId = newAccountId
+          }
+
+          // Build headers
+          const headers = new Headers()
+          if (init?.headers) {
+            if (init.headers instanceof Headers) {
+              init.headers.forEach((value, key) => headers.set(key, value))
+            } else if (Array.isArray(init.headers)) {
+              for (const [key, value] of init.headers) {
+                if (value !== undefined) headers.set(key, String(value))
+              }
+            } else {
+              for (const [key, value] of Object.entries(init.headers)) {
+                if (value !== undefined) headers.set(key, String(value))
+              }
+            }
+          }
+
+          // Set authorization header with access token
+          headers.set("authorization", `Bearer ${account.access}`)
+
+          // Set ChatGPT-Account-Id header for organization subscriptions
+          if (account.accountId) {
+            headers.set("ChatGPT-Account-Id", account.accountId)
+          }
+
+          // Rewrite URL to Codex endpoint
+          const parsed =
+            requestInput instanceof URL
+              ? requestInput
+              : new URL(typeof requestInput === "string" ? requestInput : requestInput.url)
+          const url =
+            parsed.pathname.includes("/v1/responses") || parsed.pathname.includes("/chat/completions")
+              ? new URL(CODEX_API_ENDPOINT)
+              : parsed
+
+          const response = await fetch(url, {
+            ...init,
+            headers,
+          })
+
+          // Capture usage from response headers (non-blocking)
+          const headerUsage = parseUsageFromHeaders(response.headers)
+          if (headerUsage) {
+            Auth.updateCodexAccountUsage(account.id, headerUsage).catch(() => {})
+          }
+
+          // Check for rate limit error and handle account switching
+          if (!response.ok) {
+            const body = await response
+              .clone()
+              .text()
+              .catch(() => undefined)
+            if (isCodexRateLimitError(response, body)) {
+              const resetTime = parseCodexResetTime(body)
+              log.info("codex rate limit hit", { email: account.email, resetTime })
+
+              // Mark current account as rate limited
+              await Auth.markCodexAccountRateLimited(account.id, resetTime)
+
+              // Try to switch to next available account
+              const next = await Auth.getNextAvailableCodexAccount()
+              if (next) {
+                log.info("switching to next codex account", { email: next.account.email })
+                Bus.publish(TuiEvent.ToastShow, {
+                  variant: "warning",
+                  message: `Rate limited. Switched to ${next.account.email}`,
+                })
+                // Retry the request with the new account
+                return codexFetch(requestInput, init)
+              }
+
+              // All accounts are rate limited - notify user
+              const accounts = await Auth.getCodexAccounts()
+              if (accounts.length > 0) {
+                const resetTimes = accounts
+                  .map((a) => a.rateLimit?.resetAt)
+                  .filter((time): time is number => typeof time === "number")
+                if (resetTimes.length > 0) {
+                  const nextReset = Math.min(...resetTimes)
+                  const waitMinutes = Math.max(1, Math.ceil((nextReset - Date.now()) / 60000))
+                  Bus.publish(TuiEvent.ToastShow, {
+                    variant: "error",
+                    message: `All accounts rate limited. Next available in ${waitMinutes}m`,
+                  })
+                } else {
+                  Bus.publish(TuiEvent.ToastShow, {
+                    variant: "error",
+                    message: "All accounts rate limited.",
+                  })
+                }
+              } else {
+                Bus.publish(TuiEvent.ToastShow, {
+                  variant: "error",
+                  message: "Rate limited. Please try again later.",
+                })
+              }
+            }
+          }
+
+          return response
+        }
+
         return {
           apiKey: OAUTH_DUMMY_KEY,
-          async fetch(requestInput: RequestInfo | URL, init?: RequestInit) {
-            // Remove dummy API key authorization header
-            if (init?.headers) {
-              if (init.headers instanceof Headers) {
-                init.headers.delete("authorization")
-                init.headers.delete("Authorization")
-              } else if (Array.isArray(init.headers)) {
-                init.headers = init.headers.filter(([key]) => key.toLowerCase() !== "authorization")
-              } else {
-                delete init.headers["authorization"]
-                delete init.headers["Authorization"]
-              }
-            }
-
-            const currentAuth = await getAuth()
-            if (currentAuth.type !== "oauth") return fetch(requestInput, init)
-
-            // Cast to include accountId field
-            const authWithAccount = currentAuth as typeof currentAuth & { accountId?: string }
-
-            // Check if token needs refresh
-            if (!currentAuth.access || currentAuth.expires < Date.now()) {
-              log.info("refreshing codex access token")
-              const tokens = await refreshAccessToken(currentAuth.refresh)
-              const newAccountId = extractAccountId(tokens) || authWithAccount.accountId
-              await input.client.auth.set({
-                path: { id: "openai" },
-                body: {
-                  type: "oauth",
-                  refresh: tokens.refresh_token,
-                  access: tokens.access_token,
-                  expires: Date.now() + (tokens.expires_in ?? 3600) * 1000,
-                  ...(newAccountId && { accountId: newAccountId }),
-                },
-              })
-              currentAuth.access = tokens.access_token
-              authWithAccount.accountId = newAccountId
-            }
-
-            // Build headers
-            const headers = new Headers()
-            if (init?.headers) {
-              if (init.headers instanceof Headers) {
-                init.headers.forEach((value, key) => headers.set(key, value))
-              } else if (Array.isArray(init.headers)) {
-                for (const [key, value] of init.headers) {
-                  if (value !== undefined) headers.set(key, String(value))
-                }
-              } else {
-                for (const [key, value] of Object.entries(init.headers)) {
-                  if (value !== undefined) headers.set(key, String(value))
-                }
-              }
-            }
-
-            // Set authorization header with access token
-            headers.set("authorization", `Bearer ${currentAuth.access}`)
-
-            // Set ChatGPT-Account-Id header for organization subscriptions
-            if (authWithAccount.accountId) {
-              headers.set("ChatGPT-Account-Id", authWithAccount.accountId)
-            }
-
-            // Rewrite URL to Codex endpoint
-            const parsed =
-              requestInput instanceof URL
-                ? requestInput
-                : new URL(typeof requestInput === "string" ? requestInput : requestInput.url)
-            const url =
-              parsed.pathname.includes("/v1/responses") || parsed.pathname.includes("/chat/completions")
-                ? new URL(CODEX_API_ENDPOINT)
-                : parsed
-
-            return fetch(url, {
-              ...init,
-              headers,
-            })
-          },
+          fetch: codexFetch,
         }
       },
       methods: [
@@ -514,12 +779,14 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
                 const tokens = await callbackPromise
                 stopOAuthServer()
                 const accountId = extractAccountId(tokens)
+                const email = extractEmail(tokens)
                 return {
                   type: "success" as const,
                   refresh: tokens.refresh_token,
                   access: tokens.access_token,
                   expires: Date.now() + (tokens.expires_in ?? 3600) * 1000,
                   accountId,
+                  email,
                 }
               },
             }

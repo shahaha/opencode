@@ -1876,7 +1876,44 @@ export type WellKnownAuth = {
   token: string
 }
 
-export type Auth = OAuth | ApiAuth | WellKnownAuth
+export type CodexMultiAccount = {
+  type: "codex-multi"
+  accounts: Array<{
+    id: string
+    email: string
+    refresh: string
+    access: string
+    expires: number
+    accountId?: string
+    rateLimit?: {
+      limited: boolean
+      resetAt?: number
+      lastError?: string
+    }
+    usage?: {
+      planType?: string
+      primary?: {
+        usedPercent: number
+        windowMinutes: number
+        resetAt: number
+      }
+      secondary?: {
+        usedPercent: number
+        windowMinutes: number
+        resetAt: number
+      }
+      credits?: {
+        hasCredits: boolean
+        unlimited: boolean
+        balance?: string
+      }
+      fetchedAt: number
+    }
+  }>
+  activeIndex?: number
+}
+
+export type Auth = OAuth | ApiAuth | WellKnownAuth | CodexMultiAccount
 
 export type NotFoundError = {
   name: "NotFoundError"
@@ -4147,6 +4184,50 @@ export type ProviderOauthCallbackResponses = {
 }
 
 export type ProviderOauthCallbackResponse = ProviderOauthCallbackResponses[keyof ProviderOauthCallbackResponses]
+
+export type ProviderCodexUsageData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/provider/codex/usage"
+}
+
+export type ProviderCodexUsageResponses = {
+  /**
+   * Codex account usage information
+   */
+  200: {
+    accounts: Array<{
+      id: string
+      email: string
+      isActive: boolean
+      usage: {
+        planType?: string
+        primary?: {
+          usedPercent: number
+          windowMinutes: number
+          resetAt: number
+        }
+        secondary?: {
+          usedPercent: number
+          windowMinutes: number
+          resetAt: number
+        }
+        credits?: {
+          hasCredits: boolean
+          unlimited: boolean
+          balance?: string
+        }
+        fetchedAt: number
+      } | null
+      error?: string
+    }>
+  }
+}
+
+export type ProviderCodexUsageResponse = ProviderCodexUsageResponses[keyof ProviderCodexUsageResponses]
 
 export type FindTextData = {
   body?: never

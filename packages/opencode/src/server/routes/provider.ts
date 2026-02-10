@@ -5,6 +5,8 @@ import { Config } from "../../config/config"
 import { Provider } from "../../provider/provider"
 import { ModelsDev } from "../../provider/models"
 import { ProviderAuth } from "../../provider/auth"
+import { Auth } from "../../auth"
+import { fetchCodexUsage } from "../../plugin/codex"
 import { mapValues } from "remeda"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
@@ -160,6 +162,65 @@ export const ProviderRoutes = lazy(() =>
           code,
         })
         return c.json(true)
+      },
+    )
+    .get(
+      "/codex/usage",
+      describeRoute({
+        summary: "Get Codex usage",
+        description: "Fetch usage limits for all Codex (ChatGPT) accounts.",
+        operationId: "provider.codex.usage",
+        responses: {
+          200: {
+            description: "Codex account usage information",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    accounts: z.array(
+                      z.object({
+                        id: z.string(),
+                        email: z.string(),
+                        isActive: z.boolean(),
+                        usage: Auth.CodexAccountUsage.nullable(),
+                        error: z.string().optional(),
+                      }),
+                    ),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const accounts = await Auth.getCodexAccounts()
+        const codexAuth = await Auth.getCodexAuth()
+        const activeIndex = codexAuth?.activeIndex ?? 0
+
+        const results = await Promise.all(
+          accounts.map(async (account, index) => {
+            try {
+              const usage = await fetchCodexUsage(account)
+              return {
+                id: account.id,
+                email: account.email,
+                isActive: index === activeIndex,
+                usage,
+              }
+            } catch (err) {
+              return {
+                id: account.id,
+                email: account.email,
+                isActive: index === activeIndex,
+                usage: account.usage ?? null,
+                error: err instanceof Error ? err.message : String(err),
+              }
+            }
+          }),
+        )
+
+        return c.json({ accounts: results })
       },
     ),
 )
