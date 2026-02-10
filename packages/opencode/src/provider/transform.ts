@@ -79,7 +79,7 @@ export namespace ProviderTransform {
               }
             }
             return part
-          })
+          }) as typeof msg.content
         }
         return msg
       })
@@ -95,7 +95,7 @@ export namespace ProviderTransform {
         const nextMsg = msgs[i + 1]
 
         if ((msg.role === "assistant" || msg.role === "tool") && Array.isArray(msg.content)) {
-          msg.content = msg.content.map((part) => {
+          msg.content = (msg.content.map((part) => {
             if ((part.type === "tool-call" || part.type === "tool-result") && "toolCallId" in part) {
               // Mistral requires alphanumeric tool call IDs with exactly 9 characters
               const normalizedId = part.toolCallId
@@ -109,7 +109,7 @@ export namespace ProviderTransform {
               }
             }
             return part
-          })
+          })) as typeof msg.content
         }
 
         result.push(msg)
@@ -195,7 +195,7 @@ export namespace ProviderTransform {
       const shouldUseContentOptions = !useMessageLevelOptions && Array.isArray(msg.content) && msg.content.length > 0
 
       if (shouldUseContentOptions) {
-        const lastContent = msg.content[msg.content.length - 1]
+        const lastContent = msg.content[msg.content.length - 1] as any
         if (lastContent && typeof lastContent === "object") {
           lastContent.providerOptions = mergeDeep(lastContent.providerOptions ?? {}, providerOptions)
           continue
@@ -277,7 +277,7 @@ export namespace ProviderTransform {
         return {
           ...msg,
           providerOptions: remap(msg.providerOptions),
-          content: msg.content.map((part) => ({ ...part, providerOptions: remap(part.providerOptions) })),
+          content: msg.content.map((part) => ({ ...part, providerOptions: remap((part as any).providerOptions) })),
         } as typeof msg
       })
     }
@@ -453,6 +453,29 @@ export namespace ProviderTransform {
       // https://v5.ai-sdk.dev/providers/ai-sdk-providers/anthropic
       case "@ai-sdk/google-vertex/anthropic":
         // https://v5.ai-sdk.dev/providers/ai-sdk-providers/google-vertex#anthropic-provider
+        // Opus 4.6 uses adaptive thinking with effort parameter
+        // https://docs.anthropic.com/en/docs/build-with-claude/adaptive-thinking
+        if (id.includes("opus-4-6")) {
+          return {
+            low: {
+              thinking: { type: "adaptive" },
+              effort: "low",
+            },
+            medium: {
+              thinking: { type: "adaptive" },
+              effort: "medium",
+            },
+            high: {
+              thinking: { type: "adaptive" },
+              effort: "high",
+            },
+            max: {
+              thinking: { type: "adaptive" },
+              effort: "max",
+            },
+          }
+        }
+        // Older models use manual thinking with budgetTokens
         return {
           high: {
             thinking: {
