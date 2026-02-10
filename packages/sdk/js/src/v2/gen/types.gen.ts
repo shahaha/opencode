@@ -1532,6 +1532,14 @@ export type ProviderConfig = {
           [key: string]: unknown | boolean | undefined
         }
       }
+      /**
+       * Compact when context usage exceeds this percentage (1-100, overrides global threshold)
+       */
+      compaction_threshold?: number
+      /**
+       * Model to use for compaction (e.g., 'zhipu/glm-4-plus', overrides global compaction model)
+       */
+      compaction_model?: string
     }
   }
   whitelist?: Array<string>
@@ -1822,6 +1830,14 @@ export type Config = {
      * Enable pruning of old tool outputs (default: true)
      */
     prune?: boolean
+    /**
+     * Default compaction threshold percentage (1-100). Compaction triggers when context usage exceeds this percentage (default: 100)
+     */
+    threshold?: number
+    /**
+     * Default model to use for compaction (e.g., 'anthropic/claude-haiku-3-5-20241022')
+     */
+    model?: string
   }
   experimental?: {
     disable_paste_summary?: boolean
@@ -1954,6 +1970,8 @@ export type Model = {
       [key: string]: unknown
     }
   }
+  compaction_threshold?: number
+  compaction_model?: string
 }
 
 export type Provider = {
