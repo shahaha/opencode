@@ -1,7 +1,8 @@
 import { useSync } from "@tui/context/sync"
-import { createMemo, For, Show, Switch, Match } from "solid-js"
+import { createMemo, For, Show, Switch, Match, createEffect, createSignal, on } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
+import { TextAttributes } from "@opentui/core"
 import { Locale } from "@/util/locale"
 import path from "path"
 import type { AssistantMessage } from "@opencode-ai/sdk/v2"
@@ -11,6 +12,16 @@ import { useKeybind } from "../../context/keybind"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { TodoItem } from "../../component/todo-item"
+import {
+  formatCreditsLabel,
+  formatPlanType,
+  formatUsageResetShort,
+  formatUsageWindowLabel,
+  usageBarColor,
+  usageBarString,
+} from "../../component/usage-format"
+import { useUsageResource } from "../../component/usage-client"
+import { useLocal } from "@tui/context/local"
 
 export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const sync = useSync()
@@ -19,26 +30,15 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
+  const local = useLocal()
 
   const [expanded, setExpanded] = createStore({
+    usage: true,
     mcp: true,
-    diff: true,
-    todo: true,
     lsp: true,
+    todo: true,
+    diff: true,
   })
-
-  // Sort MCP servers alphabetically for consistent display order
-  const mcpEntries = createMemo(() => Object.entries(sync.data.mcp).sort(([a], [b]) => a.localeCompare(b)))
-
-  // Count connected and error MCP servers for collapsed header display
-  const connectedMcpCount = createMemo(() => mcpEntries().filter(([_, item]) => item.status === "connected").length)
-  const errorMcpCount = createMemo(
-    () =>
-      mcpEntries().filter(
-        ([_, item]) =>
-          item.status === "failed" || item.status === "needs_auth" || item.status === "needs_client_registration",
-      ).length,
-  )
 
   const cost = createMemo(() => {
     const total = messages().reduce((sum, x) => sum + (x.role === "assistant" ? x.cost : 0), 0)
@@ -67,6 +67,46 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     sync.data.provider.some((x) => x.id !== "opencode" || Object.values(x.models).some((y) => y.cost?.input !== 0)),
   )
   const gettingStartedDismissed = createMemo(() => kv.get("dismissed_getting_started", false))
+
+  const usage = useUsageResource()
+
+  const status = createMemo(() => sync.data.session_status?.[props.sessionID] ?? { type: "idle" })
+  const [prevStatus, setPrevStatus] = createSignal<string>("idle")
+
+  createEffect(
+    on(
+      () => status().type,
+      (currentType) => {
+        if (prevStatus() !== "idle" && currentType === "idle") {
+          usage.refetch()
+        }
+        setPrevStatus(currentType)
+      },
+    ),
+  )
+
+  const usageSections = createMemo(() => {
+    const entries = usage.data()?.entries ?? []
+    return entries.filter(
+      (entry) =>
+        entry.snapshot.primary || entry.snapshot.secondary || entry.snapshot.tertiary || entry.snapshot.credits,
+    )
+  })
+
+  const usageErrors = createMemo(() => usage.data()?.errors ?? [])
+
+  // Sort MCP servers alphabetically for consistent display order
+  const mcpEntries = createMemo(() => Object.entries(sync.data.mcp).sort(([a], [b]) => a.localeCompare(b)))
+
+  // Count connected and error MCP servers for collapsed header display
+  const connectedMcpCount = createMemo(() => mcpEntries().filter(([_, item]) => item.status === "connected").length)
+  const errorMcpCount = createMemo(
+    () =>
+      mcpEntries().filter(
+        ([_, item]) =>
+          item.status === "failed" || item.status === "needs_auth" || item.status === "needs_client_registration",
+      ).length,
+  )
 
   return (
     <Show when={session()}>
@@ -98,6 +138,88 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
               <text fg={theme.textMuted}>{context()?.percentage ?? 0}% used</text>
               <text fg={theme.textMuted}>{cost()} spent</text>
             </box>
+            <Show when={usageSections().length > 0}>
+              <box>
+                <box flexDirection="row" gap={1} onMouseDown={() => setExpanded("usage", !expanded.usage)}>
+                  <text fg={theme.text}>{expanded.usage ? "▼" : "▶"}</text>
+                  <text fg={theme.text}>
+                    <b>Usage</b>
+                  </text>
+                </box>
+                <Show when={expanded.usage}>
+                  <For each={usageSections()}>
+                    {(entry, index) => {
+                      const planType = formatPlanType(entry.snapshot.planType)
+                      const entryErrors = usageErrors()
+                        .filter((error) => error.provider === entry.provider)
+                        .map((error) => error.message)
+                      return (
+                        <box flexDirection="column" gap={0} marginTop={index() === 0 ? 0 : 1}>
+                          <text fg={theme.text}>
+                            <b>{entry.displayName}</b>
+                            <Show when={planType}>
+                              <span style={{ fg: theme.textMuted }}>{` (${planType})`}</span>
+                            </Show>
+                          </text>
+                          <Show when={entry.snapshot.primary}>
+                            {(window) => (
+                              <text fg={theme.textMuted}>
+                                {formatUsageWindowLabel(entry.provider, "primary", window().windowMinutes)}{" "}
+                                <span style={{ fg: usageBarColor(window().usedPercent, theme) }}>
+                                  {usageBarString(window().usedPercent, 10)}
+                                </span>{" "}
+                                {Math.round(window().usedPercent)}%{" "}
+                                <Show when={window().resetsAt !== null}>
+                                  ({formatUsageResetShort(window().resetsAt)})
+                                </Show>
+                              </text>
+                            )}
+                          </Show>
+                          <Show when={entry.snapshot.secondary}>
+                            {(window) => (
+                              <text fg={theme.textMuted}>
+                                {formatUsageWindowLabel(entry.provider, "secondary", window().windowMinutes)}{" "}
+                                <span style={{ fg: usageBarColor(window().usedPercent, theme) }}>
+                                  {usageBarString(window().usedPercent, 10)}
+                                </span>{" "}
+                                {Math.round(window().usedPercent)}%{" "}
+                                <Show when={window().resetsAt !== null}>
+                                  ({formatUsageResetShort(window().resetsAt)})
+                                </Show>
+                              </text>
+                            )}
+                          </Show>
+                          <Show when={entry.snapshot.tertiary}>
+                            {(window) => (
+                              <text fg={theme.textMuted}>
+                                {formatUsageWindowLabel(entry.provider, "tertiary", window().windowMinutes)}{" "}
+                                <span style={{ fg: usageBarColor(window().usedPercent, theme) }}>
+                                  {usageBarString(window().usedPercent, 10)}
+                                </span>{" "}
+                                {Math.round(window().usedPercent)}%{" "}
+                                <Show when={window().resetsAt !== null}>
+                                  ({formatUsageResetShort(window().resetsAt)})
+                                </Show>
+                              </text>
+                            )}
+                          </Show>
+                          <Show when={entry.snapshot.credits}>
+                            {(credits) => (
+                              <text fg={theme.textMuted}>{formatCreditsLabel(entry.provider, credits())}</text>
+                            )}
+                          </Show>
+                          <Show when={entryErrors.length > 0}>
+                            <text fg={theme.error} attributes={TextAttributes.DIM}>
+                              {entryErrors.join(" • ")}
+                            </text>
+                          </Show>
+                        </box>
+                      )
+                    }}
+                  </For>
+                </Show>
+              </box>
+            </Show>
             <Show when={mcpEntries().length > 0}>
               <box>
                 <box

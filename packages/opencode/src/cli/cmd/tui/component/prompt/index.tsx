@@ -30,6 +30,8 @@ import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
 import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
+import { DialogUsage } from "../dialog-usage"
+import { fetchUsage, resolveUsageProvider } from "../usage-client"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
 
@@ -74,6 +76,60 @@ export function Prompt(props: PromptProps) {
   const renderer = useRenderer()
   const { theme, syntax } = useTheme()
   const kv = useKV()
+
+  function handleUsageCommand(commandText: string) {
+    const parts = commandText.trim().split(/\s+/)
+    const args = parts.slice(1)
+    const rawProvider = args.find((part) => !part.startsWith("-"))
+    const hasAll = args.includes("--all")
+    const hasCurrent = args.includes("--current")
+    if (hasAll && hasCurrent) {
+      DialogAlert.show(dialog, "Usage", "Choose only one of --all or --current.")
+      return
+    }
+
+    const provider = iife(() => {
+      if (hasAll || hasCurrent) return undefined
+      return rawProvider
+    })
+
+    const usageScope = iife(() => {
+      if (hasAll) return "all"
+      if (hasCurrent) return "current"
+      return sync.data.config.tui?.show_usage_scope ?? "current"
+    })
+
+    const currentProvider = resolveUsageProvider({
+      scope: usageScope,
+      modelProviderID: local.model.current()?.providerID ?? null,
+    })
+
+    if (usageScope === "current" && !provider && !currentProvider) {
+      DialogAlert.show(dialog, "Usage", "Usage tracking is not available for the current provider.")
+      return
+    }
+
+    const resolvedProvider = resolveUsageProvider({
+      scope: usageScope,
+      providerOverride: provider ?? null,
+      modelProviderID: local.model.current()?.providerID ?? null,
+    })
+    const params = resolvedProvider ? { provider: resolvedProvider, refresh: true } : { refresh: true }
+
+    fetchUsage(sdk, params)
+      .then((data) => {
+        if (data.entries.length > 0) {
+          dialog.replace(() => <DialogUsage entries={data.entries} errors={data.errors} />)
+          return
+        }
+        const message = data.error ?? "No usage data available."
+        DialogAlert.show(dialog, "Usage", message)
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error)
+        DialogAlert.show(dialog, "Usage", message)
+      })
+  }
 
   function promptModelWarning() {
     toast.show({
@@ -304,16 +360,23 @@ export function Prompt(props: PromptProps) {
 
               return part
             })
-            .filter((part) => part !== null)
+            .filter(Boolean) as typeof nonTextParts
 
-          setStore("prompt", {
-            input: content,
-            // keep only the non-text parts because the text parts were
-            // already expanded inline
-            parts: updatedNonTextParts,
-          })
+          setStore("prompt", "input", content)
+          setStore("prompt", "parts", updatedNonTextParts)
           restoreExtmarksFromParts(updatedNonTextParts)
-          input.cursorOffset = Bun.stringWidth(content)
+        },
+      },
+      {
+        title: "Usage",
+        value: "usage.show",
+        description: "Show usage limits for current or all providers (--current, --all)",
+        category: "Provider",
+        slash: {
+          name: "usage",
+        },
+        onSelect: () => {
+          handleUsageCommand("/usage")
         },
       },
       {
@@ -514,7 +577,7 @@ export function Prompt(props: PromptProps) {
 
   async function submit() {
     if (props.disabled) return
-    if (autocomplete?.visible) return
+    if (autocomplete?.visible && !store.prompt.input.startsWith("/usage")) return
     if (!store.prompt.input) return
     const trimmed = store.prompt.input.trim()
     if (trimmed === "exit" || trimmed === "quit" || trimmed === ":q") {
@@ -558,7 +621,50 @@ export function Prompt(props: PromptProps) {
     const currentMode = store.mode
     const variant = local.model.variant.current()
 
-    if (store.mode === "shell") {
+    const isUsage = inputText.startsWith("/usage")
+    const isShell = store.mode === "shell"
+    const isCommand =
+      inputText.startsWith("/") &&
+      iife(() => {
+        const firstLine = inputText.split("\n")[0]
+        const command = firstLine.split(" ")[0].slice(1)
+        return sync.data.command.some((x) => x.name === command)
+      })
+
+    const finalizeSubmit = (options?: { history?: boolean }) => {
+      const includeHistory = options?.history ?? true
+      if (includeHistory) {
+        history.append({
+          ...store.prompt,
+          mode: currentMode,
+        })
+      }
+      input.extmarks.clear()
+      setStore("prompt", {
+        input: "",
+        parts: [],
+      })
+      setStore("extmarkToPartIndex", new Map())
+      props.onSubmit?.()
+
+      // temporary hack to make sure the message is sent
+      if (!props.sessionID)
+        setTimeout(() => {
+          route.navigate({
+            type: "session",
+            sessionID,
+          })
+        }, 50)
+      input.clear()
+    }
+
+    if (isUsage && !isShell) {
+      handleUsageCommand(inputText)
+      finalizeSubmit({ history: false })
+      return
+    }
+
+    if (isShell) {
       sdk.client.session.shell({
         sessionID,
         agent: local.agent.current().name,
@@ -569,14 +675,11 @@ export function Prompt(props: PromptProps) {
         command: inputText,
       })
       setStore("mode", "normal")
-    } else if (
-      inputText.startsWith("/") &&
-      iife(() => {
-        const firstLine = inputText.split("\n")[0]
-        const command = firstLine.split(" ")[0].slice(1)
-        return sync.data.command.some((x) => x.name === command)
-      })
-    ) {
+      finalizeSubmit()
+      return
+    }
+
+    if (isCommand) {
       // Parse command from first line, preserve multi-line content in arguments
       const firstLineEnd = inputText.indexOf("\n")
       const firstLine = firstLineEnd === -1 ? inputText : inputText.slice(0, firstLineEnd)
@@ -599,50 +702,32 @@ export function Prompt(props: PromptProps) {
             ...x,
           })),
       })
-    } else {
-      sdk.client.session
-        .prompt({
-          sessionID,
-          ...selectedModel,
-          messageID,
-          agent: local.agent.current().name,
-          model: selectedModel,
-          variant,
-          parts: [
-            {
-              id: Identifier.ascending("part"),
-              type: "text",
-              text: inputText,
-            },
-            ...nonTextParts.map((x) => ({
-              id: Identifier.ascending("part"),
-              ...x,
-            })),
-          ],
-        })
-        .catch(() => {})
+      finalizeSubmit()
+      return
     }
-    history.append({
-      ...store.prompt,
-      mode: currentMode,
-    })
-    input.extmarks.clear()
-    setStore("prompt", {
-      input: "",
-      parts: [],
-    })
-    setStore("extmarkToPartIndex", new Map())
-    props.onSubmit?.()
 
-    // temporary hack to make sure the message is sent
-    if (!props.sessionID)
-      setTimeout(() => {
-        route.navigate({
-          type: "session",
-          sessionID,
-        })
-      }, 50)
-    input.clear()
+    sdk.client.session
+      .prompt({
+        sessionID,
+        ...selectedModel,
+        messageID,
+        agent: local.agent.current().name,
+        model: selectedModel,
+        variant,
+        parts: [
+          {
+            id: Identifier.ascending("part"),
+            type: "text",
+            text: inputText,
+          },
+          ...nonTextParts.map((x) => ({
+            id: Identifier.ascending("part"),
+            ...x,
+          })),
+        ],
+      })
+      .catch(() => {})
+    finalizeSubmit()
   }
   const exit = useExit()
 
