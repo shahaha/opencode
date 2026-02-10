@@ -47,6 +47,7 @@ export namespace SessionProcessor {
         needsCompaction = false
         const shouldBreak = (await Config.get()).experimental?.continue_loop_on_deny !== true
         while (true) {
+          if (input.abort.aborted) break
           try {
             let currentText: MessageV2.TextPart | undefined
             let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
@@ -325,6 +326,18 @@ export namespace SessionProcessor {
                   currentText = undefined
                   break
 
+                case "file":
+                  await Session.updatePart({
+                    id: Identifier.ascending("part"),
+                    messageID: input.assistantMessage.id,
+                    sessionID: input.assistantMessage.sessionID,
+                    type: "file",
+                    mime: value.mediaType,
+                    url: value.url,
+                    filename: value.filename,
+                  })
+                  break
+
                 case "finish":
                   break
 
@@ -343,7 +356,7 @@ export namespace SessionProcessor {
             })
             const error = MessageV2.fromError(e, { providerID: input.model.providerID })
             const retry = SessionRetry.retryable(error)
-            if (retry !== undefined) {
+            if (retry !== undefined && !input.abort.aborted) {
               attempt++
               const delay = SessionRetry.delay(attempt, error.name === "APIError" ? error : undefined)
               SessionStatus.set(input.sessionID, {
@@ -353,9 +366,11 @@ export namespace SessionProcessor {
                 next: Date.now() + delay,
               })
               await SessionRetry.sleep(delay, input.abort).catch(() => {})
-              continue
+              if (!input.abort.aborted) continue
             }
-            input.assistantMessage.error = error
+            input.assistantMessage.error = input.abort.aborted
+              ? new MessageV2.AbortedError({ message: "Aborted" }).toObject()
+              : error
             Bus.publish(Session.Event.Error, {
               sessionID: input.assistantMessage.sessionID,
               error: input.assistantMessage.error,
@@ -397,9 +412,11 @@ export namespace SessionProcessor {
           await Session.updateMessage(input.assistantMessage)
           if (needsCompaction) return "compact"
           if (blocked) return "stop"
+          if (input.abort.aborted) return "stop"
           if (input.assistantMessage.error) return "stop"
           return "continue"
         }
+        return "stop"
       },
     }
     return result
