@@ -195,6 +195,56 @@ Commands run in your project's root directory and their output becomes part of t
 
 ---
 
+### Commit (generate message + commit)
+
+You can create a command that generates a commit message from your current changes and (by default) runs `git commit`.
+
+Create `.opencode/commands/commit.md`:
+
+```md title=".opencode/commands/commit.md"
+---
+description: Generate a commit message and commit
+---
+
+You are helping me create a git commit.
+
+Input flags: $ARGUMENTS
+
+First, inspect the current repo state:
+
+- Staged diff:
+!`git diff --cached`
+
+- Unstaged diff:
+!`git diff`
+
+- Status:
+!`git status --short`
+
+Rules:
+- Prefer committing ONLY staged changes.
+- If there is no staged diff, stop and tell me to run `git add ...` first.
+- If `$ARGUMENTS` contains `--dry`, output ONLY the commit message text and stop.
+- If `$ARGUMENTS` contains `--ask`, output the proposed `git commit -m "<message>"` command and ask me to confirm before running it.
+- Otherwise, run `git commit -m "<message>"`.
+- Never run `git push`. Never use `--no-verify`. Do not amend unless explicitly requested.
+
+Commit message constraints:
+- Single subject line (<= ~72 chars)
+- Present tense ("add", "fix", "refactor")
+- If there are multiple concerns, pick the most important one
+```
+
+Run it in the TUI:
+
+```bash frame="none"
+/commit
+/commit --dry
+/commit --ask
+```
+
+---
+
 ### File references
 
 Include files in your command using `@` followed by the filename.
