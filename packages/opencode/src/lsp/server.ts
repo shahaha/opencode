@@ -10,6 +10,7 @@ import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
 import { Archive } from "../util/archive"
+import { findCompileCommandsDir } from "./clangd"
 
 export namespace LSPServer {
   const log = Log.create({ service: "lsp.server" })
@@ -892,10 +893,23 @@ export namespace LSPServer {
 
   export const Clangd: Info = {
     id: "clangd",
-    root: NearestRoot(["compile_commands.json", "compile_flags.txt", ".clangd", "CMakeLists.txt", "Makefile"]),
+    // clangd automatically searches for .clangd, compile_flags.txt in all parent directories of active file
+    root: async (_file) => (Instance.worktree !== "/" ? Instance.worktree : Instance.directory),
     extensions: [".c", ".cpp", ".cc", ".cxx", ".c++", ".h", ".hpp", ".hh", ".hxx", ".h++"],
     async spawn(root) {
       const args = ["--background-index", "--clang-tidy"]
+
+      // Prefer compile_commands.json in the current working directory (Instance.directory).
+      // In monorepos, Instance.directory may be a subdirectory of the git worktree root (Instance.worktree),
+      // so if nothing is found there, fall back to searching the worktree root.
+      let compileCommandsDir = await findCompileCommandsDir(Instance.directory)
+      if (!compileCommandsDir && Instance.worktree !== "/" && Instance.worktree !== Instance.directory) {
+        compileCommandsDir = await findCompileCommandsDir(Instance.worktree)
+      }
+      if (compileCommandsDir) {
+        args.push(`--compile-commands-dir=${compileCommandsDir}`)
+      }
+
       const fromPath = Bun.which("clangd")
       if (fromPath) {
         return {
