@@ -81,7 +81,6 @@ export function isPromptEqual(promptA: Prompt, promptB: Prompt): boolean {
 }
 
 function cloneSelection(selection?: FileSelection) {
-  if (!selection) return undefined
   return { ...selection }
 }
 
