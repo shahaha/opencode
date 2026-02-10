@@ -470,17 +470,36 @@ export namespace Config {
 
   /**
    * Extracts a canonical plugin name from a plugin specifier.
-   * - For file:// URLs: extracts filename without extension
+   * - For file:// URLs: extracts a unique identifier based on the path
+   *   - If filename is "index", uses the grandparent directory name (handles src/, dist/)
+   *   - Otherwise uses the filename without extension
    * - For npm packages: extracts package name without version
    *
    * @example
    * getPluginName("file:///path/to/plugin/foo.js") // "foo"
+   * getPluginName("file:///path/to/my-plugin/src/index.ts") // "my-plugin"
+   * getPluginName("file:///path/to/oh-my-opencode/dist/index.js") // "oh-my-opencode"
    * getPluginName("oh-my-opencode@2.4.3") // "oh-my-opencode"
    * getPluginName("@scope/pkg@1.0.0") // "@scope/pkg"
    */
   export function getPluginName(plugin: string): string {
     if (plugin.startsWith("file://")) {
-      return path.parse(new URL(plugin).pathname).name
+      const urlPath = new URL(plugin).pathname
+      const parsed = path.parse(urlPath)
+      const filename = parsed.name
+      
+      // If the entry point is named "index", use the package directory name instead
+      // This handles common patterns like /my-plugin/src/index.ts or /my-plugin/dist/index.js
+      if (filename === "index") {
+        const parentDir = path.basename(parsed.dir)
+        // If parent is src/ or dist/, go up one more level to get the actual package name
+        if (parentDir === "src" || parentDir === "dist" || parentDir === "lib") {
+          return path.basename(path.dirname(parsed.dir))
+        }
+        return parentDir
+      }
+      
+      return filename
     }
     const lastAt = plugin.lastIndexOf("@")
     if (lastAt > 0) {
