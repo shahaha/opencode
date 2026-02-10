@@ -385,6 +385,12 @@ const createPlatform = (password: Accessor<string | null>): Platform => ({
       }, "image/png")
     })
   },
+
+  startWebMirror: (config) => commands.startWebMirror(config),
+  stopWebMirror: async () => {
+    await commands.stopWebMirror()
+  },
+  getWebMirrorStatus: () => commands.getWebMirrorStatus(),
 })
 
 let menuTrigger = null as null | ((id: string) => void)

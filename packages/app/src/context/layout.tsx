@@ -1,9 +1,10 @@
 import { createStore, produce } from "solid-js/store"
-import { batch, createEffect, createMemo, onCleanup, onMount, type Accessor } from "solid-js"
+import { batch, createEffect, createMemo, on, onCleanup, onMount, type Accessor } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { useGlobalSync } from "./global-sync"
 import { useGlobalSDK } from "./global-sdk"
 import { useServer } from "./server"
+import { usePlatform } from "./platform"
 import { Project } from "@opencode-ai/sdk/v2"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
 import { same } from "@/utils/same"
@@ -458,6 +459,105 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           })
       }
     })
+
+    // Mirror sidebar sync: Desktop → Server → Mirror (one-way).
+    // Desktop writes its sidebar state, Mirror reads it. No loops possible.
+    const platform = usePlatform()
+    const isMirror = platform.platform === "desktop" && !platform.storage
+    const isDesktop = platform.platform === "desktop" && !!platform.storage
+
+    if (isDesktop) {
+      // Desktop: push sidebar state to server on every change (debounced)
+      let pushTimer: ReturnType<typeof setTimeout> | undefined
+      const doFetch = platform.fetch ?? globalThis.fetch
+      createEffect(
+        on(
+          () => JSON.stringify(server.projects.list().map((p) => [p.worktree, p.expanded])),
+          () => {
+            if (!server.ready()) return
+            clearTimeout(pushTimer)
+            pushTimer = setTimeout(() => {
+              const payload = server.projects.list().map((p) => ({
+                worktree: p.worktree,
+                expanded: p.expanded,
+              }))
+              doFetch(globalSdk.url + "/mirror/sidebar", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              }).catch(() => {})
+            }, 300)
+          },
+        ),
+      )
+    }
+
+    if (isMirror) {
+      // Clear stale localStorage projects immediately so the mirror doesn't
+      // briefly show an outdated sidebar order from a previous browser session.
+      // The correct order will be fetched from /mirror/sidebar below.
+      batch(() => {
+        for (const p of server.projects.list().slice()) {
+          server.projects.close(p.worktree)
+        }
+      })
+
+      // Apply remote sidebar state to the local mirror store.
+      // Reads server.projects inside batch to avoid reactive loops.
+      function applySidebar(projects: Array<{ worktree: string; expanded: boolean }>) {
+        if (!Array.isArray(projects) || projects.length === 0) return
+        batch(() => {
+          const local = server.projects.list().slice()
+          const remoteWorktrees = new Set(projects.map((p) => p.worktree))
+          for (const p of local) {
+            if (!remoteWorktrees.has(p.worktree)) server.projects.close(p.worktree)
+          }
+          const existing = new Set(local.map((p) => p.worktree))
+          for (const project of projects) {
+            if (!project.worktree) continue
+            if (!existing.has(project.worktree)) server.projects.open(project.worktree)
+            const current = local.find((p) => p.worktree === project.worktree)
+            if (project.expanded && (!current || !current.expanded)) server.projects.expand(project.worktree)
+            if (!project.expanded && current?.expanded) server.projects.collapse(project.worktree)
+            globalSync.project.loadSessions(project.worktree)
+          }
+          // Reorder: close all, then re-open in reverse because open() prepends
+          for (const p of server.projects.list().slice()) {
+            server.projects.close(p.worktree)
+          }
+          for (let i = projects.length - 1; i >= 0; i--) {
+            if (!projects[i].worktree) continue
+            server.projects.open(projects[i].worktree)
+            if (projects[i].expanded) server.projects.expand(projects[i].worktree)
+          }
+        })
+      }
+
+      // Mirror: read sidebar from server on startup
+      let loaded = false
+      createEffect(() => {
+        if (loaded) return
+        if (!globalSync.ready) return
+        if (!server.ready()) return
+        loaded = true
+        fetch(globalSdk.url + "/mirror/sidebar")
+          .then((r) => r.json())
+          .then(applySidebar)
+          .catch(() => {})
+      })
+
+      // Mirror: react to live changes from desktop via SSE.
+      // on() ensures only mirrorSidebar is tracked — not server.projects.
+      createEffect(
+        on(
+          () => globalSync.data.mirrorSidebar,
+          (sidebar) => {
+            if (!sidebar) return
+            applySidebar(sidebar as Array<{ worktree: string; expanded: boolean }>)
+          },
+        ),
+      )
+    }
 
     onMount(() => {
       Promise.all(
