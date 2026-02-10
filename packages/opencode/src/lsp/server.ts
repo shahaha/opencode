@@ -1582,6 +1582,7 @@ export namespace LSPServer {
       return {
         process: spawn(dart, ["language-server", "--lsp"], {
           cwd: root,
+          shell: process.platform === "win32",
         }),
       }
     },
