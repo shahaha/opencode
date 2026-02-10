@@ -499,6 +499,8 @@ export const dict = {
   "sidebar.nav.projectsAndSessions": "Projetos e sessões",
   "sidebar.settings": "Configurações",
   "sidebar.help": "Ajuda",
+  "sidebar.project.pin": "Fixar no topo",
+  "sidebar.project.unpin": "Desafixar",
   "sidebar.workspaces.enable": "Habilitar espaços de trabalho",
   "sidebar.workspaces.disable": "Desabilitar espaços de trabalho",
   "sidebar.gettingStarted.title": "Começando",
@@ -517,6 +519,10 @@ export const dict = {
   "settings.general.section.notifications": "Notificações do sistema",
   "settings.general.section.updates": "Atualizações",
   "settings.general.section.sounds": "Efeitos sonoros",
+  "settings.general.section.desktop": "Desktop",
+
+  "settings.general.desktop.dynamicSort.title": "Ordenação dinâmica da barra lateral",
+  "settings.general.desktop.dynamicSort.description": "Mover projetos recentemente ativos para o topo",
 
   "settings.general.row.language.title": "Idioma",
   "settings.general.row.language.description": "Alterar o idioma de exibição do OpenCode",

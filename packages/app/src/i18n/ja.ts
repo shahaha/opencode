@@ -494,6 +494,8 @@ export const dict = {
   "sidebar.nav.projectsAndSessions": "プロジェクトとセッション",
   "sidebar.settings": "設定",
   "sidebar.help": "ヘルプ",
+  "sidebar.project.pin": "上部に固定",
+  "sidebar.project.unpin": "固定を解除",
   "sidebar.workspaces.enable": "ワークスペースを有効化",
   "sidebar.workspaces.disable": "ワークスペースを無効化",
   "sidebar.gettingStarted.title": "はじめに",
@@ -512,6 +514,10 @@ export const dict = {
   "settings.general.section.notifications": "システム通知",
   "settings.general.section.updates": "アップデート",
   "settings.general.section.sounds": "効果音",
+  "settings.general.section.desktop": "Desktop",
+
+  "settings.general.desktop.dynamicSort.title": "サイドバーの動的ソート",
+  "settings.general.desktop.dynamicSort.description": "最近アクティブなプロジェクトを上部に移動",
 
   "settings.general.row.language.title": "言語",
   "settings.general.row.language.description": "OpenCodeの表示言語を変更します",

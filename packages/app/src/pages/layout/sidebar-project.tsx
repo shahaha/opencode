@@ -10,6 +10,7 @@ import { createSortable } from "@thisbeyond/solid-dnd"
 import { type LocalProject } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
+import { useServer } from "@/context/server"
 import { ProjectIcon, SessionItem, type SessionItemProps } from "./sidebar-items"
 import { childMapByParent, displayName, sortedRootSessions } from "./helpers"
 import { projectSelected, projectTileActive } from "./sidebar-project-helpers"
@@ -58,6 +59,7 @@ export const SortableProject = (props: {
 }): JSX.Element => {
   const globalSync = useGlobalSync()
   const language = useLanguage()
+  const server = useServer()
   const sortable = createSortable(props.project.worktree)
   const selected = createMemo(() =>
     projectSelected(props.ctx.currentDir(), props.project.worktree, props.project.sandboxes),
@@ -95,11 +97,13 @@ export const SortableProject = (props: {
   }
 
   const projectStore = createMemo(() => globalSync.child(props.project.worktree, { bootstrap: false })[0])
-  const projectSessions = createMemo(() => sortedRootSessions(projectStore(), Date.now()).slice(0, 2))
+  const projectSessions = createMemo(() =>
+    sortedRootSessions(projectStore(), Date.now(), server.dynamicSort.enabled()).slice(0, 2),
+  )
   const projectChildren = createMemo(() => childMapByParent(projectStore().session))
   const workspaceSessions = (directory: string) => {
     const [data] = globalSync.child(directory, { bootstrap: false })
-    return sortedRootSessions(data, Date.now()).slice(0, 2)
+    return sortedRootSessions(data, Date.now(), server.dynamicSort.enabled()).slice(0, 2)
   }
   const workspaceChildren = (directory: string) => {
     const [data] = globalSync.child(directory, { bootstrap: false })
@@ -148,6 +152,21 @@ export const SortableProject = (props: {
         <ContextMenu.Content>
           <ContextMenu.Item onSelect={() => props.ctx.showEditProjectDialog(props.project)}>
             <ContextMenu.ItemLabel>{language.t("common.edit")}</ContextMenu.ItemLabel>
+          </ContextMenu.Item>
+          <ContextMenu.Item
+            data-action="project-pin-toggle"
+            data-project={base64Encode(props.project.worktree)}
+            onSelect={() => {
+              server.projects.isPinned(props.project.worktree)
+                ? server.projects.unpin(props.project.worktree)
+                : server.projects.pin(props.project.worktree)
+            }}
+          >
+            <ContextMenu.ItemLabel>
+              {server.projects.isPinned(props.project.worktree)
+                ? language.t("sidebar.project.unpin")
+                : language.t("sidebar.project.pin")}
+            </ContextMenu.ItemLabel>
           </ContextMenu.Item>
           <ContextMenu.Item
             data-action="project-workspaces-toggle"

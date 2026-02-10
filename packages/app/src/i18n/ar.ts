@@ -495,6 +495,8 @@ export const dict = {
   "sidebar.nav.projectsAndSessions": "المشاريع والجلسات",
   "sidebar.settings": "الإعدادات",
   "sidebar.help": "مساعدة",
+  "sidebar.project.pin": "تثبيت في الأعلى",
+  "sidebar.project.unpin": "إلغاء التثبيت",
   "sidebar.workspaces.enable": "تمكين مساحات العمل",
   "sidebar.workspaces.disable": "تعطيل مساحات العمل",
   "sidebar.gettingStarted.title": "البدء",
@@ -513,6 +515,10 @@ export const dict = {
   "settings.general.section.notifications": "إشعارات النظام",
   "settings.general.section.updates": "التحديثات",
   "settings.general.section.sounds": "المؤثرات الصوتية",
+  "settings.general.section.desktop": "Desktop",
+
+  "settings.general.desktop.dynamicSort.title": "ترتيب ديناميكي للشريط الجانبي",
+  "settings.general.desktop.dynamicSort.description": "نقل المشاريع النشطة مؤخراً إلى الأعلى",
 
   "settings.general.row.language.title": "اللغة",
   "settings.general.row.language.description": "تغيير لغة العرض لـ OpenCode",

@@ -77,6 +77,7 @@ export function applyDirectoryEvent(input: {
   directory: string
   loadLsp: () => void
   vcsCache?: VcsCache
+  onSessionBusy?: (sessionID: string) => void
 }) {
   const event = input.event
   switch (event.type) {
@@ -154,6 +155,7 @@ export function applyDirectoryEvent(input: {
     case "session.status": {
       const props = event.properties as { sessionID: string; status: SessionStatus }
       input.setStore("session_status", props.sessionID, reconcile(props.status))
+      if (props.status.type === "busy") input.onSessionBusy?.(props.sessionID)
       break
     }
     case "message.updated": {

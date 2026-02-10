@@ -535,6 +535,8 @@ export const dict = {
   "sidebar.nav.projectsAndSessions": "项目和会话",
   "sidebar.settings": "设置",
   "sidebar.help": "帮助",
+  "sidebar.project.pin": "置顶",
+  "sidebar.project.unpin": "取消置顶",
   "sidebar.workspaces.enable": "启用工作区",
   "sidebar.workspaces.disable": "禁用工作区",
   "sidebar.gettingStarted.title": "入门",
@@ -553,6 +555,10 @@ export const dict = {
   "settings.general.section.notifications": "系统通知",
   "settings.general.section.updates": "更新",
   "settings.general.section.sounds": "音效",
+  "settings.general.section.desktop": "Desktop",
+
+  "settings.general.desktop.dynamicSort.title": "动态侧边栏排序",
+  "settings.general.desktop.dynamicSort.description": "将最近活跃的项目移至顶部",
 
   "settings.general.row.language.title": "语言",
   "settings.general.row.language.description": "更改 OpenCode 的显示语言",

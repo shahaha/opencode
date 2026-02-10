@@ -500,6 +500,8 @@ export const dict = {
   "sidebar.nav.projectsAndSessions": "프로젝트 및 세션",
   "sidebar.settings": "설정",
   "sidebar.help": "도움말",
+  "sidebar.project.pin": "상단에 고정",
+  "sidebar.project.unpin": "고정 해제",
   "sidebar.workspaces.enable": "작업 공간 활성화",
   "sidebar.workspaces.disable": "작업 공간 비활성화",
   "sidebar.gettingStarted.title": "시작하기",
@@ -518,6 +520,10 @@ export const dict = {
   "settings.general.section.notifications": "시스템 알림",
   "settings.general.section.updates": "업데이트",
   "settings.general.section.sounds": "효과음",
+  "settings.general.section.desktop": "Desktop",
+
+  "settings.general.desktop.dynamicSort.title": "사이드바 동적 정렬",
+  "settings.general.desktop.dynamicSort.description": "최근 활성 프로젝트를 상단으로 이동",
 
   "settings.general.row.language.title": "언어",
   "settings.general.row.language.description": "OpenCode 표시 언어 변경",
