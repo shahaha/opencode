@@ -244,12 +244,14 @@ pub fn serve(app: &AppHandle, hostname: &str, port: u32, password: &str) -> Comm
 
     println!("spawning sidecar on port {port}");
 
-    let (mut rx, child) = create_command(
+    let (mut rx, child) = create_command_with_env(
         app,
         format!("serve --hostname {hostname} --port {port}").as_str(),
+        &[
+            ("OPENCODE_SERVER_USERNAME", "opencode"),
+            ("OPENCODE_SERVER_PASSWORD", password),
+        ],
     )
-    .env("OPENCODE_SERVER_USERNAME", "opencode")
-    .env("OPENCODE_SERVER_PASSWORD", password)
     .spawn()
     .expect("Failed to spawn opencode");
 
