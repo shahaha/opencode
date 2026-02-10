@@ -1,5 +1,6 @@
 import { cmd } from "../cmd"
 import { tui } from "./app"
+import { getAuthorizationHeader } from "@/flag/auth"
 
 export const AttachCommand = cmd({
   command: "attach <url>",
@@ -24,6 +25,11 @@ export const AttachCommand = cmd({
         alias: ["p"],
         type: "string",
         describe: "basic auth password (defaults to OPENCODE_SERVER_PASSWORD)",
+      })
+      .option("username", {
+        alias: ["u"],
+        type: "string",
+        describe: "basic auth username (defaults to OPENCODE_SERVER_USERNAME or 'opencode')",
       }),
   handler: async (args) => {
     const directory = (() => {
@@ -36,17 +42,22 @@ export const AttachCommand = cmd({
         return args.dir
       }
     })()
-    const headers = (() => {
-      const password = args.password ?? process.env.OPENCODE_SERVER_PASSWORD
-      if (!password) return undefined
-      const auth = `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}`
-      return { Authorization: auth }
-    })()
+
+    // If server requires authentication, create a custom fetch that includes the auth header
+    const authHeader = getAuthorizationHeader({ passwordFromCli: args.password, usernameFromCli: args.username })
+    const customFetch = authHeader
+      ? ((async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+          const request = new Request(input, init)
+          request.headers.set("Authorization", authHeader)
+          return fetch(request)
+        }) as typeof fetch)
+      : undefined
+
     await tui({
       url: args.url,
       args: { sessionID: args.session },
       directory,
-      headers,
+      fetch: customFetch,
     })
   },
 })

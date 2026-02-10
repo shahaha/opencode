@@ -9,6 +9,7 @@ import { Log } from "@/util/log"
 import { withNetworkOptions, resolveNetworkOptions } from "@/cli/network"
 import type { Event } from "@opencode-ai/sdk/v2"
 import type { EventSource } from "./context/sdk"
+import { getAuthorizationHeader } from "@/flag/auth"
 
 declare global {
   const OPENCODE_WORKER_PATH: string
@@ -20,6 +21,7 @@ function createWorkerFetch(client: RpcClient): typeof fetch {
   const fn = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init)
     const body = request.body ? await request.text() : undefined
+
     const result = await client.call("fetch", {
       url: request.url,
       method: request.method,
@@ -142,6 +144,16 @@ export const TuiThreadCommand = cmd({
       // Start HTTP server for external access
       const server = await client.call("server", networkOpts)
       url = server.url
+
+      // if server is started with password protection, we need to provide it
+      const authHeader = getAuthorizationHeader()
+      if (authHeader) {
+        customFetch = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+          const request = new Request(input, init)
+          request.headers.set("Authorization", authHeader)
+          return fetch(request)
+        }) as typeof fetch
+      }
     } else {
       // Use direct RPC communication (no HTTP)
       url = "http://opencode.internal"
