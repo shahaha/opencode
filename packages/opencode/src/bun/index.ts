@@ -12,6 +12,13 @@ import { proxied } from "@/util/proxied"
 export namespace BunProc {
   const log = Log.create({ service: "bun" })
 
+  interface PackageJson {
+    dependencies?: Record<string, string>
+    opencode?: {
+      providers?: Record<string, string>
+    }
+  }
+
   export async function run(cmd: string[], options?: Bun.SpawnOptions.OptionsObject<any, any, any>) {
     log.info("running", {
       cmd: [which(), ...cmd],
@@ -61,77 +68,100 @@ export namespace BunProc {
     }),
   )
 
-  export async function install(pkg: string, version = "latest") {
-    // Use lock to ensure only one install at a time
+  async function readPackageJson(): Promise<PackageJson> {
+    const file = Bun.file(path.join(Global.Path.cache, "package.json"))
+    return file.json().catch(() => ({}))
+  }
+
+  async function writePackageJson(parsed: PackageJson) {
+    const file = Bun.file(path.join(Global.Path.cache, "package.json"))
+    await Bun.write(file.name!, JSON.stringify(parsed, null, 2))
+  }
+
+  async function track(provider: string, pkg: string) {
+    const parsed = await readPackageJson()
+    if (!parsed.opencode) parsed.opencode = {}
+    if (!parsed.opencode.providers) parsed.opencode.providers = {}
+    parsed.opencode.providers[provider] = pkg
+    await writePackageJson(parsed)
+  }
+
+  async function cleanup(provider: string, oldPkg: string) {
+    const parsed = await readPackageJson()
+    const providers = parsed.opencode?.providers ?? {}
+    const used = Object.entries(providers).some(([p, name]) => p !== provider && name === oldPkg)
+    if (used) return
+    log.info("removing unused package", { pkg: oldPkg })
+    await BunProc.run(["remove", "--cwd", Global.Path.cache, oldPkg]).catch(() => {})
+  }
+
+  async function resolveVersion(mod: string, version: string) {
+    if (version !== "latest") return version
+    const file = Bun.file(path.join(mod, "package.json"))
+    const pkg = await file.json().catch(() => null)
+    return pkg?.version ?? version
+  }
+
+  async function finalize(provider: string | undefined, pkg: string, oldPkg: string | undefined) {
+    if (provider) await track(provider, pkg)
+    if (oldPkg && oldPkg !== pkg) await cleanup(provider!, oldPkg)
+  }
+
+  export async function install(pkg: string, version = "latest", provider?: string) {
     using _ = await Lock.write("bun-install")
 
     const mod = path.join(Global.Path.cache, "node_modules", pkg)
-    const pkgjson = Bun.file(path.join(Global.Path.cache, "package.json"))
-    const parsed = await pkgjson.json().catch(async () => {
-      const result = { dependencies: {} }
-      await Bun.write(pkgjson.name!, JSON.stringify(result, null, 2))
-      return result
-    })
-    const dependencies = parsed.dependencies ?? {}
-    if (!parsed.dependencies) parsed.dependencies = dependencies
+    const state = await readPackageJson()
+    const cached = state.dependencies?.[pkg]
+    const oldPkg = provider ? state.opencode?.providers?.[provider] : undefined
+
+    // Check if we can skip installation
     const modExists = await Filesystem.exists(mod)
-    const cachedVersion = dependencies[pkg]
-
-    if (!modExists || !cachedVersion) {
-      // continue to install
-    } else if (version !== "latest" && cachedVersion === version) {
-      return mod
-    } else if (version === "latest") {
-      const isOutdated = await PackageRegistry.isOutdated(pkg, cachedVersion, Global.Path.cache)
-      if (!isOutdated) return mod
-      log.info("Cached version is outdated, proceeding with install", { pkg, cachedVersion })
-    }
-
-    // Build command arguments
-    const args = [
-      "add",
-      "--force",
-      "--exact",
-      // TODO: get rid of this case (see: https://github.com/oven-sh/bun/issues/19936)
-      ...(proxied() ? ["--no-cache"] : []),
-      "--cwd",
-      Global.Path.cache,
-      pkg + "@" + version,
-    ]
-
-    // Let Bun handle registry resolution:
-    // - If .npmrc files exist, Bun will use them automatically
-    // - If no .npmrc files exist, Bun will default to https://registry.npmjs.org
-    // - No need to pass --registry flag
-    log.info("installing package using Bun's default registry resolution", {
-      pkg,
-      version,
-    })
-
-    await BunProc.run(args, {
-      cwd: Global.Path.cache,
-    }).catch((e) => {
-      throw new InstallFailedError(
-        { pkg, version },
-        {
-          cause: e,
-        },
-      )
-    })
-
-    // Resolve actual version from installed package when using "latest"
-    // This ensures subsequent starts use the cached version until explicitly updated
-    let resolvedVersion = version
-    if (version === "latest") {
-      const installedPkgJson = Bun.file(path.join(mod, "package.json"))
-      const installedPkg = await installedPkgJson.json().catch(() => null)
-      if (installedPkg?.version) {
-        resolvedVersion = installedPkg.version
+    if (version !== "latest") {
+      if (cached === version && modExists) {
+        await finalize(provider, pkg, oldPkg)
+        return mod
       }
+    } else {
+      const outdated = await PackageRegistry.isOutdated(pkg, cached, Global.Path.cache)
+      if (!outdated && modExists) {
+        await finalize(provider, pkg, oldPkg)
+        return mod
+      }
+      if (outdated) log.info("cached version is outdated", { pkg, cached })
     }
 
-    parsed.dependencies[pkg] = resolvedVersion
-    await Bun.write(pkgjson.name!, JSON.stringify(parsed, null, 2))
+    log.info("installing package", { pkg, version })
+
+    await BunProc.run(
+      [
+        "add",
+        "--force",
+        "--exact",
+        // TODO: get rid of this case (see: https://github.com/oven-sh/bun/issues/19936)
+        ...(proxied() ? ["--no-cache"] : []),
+        "--cwd",
+        Global.Path.cache,
+        `${pkg}@${version}`,
+      ],
+      { cwd: Global.Path.cache },
+    ).catch((e) => {
+      throw new InstallFailedError({ pkg, version }, { cause: e })
+    })
+
+    // Persist resolved version and provider tracking
+    const resolved = await resolveVersion(mod, version)
+    const updated = await readPackageJson()
+    if (!updated.dependencies) updated.dependencies = {}
+    updated.dependencies[pkg] = resolved
+    if (provider) {
+      if (!updated.opencode) updated.opencode = {}
+      if (!updated.opencode.providers) updated.opencode.providers = {}
+      updated.opencode.providers[provider] = pkg
+    }
+    await writePackageJson(updated)
+
+    if (oldPkg && oldPkg !== pkg) await cleanup(provider!, oldPkg)
     return mod
   }
 }
