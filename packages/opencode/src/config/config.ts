@@ -1122,11 +1122,19 @@ export namespace Config {
                 disabled: z.literal(true),
               }),
               z.object({
-                command: z.array(z.string()),
+                command: z.array(z.string()).optional(),
                 extensions: z.array(z.string()).optional(),
                 disabled: z.boolean().optional(),
                 env: z.record(z.string(), z.string()).optional(),
                 initialization: z.record(z.string(), z.any()).optional(),
+                timeout: z
+                  .number()
+                  .int()
+                  .positive()
+                  .optional()
+                  .describe(
+                    "Timeout in milliseconds for this LSP server's initialization. Default is 45000 (45 seconds).",
+                  ),
               }),
             ]),
           ),
