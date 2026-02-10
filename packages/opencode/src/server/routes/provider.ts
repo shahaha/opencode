@@ -46,6 +46,15 @@ export const ProviderRoutes = lazy(() =>
             filteredProviders[key] = value
           }
         }
+        // Add Maple AI (not in models.dev, models discovered dynamically from proxy)
+        if ((enabled ? enabled.has("maple") : true) && !disabled.has("maple")) {
+          filteredProviders["maple"] = {
+            id: "maple",
+            name: "Maple AI",
+            env: ["MAPLE_API_KEY"],
+            models: {},
+          }
+        }
 
         const connected = await Provider.list()
         const providers = Object.assign(
@@ -54,7 +63,11 @@ export const ProviderRoutes = lazy(() =>
         )
         return c.json({
           all: Object.values(providers),
-          default: mapValues(providers, (item) => Provider.sort(Object.values(item.models))[0].id),
+          default: mapValues(providers, (item) => {
+            const models = Object.values(item.models)
+            if (models.length === 0) return ""
+            return Provider.sort(models)[0].id
+          }),
           connected: Object.keys(connected),
         })
       },

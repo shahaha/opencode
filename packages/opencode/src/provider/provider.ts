@@ -528,6 +528,69 @@ export namespace Provider {
         },
       }
     },
+    maple: async (input) => {
+      const config = await Config.get()
+      const baseURL = config.provider?.["maple"]?.options?.baseURL ?? "http://127.0.0.1:8080/v1"
+
+      const auth = await Auth.get("maple")
+      const apiKey = auth?.type === "api" ? auth.key : Env.get("MAPLE_API_KEY")
+
+      if (!apiKey) return { autoload: false }
+
+      // Dynamically fetch models from the Maple proxy
+      try {
+        const response = await fetch(`${baseURL}/models`, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+          signal: AbortSignal.timeout(5000),
+        })
+        if (!response.ok) {
+          log.warn("Failed to fetch Maple models", { status: response.status })
+          return { autoload: false }
+        }
+        const data = (await response.json()) as { data?: Array<{ id: string }> }
+        const models = data.data ?? []
+
+        for (const model of models) {
+          input.models[model.id] = {
+            id: model.id,
+            providerID: "maple",
+            name: model.id,
+            api: {
+              id: model.id,
+              url: baseURL,
+              npm: "@ai-sdk/openai-compatible",
+            },
+            status: "active",
+            headers: {},
+            options: {},
+            cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+            limit: { context: 128000, output: 8192 },
+            capabilities: {
+              temperature: true,
+              reasoning: false,
+              attachment: false,
+              toolcall: true,
+              input: { text: true, audio: false, image: false, video: false, pdf: false },
+              output: { text: true, audio: false, image: false, video: false, pdf: false },
+              interleaved: false,
+            },
+            release_date: "",
+            variants: {},
+          }
+        }
+      } catch (e) {
+        log.warn("Failed to connect to Maple proxy", { error: e })
+        return { autoload: false }
+      }
+
+      return {
+        autoload: Object.keys(input.models).length > 0,
+        options: {
+          baseURL,
+          apiKey,
+        },
+      }
+    },
   }
 
   export const Model = z
@@ -732,6 +795,16 @@ export namespace Provider {
           providerID: "github-copilot-enterprise",
         })),
       }
+    }
+
+    // Add Maple AI provider (models are populated dynamically from the proxy)
+    database["maple"] = {
+      id: "maple",
+      name: "Maple AI",
+      source: "custom",
+      env: ["MAPLE_API_KEY"],
+      options: {},
+      models: {},
     }
 
     function mergeProvider(providerID: string, provider: Partial<Info>) {
