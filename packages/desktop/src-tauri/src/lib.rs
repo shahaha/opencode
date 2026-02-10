@@ -52,6 +52,13 @@ enum InitStep {
     Done,
 }
 
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+enum WslPathMode {
+    Windows,
+    Linux,
+}
+
 struct InitState {
     current: watch::Receiver<InitStep>,
 }
@@ -152,12 +159,12 @@ fn check_app_exists(app_name: &str) -> bool {
     {
         check_windows_app(app_name)
     }
-    
+
     #[cfg(target_os = "macos")]
     {
         check_macos_app(app_name)
     }
-    
+
     #[cfg(target_os = "linux")]
     {
         check_linux_app(app_name)
@@ -181,13 +188,13 @@ fn check_macos_app(app_name: &str) -> bool {
     if let Ok(home) = std::env::var("HOME") {
         app_locations.push(format!("{}/Applications/{}.app", home, app_name));
     }
-    
+
     for location in app_locations {
         if std::path::Path::new(&location).exists() {
             return true;
         }
     }
-    
+
     // Also check if command exists in PATH
     Command::new("which")
         .arg(app_name)
@@ -238,6 +245,30 @@ fn check_linux_app(app_name: &str) -> bool {
     return true;
 }
 
+#[tauri::command]
+#[specta::specta]
+fn wsl_path(path: String, mode: Option<WslPathMode>) -> Result<String, String> {
+    let flag = match mode.unwrap_or(WslPathMode::Linux) {
+        WslPathMode::Windows => "-w",
+        WslPathMode::Linux => "-u",
+    };
+
+    let output = Command::new("wsl")
+        .args(["-e", "wslpath", flag, &path])
+        .output()
+        .map_err(|e| format!("Failed to run wslpath: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if stderr.is_empty() {
+            return Err("wslpath failed".to_string());
+        }
+        return Err(stderr);
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri_specta::Builder::<tauri::Wry>::new()
@@ -248,10 +279,13 @@ pub fn run() {
             await_initialization,
             server::get_default_server_url,
             server::set_default_server_url,
+            server::get_wsl_config,
+            server::set_wsl_config,
             get_display_backend,
             set_display_backend,
             markdown::parse_markdown_command,
-            check_app_exists
+            check_app_exists,
+            wsl_path
         ])
         .events(tauri_specta::collect_events![LoadingWindowComplete])
         .error_handling(tauri_specta::ErrorHandlingMode::Throw);
