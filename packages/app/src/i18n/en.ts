@@ -208,8 +208,8 @@ export const dict = {
   "model.tooltip.context": "Context limit {{limit}}",
 
   "common.search.placeholder": "Search",
-  "common.goBack": "Navigate back",
-  "common.goForward": "Navigate forward",
+  "common.goBack": "Back",
+  "common.goForward": "Forward",
   "common.loading": "Loading",
   "common.loading.ellipsis": "...",
   "common.cancel": "Cancel",

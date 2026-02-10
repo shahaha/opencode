@@ -1,15 +1,15 @@
 ---
 title: Biçimlendiriciler
-description: opencode dile özgü biçimlendiriciler kullanır.
+description: OpenCode dile özgü biçimlendiriciler kullanır.
 ---
 
-opencode, dosyaları dile özgü formatlayıcılar kullanılarak yazıldıktan veya düzenlendikten sonra otomatik olarak formatlar. Bu, oluşturulan kodun projenizin kod stillerine uymasını sağlar.
+OpenCode, dosyaları dile özgü formatlayıcılar kullanılarak yazıldıktan veya düzenlendikten sonra otomatik olarak formatlar. Bu, oluşturulan kodun projenizin kod stillerine uymasını sağlar.
 
 ---
 
 ## Built-in
 
-opencode, popüler diller ve çerçeveler için çeşitli yerleşik biçimlendiricilerle birlikte gelir. Aşağıda ihtiyaç duyduğu biçimlendiricilerin, desteklenen dosya uzantılarının ve komutların veya yapılandırma seçeneklerinin bir listesi bulunmaktadır.
+OpenCode, popüler diller ve çerçeveler için çeşitli yerleşik biçimlendiricilerle birlikte gelir. Aşağıda ihtiyaç duyduğu biçimlendiricilerin, desteklenen dosya uzantılarının ve komutların veya yapılandırma seçeneklerinin bir listesi bulunmaktadır.
 
 | Formatter          | Extensions                                                                                             | Requirements                                                                                             |
 | ------------------ | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
@@ -38,13 +38,13 @@ opencode, popüler diller ve çerçeveler için çeşitli yerleşik biçimlendir
 | oxfmt (Deneysel)   | .js, .jsx, .ts, .tsx                                                                                   | `package.json` içindeki `oxfmt` bağımlılığı ve [experimental env variable flag](/docs/cli/#experimental) |
 | ormolu             | .hs                                                                                                    | `ormolu` komutu mevcut                                                                                   |
 
-Yani eğer projenizin `package.json` dosyasında `prettier` varsa, opencode bunu otomatik olarak kullanacaktır.
+Yani eğer projenizin `package.json` dosyasında `prettier` varsa, OpenCode bunu otomatik olarak kullanacaktır.
 
 ---
 
 ## Nasıl çalışır?
 
-opencode bir dosyayı yazdığında veya düzenlediğinde:
+OpenCode bir dosyayı yazdığında veya düzenlediğinde:
 
 1. Dosya uzantısını tüm etkin formatlayıcılara göre kontrol eder.
 2. Dosyada uygun biçimlendirici komutunu çalıştırır.
@@ -56,7 +56,7 @@ Bu işlem arka planda gerçekleşir ve kod stillerinizin herhangi bir manuel ad�
 
 ## Yapılandır
 
-Biçimlendiricileri opencode yapılandırmanızdaki `formatter` bölümü aracılığıyla özelleştirebilirsiniz.
+Biçimlendiricileri OpenCode yapılandırmanızdaki `formatter` bölümü aracılığıyla özelleştirebilirsiniz.
 
 ```json title="opencode.json"
 {
