@@ -12,6 +12,7 @@ const ctx = {
   messages: [],
   metadata: () => {},
   ask: async () => {},
+  getConversation: async () => [],
 }
 
 describe("tool.question", () => {

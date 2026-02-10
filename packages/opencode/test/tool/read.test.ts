@@ -17,6 +17,7 @@ const ctx = {
   messages: [],
   metadata: () => {},
   ask: async () => {},
+  getConversation: async () => [],
 }
 
 describe("tool.read external_directory permission", () => {

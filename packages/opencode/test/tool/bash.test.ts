@@ -15,6 +15,7 @@ const ctx = {
   messages: [],
   metadata: () => {},
   ask: async () => {},
+  getConversation: async () => [],
 }
 
 const projectRoot = path.join(__dirname, "../..")

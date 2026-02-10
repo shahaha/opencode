@@ -13,6 +13,7 @@ const baseCtx = {
   abort: AbortSignal.any([]),
   messages: [],
   metadata: () => {},
+  getConversation: async () => [],
 }
 
 type AskInput = {
