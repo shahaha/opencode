@@ -346,13 +346,23 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     }
 
     const renderer = useRenderer()
+    const [transparent] = kv.signal("transparent_background", false)
     process.on("SIGUSR2", async () => {
       renderer.clearPaletteCache()
       init()
     })
 
     const values = createMemo(() => {
-      return resolveTheme(store.themes[store.active] ?? store.themes.opencode, store.mode)
+      const resolved = resolveTheme(store.themes[store.active] ?? store.themes.opencode, store.mode)
+      if (!transparent()) return resolved
+      const clear = RGBA.fromInts(0, 0, 0, 0)
+      return {
+        ...resolved,
+        background: clear,
+        backgroundPanel: clear,
+        backgroundElement: clear,
+        backgroundMenu: clear,
+      }
     })
 
     const syntax = createMemo(() => generateSyntax(values()))

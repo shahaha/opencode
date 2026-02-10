@@ -209,6 +209,7 @@ function App() {
     renderer.clearSelection()
   }
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
+  const [transparent, setTransparent] = kv.signal("transparent_background", false)
 
   createEffect(() => {
     console.log(JSON.stringify(route.data))
@@ -499,6 +500,15 @@ function App() {
       category: "System",
     },
     {
+      title: transparent() ? "Disable transparent background" : "Enable transparent background",
+      value: "tui.transparent.toggle",
+      category: "System",
+      onSelect: (dialog) => {
+        setTransparent((value) => !value)
+        dialog.clear()
+      },
+    },
+    {
       title: "Help",
       value: "help.show",
       slash: {
@@ -691,7 +701,7 @@ function App() {
     <box
       width={dimensions().width}
       height={dimensions().height}
-      backgroundColor={theme.background}
+      backgroundColor={theme.background.a === 0 ? undefined : theme.background}
       onMouseUp={async () => {
         if (Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) {
           renderer.clearSelection()
