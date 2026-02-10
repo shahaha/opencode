@@ -776,10 +776,11 @@ export namespace SessionPrompt {
           },
         )
 
+        const pattern = PermissionNext.serialize(args as Record<string, unknown>)
         await ctx.ask({
           permission: key,
-          metadata: {},
-          patterns: ["*"],
+          metadata: args,
+          patterns: pattern ? [pattern] : ["*"],
           always: ["*"],
         })
 
