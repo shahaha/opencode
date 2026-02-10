@@ -33,6 +33,13 @@ await Promise.all([
   fs.mkdir(Global.Path.bin, { recursive: true }),
 ])
 
+const binPackageJson = path.join(Global.Path.bin, "package.json")
+if (!(await Bun.file(binPackageJson).exists())) {
+  await Bun.file(binPackageJson)
+    .write("{}")
+    .catch(() => {})
+}
+
 const CACHE_VERSION = "21"
 
 const version = await Bun.file(path.join(Global.Path.cache, "version"))
