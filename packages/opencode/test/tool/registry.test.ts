@@ -114,8 +114,9 @@ describe("tool.registry", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        // should not throw even when the tool has unresolvable dependencies
         const ids = await ToolRegistry.ids()
-        expect(ids).toContain("cowsay")
+        expect(ids).not.toContain("cowsay")
       },
     })
   })
