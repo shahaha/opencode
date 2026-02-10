@@ -25,12 +25,53 @@ export namespace Global {
   }
 }
 
+function ensureDir(dir: string) {
+  return fs.mkdir(dir, { recursive: true }).catch((err) => {
+    if (err.code === "EACCES") {
+      const parent = path.dirname(dir)
+      const isWindows = process.platform === "win32"
+
+      const remediation = isWindows
+        ? [
+            "On Windows, adjust the folder permissions so your user can write to it.",
+            "For example, in an elevated PowerShell prompt you can run:",
+            `  icacls "${parent}" /grant "${process.env.USERNAME}:(OI)(CI)M" /T`,
+          ].join("\n")
+        : [
+            "To fix this on Unix-like systems, run:",
+            `  sudo chown -R $(whoami) "${parent}"`,
+          ].join("\n")
+
+      const dataDirInstruction = isWindows
+        ? '  $env:XDG_DATA_HOME="$HOME\\.opencode-data"'
+        : '  export XDG_DATA_HOME="$HOME/.opencode-data"'
+
+      const message = [
+        `Error: Permission denied creating directory: ${dir}`,
+        "",
+        `The parent directory "${parent}" exists but opencode cannot write to it.`,
+        "This can happen when another application created it with restrictive permissions.",
+        "",
+        remediation,
+        "",
+        "Or set a custom data directory:",
+        dataDirInstruction,
+        "",
+      ].join("\n")
+
+      console.error(message)
+      process.exit(1)
+    }
+    throw err
+  })
+}
+
 await Promise.all([
-  fs.mkdir(Global.Path.data, { recursive: true }),
-  fs.mkdir(Global.Path.config, { recursive: true }),
-  fs.mkdir(Global.Path.state, { recursive: true }),
-  fs.mkdir(Global.Path.log, { recursive: true }),
-  fs.mkdir(Global.Path.bin, { recursive: true }),
+  ensureDir(Global.Path.data),
+  ensureDir(Global.Path.config),
+  ensureDir(Global.Path.state),
+  ensureDir(Global.Path.log),
+  ensureDir(Global.Path.bin),
 ])
 
 const CACHE_VERSION = "21"
