@@ -673,3 +673,31 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
     },
   })
 })
+
+test("agent variant can be set from config", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      agent: {
+        build: { variant: "high" },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const build = await Agent.get("build")
+      expect(build?.variant).toBe("high")
+    },
+  })
+})
+
+test("agent variant defaults to undefined when not set", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const build = await Agent.get("build")
+      expect(build?.variant).toBeUndefined()
+    },
+  })
+})
