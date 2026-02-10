@@ -32,6 +32,11 @@ import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
+import { useVimEnabled } from "../vim"
+import { createVimState } from "../vim/vim-state"
+import { createVimHandler } from "../vim/vim-handler"
+import { vimScroll } from "../vim/vim-scroll"
+import { useVimIndicator } from "../vim/vim-indicator"
 
 export type PromptProps = {
   sessionID?: string
@@ -74,6 +79,7 @@ export function Prompt(props: PromptProps) {
   const renderer = useRenderer()
   const { theme, syntax } = useTheme()
   const kv = useKV()
+  const vimEnabled = useVimEnabled()
 
   function promptModelWarning() {
     toast.show({
@@ -110,6 +116,19 @@ export function Prompt(props: PromptProps) {
     if (!props.disabled) input.cursorColor = theme.text
   })
 
+  createEffect(() => {
+    if (!input || input.isDestroyed) return
+    if (vimEnabled() && store.mode === "normal") {
+      if (vimState.isInsert()) {
+        input.cursorStyle = { style: "line", blinking: true }
+        return
+      }
+      input.cursorStyle = { style: "block", blinking: false }
+      return
+    }
+    input.cursorStyle = { style: "block", blinking: true }
+  })
+
   const lastUserMessage = createMemo(() => {
     if (!props.sessionID) return undefined
     const messages = sync.data.message[props.sessionID]
@@ -132,6 +151,32 @@ export function Prompt(props: PromptProps) {
     mode: "normal",
     extmarkToPartIndex: new Map(),
     interrupt: 0,
+  })
+  const vimState = createVimState({
+    enabled: vimEnabled,
+  })
+  const vimIndicator = useVimIndicator({
+    enabled: vimEnabled,
+    active: () => store.mode === "normal",
+    state: vimState,
+  })
+  const vim = createVimHandler({
+    enabled: vimEnabled,
+    state: vimState,
+    textarea: () => input,
+    submit,
+    scroll(action) {
+      if (action === "line-down") command.trigger("session.line.down")
+      if (action === "line-up") command.trigger("session.line.up")
+      if (action === "half-down") command.trigger("session.half.page.down")
+      if (action === "half-up") command.trigger("session.half.page.up")
+      if (action === "page-down") command.trigger("session.page.down")
+      if (action === "page-up") command.trigger("session.page.up")
+    },
+    jump(action) {
+      if (action === "top") command.trigger("session.first")
+      if (action === "bottom") command.trigger("session.last")
+    },
   })
 
   // Initialize agent/model/variant from last user message when session changes
@@ -171,7 +216,6 @@ export function Prompt(props: PromptProps) {
       {
         title: "Submit prompt",
         value: "prompt.submit",
-        keybind: "input_submit",
         category: "Prompt",
         hidden: true,
         onSelect: (dialog) => {
@@ -207,9 +251,16 @@ export function Prompt(props: PromptProps) {
         onSelect: (dialog) => {
           if (autocomplete.visible) return
           if (!input.focused) return
+          if (vimEnabled() && store.mode === "normal" && vimState.isInsert()) {
+            vimState.setMode("normal")
+            setStore("interrupt", 0)
+            dialog.clear()
+            return
+          }
           // TODO: this should be its own command
           if (store.mode === "shell") {
             setStore("mode", "normal")
+            vimState.reset()
             return
           }
           if (!props.sessionID) return
@@ -376,8 +427,23 @@ export function Prompt(props: PromptProps) {
 
   createEffect(() => {
     if (props.visible !== false) input?.focus()
-    if (props.visible === false) input?.blur()
+    if (props.visible === false) {
+      input?.blur()
+      vimState.reset()
+    }
   })
+
+  function submitFromTextarea() {
+    if (store.mode !== "normal") {
+      submit()
+      return
+    }
+    if (vimEnabled() && vimState.isInsert()) {
+      input.insertText("\n")
+      return
+    }
+    submit()
+  }
 
   function restoreExtmarksFromParts(parts: PromptInfo["parts"]) {
     input.extmarks.clear()
@@ -841,10 +907,11 @@ export function Prompt(props: PromptProps) {
                   setStore("extmarkToPartIndex", new Map())
                   return
                 }
-                if (keybind.match("app_exit", e)) {
+                const isVimScrollOverride =
+                  vimEnabled() && store.mode === "normal" && vimState.mode() === "normal" && !!vimScroll(e)
+                if (!isVimScrollOverride && keybind.match("app_exit", e)) {
                   if (store.prompt.input === "") {
                     await exit()
-                    // Don't preventDefault - let textarea potentially handle the event
                     e.preventDefault()
                     return
                   }
@@ -857,11 +924,14 @@ export function Prompt(props: PromptProps) {
                 if (store.mode === "shell") {
                   if ((e.name === "backspace" && input.visualCursor.offset === 0) || e.name === "escape") {
                     setStore("mode", "normal")
+                    vimState.reset()
                     e.preventDefault()
                     return
                   }
                 }
                 if (store.mode === "normal") autocomplete.onKeyDown(e)
+                if (e.defaultPrevented) return
+                if (store.mode === "normal" && vim.handleKey(e)) return
                 if (!autocomplete.visible) {
                   if (
                     (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
@@ -887,7 +957,7 @@ export function Prompt(props: PromptProps) {
                     input.cursorOffset = input.plainText.length
                 }
               }}
-              onSubmit={submit}
+              onSubmit={submitFromTextarea}
               onPaste={async (event: PasteEvent) => {
                 if (props.disabled) {
                   event.preventDefault()
@@ -1021,6 +1091,13 @@ export function Prompt(props: PromptProps) {
           />
         </box>
         <box flexDirection="row" justifyContent="space-between">
+          <Show when={vimIndicator()}>
+            {(indicator) => (
+              <text fg={indicator() === "INSERT" ? local.agent.color(local.agent.current().name) : theme.textMuted}>
+                {indicator()}
+              </text>
+            )}
+          </Show>
           <Show when={status().type !== "idle"} fallback={<text />}>
             <box
               flexDirection="row"

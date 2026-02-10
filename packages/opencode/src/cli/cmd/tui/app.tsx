@@ -36,6 +36,7 @@ import { ArgsProvider, useArgs, type Args } from "./context/args"
 import open from "open"
 import { writeHeapSnapshot } from "v8"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
+import { useVimEnabled } from "./component/vim"
 
 async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
   // can't set raw mode if not a TTY
@@ -198,6 +199,7 @@ function App() {
   const sync = useSync()
   const exit = useExit()
   const promptRef = usePromptRef()
+  const vim = useVimEnabled()
 
   // Wire up console copy-to-clipboard via opentui's onCopySelection callback
   renderer.console.onCopySelection = async (text: string) => {
@@ -588,6 +590,15 @@ function App() {
           if (!next) renderer.setTerminalTitle("")
           return next
         })
+        dialog.clear()
+      },
+    },
+    {
+      title: vim() ? "Disable vim input" : "Enable vim input",
+      value: "input.vim.toggle",
+      category: "Settings",
+      onSelect: (dialog) => {
+        kv.set("input_vim_mode", !vim())
         dialog.clear()
       },
     },

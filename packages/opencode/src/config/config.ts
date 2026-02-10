@@ -928,6 +928,7 @@ export namespace Config {
       .enum(["auto", "stacked"])
       .optional()
       .describe("Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column"),
+    vim: z.boolean().optional().describe("Enable vim-style input for the prompt"),
   })
 
   export const Server = z
