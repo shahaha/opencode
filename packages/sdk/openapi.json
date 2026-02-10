@@ -2444,6 +2444,10 @@
                         }
                       ]
                     }
+                  },
+                  "renderAsAssistant": {
+                    "description": "Render this user message with assistant styling in the UI",
+                    "type": "boolean"
                   }
                 },
                 "required": ["parts"]
@@ -2820,6 +2824,10 @@
                         }
                       ]
                     }
+                  },
+                  "renderAsAssistant": {
+                    "description": "Render this user message with assistant styling in the UI",
+                    "type": "boolean"
                   }
                 },
                 "required": ["parts"]
@@ -6164,6 +6172,10 @@
           },
           "variant": {
             "type": "string"
+          },
+          "renderAsAssistant": {
+            "description": "Render this user message with assistant styling in the UI",
+            "type": "boolean"
           }
         },
         "required": ["id", "sessionID", "role", "time", "agent", "model"]
