@@ -1222,9 +1222,7 @@ export namespace SessionPrompt {
     )
 
     await Session.updateMessage(info)
-    for (const part of parts) {
-      await Session.updatePart(part)
-    }
+    await Promise.all(parts.map((part) => Session.updatePart(part)))
 
     return {
       info,
