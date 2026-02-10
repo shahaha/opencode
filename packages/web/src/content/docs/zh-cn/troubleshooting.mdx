@@ -3,7 +3,7 @@ title: 故障排除
 description: 常見問題以及如何解決它們。
 ---
 
-要排除 opencode 的问题，请首先检查其存储在磁碟上的日志和本地数据。
+要排除 OpenCode 的问题，请首先检查其存储在磁碟上的日志和本地数据。
 
 ---
 
@@ -39,13 +39,13 @@ opencode程序将会话数据和其他应用程序数据存储在磁碟上：
 
 ## 桌面應用程式
 
-opencode Desktop runs a local opencode server (the `opencode-cli` sidecar) in the background. Most issues are caused by a misbehaving plugin, a corrupted cache, or a bad server setting.
+OpenCode Desktop runs a local OpenCode server (the `opencode-cli` sidecar) in the background. Most issues are caused by a misbehaving plugin, a corrupted cache, or a bad server setting.
 
 ### 快速檢查
 
 - 完全退出並重新啟動應用程式。
 - 如果應用程式顯示錯誤螢幕，請單擊“**重新啟動**”並複制錯誤詳細資訊。
-- macOS only: `opencode` menu -> **Reload Webview** (helps if the UI is blank/frozen).
+- macOS only: `OpenCode` menu -> **Reload Webview** (helps if the UI is blank/frozen).
 
 ---
 
@@ -72,7 +72,7 @@ opencode Desktop runs a local opencode server (the `opencode-cli` sidecar) in th
 
 #### 檢查外掛目錄
 
-opencode 还可以从磁碟加载本地外挂。暂时将它们移开（或重新命名资料夹）并重新启动桌面应用程序：
+OpenCode 还可以从磁碟加载本地外挂。暂时将它们移开（或重新命名资料夹）并重新启动桌面应用程序：
 
 - **全域性外掛**
   - **macOS/Linux**: `~/.config/opencode/plugins/`
@@ -86,22 +86,22 @@ opencode 还可以从磁碟加载本地外挂。暂时将它们移开（或重�
 
 ### 清除快取
 
-如果取消外挂没有帮助（或者外挂安装被卡住），请清除快取，方便opencode可以重建它。
+如果取消外挂没有帮助（或者外挂安装被卡住），请清除快取，方便OpenCode可以重建它。
 
-1. 完全退出 opencode 桌面。
+1. 完全退出 OpenCode 桌面。
 2. 刪除快取目錄：
 
 - **macOS**: Finder -> `Cmd+Shift+G` -> paste `~/.cache/opencode`
 - **Linux**: delete `~/.cache/opencode` (or run `rm -rf ~/.cache/opencode`)
 - **Windows**: Press `WIN+R` and paste `%USERPROFILE%\.cache\opencode`
 
-3. 重新启动 opencode 桌面。
+3. 重新启动 OpenCode 桌面。
 
 ---
 
 ### 修復伺服器連線問題
 
-opencode Desktop 可以启动自己的本地服务器（默认配置）或连线到您的服务器 URL。
+OpenCode Desktop 可以启动自己的本地服务器（默认配置）或连线到您的服务器 URL。
 
 如果您看到**“连线失败”**对话中断（或者应用程序永远无法穿透启动萤幕），请检查自定义服务器URL。
 
@@ -132,21 +132,21 @@ If your `opencode.json(c)` contains a `server` section, temporarily remove it an
 
 ### Windows：WebView2执行时
 
-在 Windows 上，opencode 桌面需要 Microsoft Edge **WebView2 执行时**。如果应用程序打开为空白视窗或无法启动，请 install/update WebView2 并重试。
+在 Windows 上，OpenCode 桌面需要 Microsoft Edge **WebView2 执行时**。如果应用程序打开为空白视窗或无法启动，请 install/update WebView2 并重试。
 
 ---
 
 ### Windows：一般问题
 
-If you're experiencing slow performance, file access issues, or terminal problems on Windows, try using [WSL (Windows Subsystem for Linux)](/docs/windows-wsl). WSL provides a Linux environment that works more seamlessly with opencode's features.
+If you're experiencing slow performance, file access issues, or terminal problems on Windows, try using [WSL (Windows Subsystem for Linux)](/docs/windows-wsl). WSL provides a Linux environment that works more seamlessly with OpenCode's features.
 
 ---
 
 ### 通知不顯示
 
-opencode 桌面仅在以下情况下显示系统通知：
+OpenCode 桌面仅在以下情况下显示系统通知：
 
-- 在您的作业系统中设置为 opencode 启用了通知，并且
+- 在您的作业系统中设置为 OpenCode 启用了通知，并且
 - 應用程式視窗未聚焦。
 
 ---
@@ -155,8 +155,8 @@ opencode 桌面仅在以下情况下显示系统通知：
 
 如果应用程序无法并且启动您无法从 UI 内部清除设置，请重置桌面应用程序的存储状态。
 
-1. 退出 opencode 桌面。
-2. 查询并删除这些文件（它们位于 opencode 桌面应用程序数据目录中）：
+1. 退出 OpenCode 桌面。
+2. 查询并删除这些文件（它们位于 OpenCode 桌面应用程序数据目录中）：
 
 - `opencode.settings.dat` (desktop default server URL)
 - `opencode.global.dat` and `opencode.workspace.*.dat` (UI state like recent servers/projects)
@@ -171,7 +171,7 @@ opencode 桌面仅在以下情况下显示系统通知：
 
 ## 尋求幫助
 
-如果您遇到 opencode 问题：
+如果您遇到 OpenCode 问题：
 
 1. **报告 GitHub** 上的问题
 
@@ -195,7 +195,7 @@ opencode 桌面仅在以下情况下显示系统通知：
 
 ---
 
-### opencode 无法启动
+### OpenCode 无法启动
 
 1. 檢查日誌中是否有錯誤訊息
 2. 尝试使用 `--print-logs` 执行以检视终端中的输出
