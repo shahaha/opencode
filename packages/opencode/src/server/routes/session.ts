@@ -2,6 +2,8 @@ import { Hono } from "hono"
 import { stream } from "hono/streaming"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
+import * as path from "node:path"
+import * as fs from "node:fs/promises"
 import { Session } from "../../session"
 import { MessageV2 } from "../../session/message-v2"
 import { SessionPrompt } from "../../session/prompt"
@@ -16,6 +18,9 @@ import { Log } from "../../util/log"
 import { PermissionNext } from "@/permission/next"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { Instance } from "../../project/instance"
+import { Ripgrep } from "../../file/ripgrep"
+import { IGNORE_PATTERNS } from "../../tool/ls"
 
 const log = Log.create({ service: "server" })
 
@@ -934,6 +939,79 @@ export const SessionRoutes = lazy(() =>
           reply: c.req.valid("json").response,
         })
         return c.json(true)
+      },
+    )
+    .post(
+      "/add-dir",
+      describeRoute({
+        summary: "Add directory to context",
+        description:
+          "Add a directory to the conversation context. If the directory is outside the project, grants external_directory permission.",
+        operationId: "session.addDir",
+        responses: {
+          200: {
+            description: "Directory added successfully",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    path: z.string(),
+                    granted: z.boolean(),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          path: z.string(),
+          sessionID: z.string(),
+        }),
+      ),
+      async (c) => {
+        const body = c.req.valid("json")
+        const input = body.path
+
+        const expanded = input.startsWith("~/")
+          ? path.join(process.env.HOME || process.env.USERPROFILE || "", input.slice(2))
+          : input.startsWith("~")
+            ? path.join(process.env.HOME || process.env.USERPROFILE || "", input.slice(1))
+            : input
+
+        const absolute = path.isAbsolute(expanded) ? expanded : path.resolve(Instance.directory, expanded)
+
+        const info = await fs.stat(absolute).catch(() => null)
+        if (!info) return c.json({ error: "Directory does not exist" }, 400)
+        if (!info.isDirectory()) return c.json({ error: "Path is not a directory" }, 400)
+
+        const resolved = await fs.realpath(absolute)
+        const granted = !Instance.containsPath(resolved)
+        if (granted) {
+          await PermissionNext.grant({
+            permission: "external_directory",
+            patterns: [path.join(resolved, "*")],
+          })
+        }
+
+        const globs = IGNORE_PATTERNS.map((p) => `!${p}*`)
+        const files: string[] = []
+        for await (const file of Ripgrep.files({ cwd: resolved, glob: globs })) {
+          files.push(file)
+          if (files.length >= 100) break
+        }
+        const listing = files.sort().join("\n")
+
+        await SessionPrompt.prompt({
+          sessionID: body.sessionID,
+          noReply: true,
+          parts: [{ type: "text", text: `Added directory to context: ${resolved}\n\n${listing}` }],
+        })
+
+        return c.json({ path: resolved, granted })
       },
     ),
 )

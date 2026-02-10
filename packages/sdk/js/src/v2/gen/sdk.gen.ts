@@ -98,6 +98,8 @@ import type {
   QuestionReplyResponses,
   SessionAbortErrors,
   SessionAbortResponses,
+  SessionAddDirErrors,
+  SessionAddDirResponses,
   SessionChildrenErrors,
   SessionChildrenResponses,
   SessionCommandErrors,
@@ -1764,6 +1766,43 @@ export class Session extends HeyApiClient {
       url: "/session/{sessionID}/unrevert",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Add directory to context
+   *
+   * Add a directory to the conversation context. If the directory is outside the project, grants external_directory permission.
+   */
+  public addDir<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      path?: string
+      sessionID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "path" },
+            { in: "body", key: "sessionID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionAddDirResponses, SessionAddDirErrors, ThrowOnError>({
+      url: "/session/add-dir",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 }

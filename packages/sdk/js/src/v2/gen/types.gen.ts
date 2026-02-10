@@ -3877,6 +3877,39 @@ export type PermissionListResponses = {
 
 export type PermissionListResponse = PermissionListResponses[keyof PermissionListResponses]
 
+export type SessionAddDirData = {
+  body?: {
+    path: string
+    sessionID: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/session/add-dir"
+}
+
+export type SessionAddDirErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type SessionAddDirError = SessionAddDirErrors[keyof SessionAddDirErrors]
+
+export type SessionAddDirResponses = {
+  /**
+   * Directory added successfully
+   */
+  200: {
+    path: string
+    granted: boolean
+  }
+}
+
+export type SessionAddDirResponse = SessionAddDirResponses[keyof SessionAddDirResponses]
+
 export type QuestionListData = {
   body?: never
   path?: never

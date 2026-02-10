@@ -459,6 +459,20 @@ export function Prompt(props: PromptProps) {
 
   command.register(() => [
     {
+      title: "Add directory to context",
+      value: "context.addDir",
+      category: "Session",
+      slash: { name: "add-dir" },
+      onSelect: (dialog) => {
+        dialog.clear()
+        const newText = "/add-dir "
+        const cursor = input.logicalCursor
+        input.deleteRange(0, 0, cursor.row, cursor.col)
+        input.insertText(newText)
+        input.cursorOffset = Bun.stringWidth(newText)
+      },
+    },
+    {
       title: "Stash prompt",
       value: "prompt.stash",
       category: "Prompt",
@@ -569,6 +583,22 @@ export function Prompt(props: PromptProps) {
         command: inputText,
       })
       setStore("mode", "normal")
+    } else if (inputText.startsWith("/add-dir ")) {
+      const dirPath = inputText.slice("/add-dir ".length).trim()
+      if (!dirPath) {
+        toast.show({ title: "Usage: /add-dir <path>", message: "Please provide a directory path", variant: "error" })
+        return
+      }
+      const result = await sdk.client.session.addDir({ path: dirPath, sessionID })
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      const resolved = result.data!.path
+      input.clear()
+      setStore("prompt", { input: "", parts: [] })
+      toast.show({ title: "Directory added", message: resolved, variant: "success" })
+      return
     } else if (
       inputText.startsWith("/") &&
       iife(() => {
