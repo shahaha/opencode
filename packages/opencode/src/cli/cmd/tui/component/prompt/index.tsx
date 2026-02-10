@@ -814,6 +814,35 @@ export function Prompt(props: PromptProps) {
                   e.preventDefault()
                   return
                 }
+                if (keybind.match("input_delete_to_line_start", e)) {
+                  const text = input.plainText
+                  const offset = input.cursorOffset
+                  const start = text.lastIndexOf("\n", offset - 1) + 1
+                  const target = offset > start ? start : Math.max(0, start - 1)
+
+                  if (offset !== target) {
+                    input.setText(text.slice(0, target) + text.slice(offset))
+                    input.cursorOffset = target
+                  }
+                  e.preventDefault()
+                  return
+                }
+                if (keybind.match("input_delete_word_backward", e)) {
+                  const text = input.plainText
+                  const offset = input.cursorOffset
+                  const start = text.lastIndexOf("\n", offset - 1) + 1
+                  const slice = text.slice(start, offset)
+                  const match = slice.match(/(\S+)\s*$/)
+                  if (match) {
+                    const pos = start + match.index!
+                    input.setText(text.slice(0, pos) + text.slice(offset))
+                    input.cursorOffset = pos
+                    e.preventDefault()
+                    return
+                  }
+                  // Fallthrough to default behavior if no word found (e.g. at line start)
+                  return
+                }
                 // Handle clipboard paste (Ctrl+V) - check for images first on Windows
                 // This is needed because Windows terminal doesn't properly send image data
                 // through bracketed paste, so we need to intercept the keypress and
