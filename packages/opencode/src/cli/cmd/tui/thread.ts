@@ -118,6 +118,19 @@ export const TuiThreadCommand = cmd({
       await client.call("reload", undefined)
     })
 
+    // Handle termination signals to properly shutdown worker
+    const shutdown = async () => {
+      try {
+        await client.call("shutdown", undefined)
+      } catch {
+        // Ignore errors if worker is already dead
+      }
+      process.exit(0)
+    }
+
+    process.on("SIGTERM", shutdown)
+    process.on("SIGINT", shutdown)
+
     const prompt = await iife(async () => {
       const piped = !process.stdin.isTTY ? await Bun.stdin.text() : undefined
       if (!args.prompt) return piped
