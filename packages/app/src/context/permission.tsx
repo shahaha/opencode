@@ -20,7 +20,6 @@ function shouldAutoAccept(perm: PermissionRequest) {
 }
 
 function isNonAllowRule(rule: unknown) {
-  if (!rule) return false
   if (typeof rule === "string") return rule !== "allow"
   if (typeof rule !== "object") return false
   if (Array.isArray(rule)) return false
