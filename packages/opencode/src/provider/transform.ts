@@ -41,6 +41,52 @@ export namespace ProviderTransform {
     return undefined
   }
 
+  export function parseModel(model: string) {
+    const [providerID, ...rest] = model.split("/")
+    return {
+      providerID: providerID,
+      modelID: rest.join("/"),
+    }
+  }
+
+  // For Vercel AI Gateway models, maps the model ID prefix to the native SDK
+  // npm package so we can reuse existing provider-specific logic.
+  function gatewayUnderlyingNpm(model: Provider.Model): string | undefined {
+    if (model.api.npm !== "@ai-sdk/gateway") return undefined
+    switch (parseModel(model.api.id).providerID) {
+      case "anthropic":
+        return "@ai-sdk/anthropic"
+      case "openai":
+        return "@ai-sdk/openai"
+      case "google":
+        return "@ai-sdk/google"
+      case "xai":
+        return "@ai-sdk/xai"
+      case "groq":
+        return "@ai-sdk/groq"
+    }
+    return undefined
+  }
+
+  // Creates a virtual model that looks like it comes from the native SDK,
+  // stripping the gateway provider prefix from IDs so existing checks work.
+  function gatewayModel(model: Provider.Model, npm: string): Provider.Model {
+    const parsed = parseModel(model.api.id)
+    return {
+      ...model,
+      id: parsed.modelID,
+      providerID: parsed.providerID,
+      api: { ...model.api, id: parsed.modelID, npm },
+    }
+  }
+
+  // Wraps provider-specific options under a providerOptions key so that
+  // providerOptions() can extract and place them under the correct provider key.
+  function wrapGatewayOptions(model: Provider.Model, opts: Record<string, any>): Record<string, any> {
+    if (Object.keys(opts).length === 0) return opts
+    return { providerOptions: { [parseModel(model.api.id).providerID]: opts } }
+  }
+
   function normalizeMessages(
     msgs: ModelMessage[],
     model: Provider.Model,
@@ -360,9 +406,12 @@ export namespace ProviderTransform {
         if (!model.id.includes("gpt") && !model.id.includes("gemini-3")) return {}
         return Object.fromEntries(OPENAI_EFFORTS.map((effort) => [effort, { reasoning: { effort } }]))
 
-      // TODO: YOU CANNOT SET max_tokens if this is set!!!
-      case "@ai-sdk/gateway":
-        return Object.fromEntries(OPENAI_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
+      case "@ai-sdk/gateway": {
+        const npm = gatewayUnderlyingNpm(model)
+        if (!npm) return {}
+        const native = variants(gatewayModel(model, npm))
+        return Object.fromEntries(Object.entries(native).map(([key, opts]) => [key, wrapGatewayOptions(model, opts)]))
+      }
 
       case "@ai-sdk/github-copilot":
         if (model.id.includes("gemini")) {
@@ -584,6 +633,12 @@ export namespace ProviderTransform {
     sessionID: string
     providerOptions?: Record<string, any>
   }): Record<string, any> {
+    const npm = gatewayUnderlyingNpm(input.model)
+    if (npm) {
+      const native = options({ ...input, model: gatewayModel(input.model, npm) })
+      return wrapGatewayOptions(input.model, native)
+    }
+
     const result: Record<string, any> = {}
 
     // openai and providers using openai package should set store to false by default.
@@ -688,7 +743,13 @@ export namespace ProviderTransform {
     return result
   }
 
-  export function smallOptions(model: Provider.Model) {
+  export function smallOptions(model: Provider.Model): Record<string, any> {
+    const npm = gatewayUnderlyingNpm(model)
+    if (npm) {
+      const native = smallOptions(gatewayModel(model, npm))
+      return wrapGatewayOptions(model, native)
+    }
+
     if (
       model.providerID === "openai" ||
       model.api.npm === "@ai-sdk/openai" ||
@@ -720,6 +781,13 @@ export namespace ProviderTransform {
 
   export function providerOptions(model: Provider.Model, options: { [x: string]: any }) {
     const key = sdkKey(model.api.npm) ?? model.providerID
+    if (model.api.npm === "@ai-sdk/gateway") {
+      const { providerOptions: explicit = {}, ...rest } = options
+      return {
+        ...(Object.keys(rest).length > 0 ? { [key]: rest } : {}),
+        ...explicit,
+      }
+    }
     return { [key]: options }
   }
 
@@ -732,10 +800,16 @@ export namespace ProviderTransform {
     const modelCap = modelLimit || globalLimit
     const standardLimit = Math.min(modelCap, globalLimit)
 
-    if (npm === "@ai-sdk/anthropic" || npm === "@ai-sdk/google-vertex/anthropic") {
-      const thinking = options?.["thinking"]
-      const budgetTokens = typeof thinking?.["budgetTokens"] === "number" ? thinking["budgetTokens"] : 0
-      const enabled = thinking?.["type"] === "enabled"
+    const thinking =
+      npm === "@ai-sdk/anthropic" || npm === "@ai-sdk/google-vertex/anthropic"
+        ? options?.["thinking"]
+        : npm === "@ai-sdk/gateway"
+          ? options?.["providerOptions"]?.["anthropic"]?.["thinking"]
+          : undefined
+
+    if (thinking) {
+      const budgetTokens = typeof thinking["budgetTokens"] === "number" ? thinking["budgetTokens"] : 0
+      const enabled = thinking["type"] === "enabled"
       if (enabled && budgetTokens > 0) {
         // Return text tokens so that text + thinking <= model cap, preferring 32k text when possible.
         if (budgetTokens + standardLimit <= modelCap) {
