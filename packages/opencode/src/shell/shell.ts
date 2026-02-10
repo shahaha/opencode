@@ -1,4 +1,5 @@
 import { Flag } from "@/flag/flag"
+import { Env } from "@/env"
 import { lazy } from "@/util/lazy"
 import path from "path"
 import { spawn, type ChildProcess } from "child_process"
@@ -45,7 +46,7 @@ export namespace Shell {
         const bash = path.join(git, "..", "..", "bin", "bash.exe")
         if (Bun.file(bash).size) return bash
       }
-      return process.env.COMSPEC || "cmd.exe"
+      return Env.get("COMSPEC") || "cmd.exe"
     }
     if (process.platform === "darwin") return "/bin/zsh"
     const bash = Bun.which("bash")
@@ -54,13 +55,13 @@ export namespace Shell {
   }
 
   export const preferred = lazy(() => {
-    const s = process.env.SHELL
+    const s = Env.get("SHELL")
     if (s) return s
     return fallback()
   })
 
   export const acceptable = lazy(() => {
-    const s = process.env.SHELL
+    const s = Env.get("SHELL")
     if (s && !BLACKLIST.has(process.platform === "win32" ? path.win32.basename(s) : path.basename(s))) return s
     return fallback()
   })

@@ -3,6 +3,7 @@ import path from "path"
 import { pathToFileURL } from "url"
 import os from "os"
 import z from "zod"
+import { Env } from "../env"
 import { Filesystem } from "../util/filesystem"
 import { ModelsDev } from "../provider/models"
 import { mergeDeep, pipe, unique } from "remeda"
@@ -44,13 +45,13 @@ export namespace Config {
       case "darwin":
         return "/Library/Application Support/opencode"
       case "win32":
-        return path.join(process.env.ProgramData || "C:\\ProgramData", "opencode")
+        return path.join(Env.get("ProgramData") || "C:\\ProgramData", "opencode")
       default:
         return "/etc/opencode"
     }
   }
 
-  const managedConfigDir = process.env.OPENCODE_TEST_MANAGED_CONFIG_DIR || getManagedConfigDir()
+  const managedConfigDir = Env.get("OPENCODE_TEST_MANAGED_CONFIG_DIR") || getManagedConfigDir()
 
   // Custom merge function that concatenates array fields instead of replacing them
   function mergeConfigConcatArrays(target: Info, source: Info): Info {
@@ -78,7 +79,7 @@ export namespace Config {
     let result: Info = {}
     for (const [key, value] of Object.entries(auth)) {
       if (value.type === "wellknown") {
-        process.env[value.key] = value.token
+        Env.set(value.key, value.token)
         log.debug("fetching remote config", { url: `${key}/.well-known/opencode` })
         const response = await fetch(`${key}/.well-known/opencode`)
         if (!response.ok) {
@@ -1236,7 +1237,7 @@ export namespace Config {
   async function load(text: string, configFilepath: string) {
     const original = text
     text = text.replace(/\{env:([^}]+)\}/g, (_, varName) => {
-      return process.env[varName] || ""
+      return Env.get(varName) || ""
     })
 
     const fileMatches = text.match(/\{file:[^}]+\}/g)

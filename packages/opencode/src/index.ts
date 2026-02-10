@@ -19,6 +19,7 @@ import { McpCommand } from "./cli/cmd/mcp"
 import { GithubCommand } from "./cli/cmd/github"
 import { ExportCommand } from "./cli/cmd/export"
 import { ImportCommand } from "./cli/cmd/import"
+import { Env } from "./env"
 import { AttachCommand } from "./cli/cmd/tui/attach"
 import { TuiThreadCommand } from "./cli/cmd/tui/thread"
 import { AcpCommand } from "./cli/cmd/acp"
@@ -67,8 +68,8 @@ const cli = yargs(hideBin(process.argv))
       })(),
     })
 
-    process.env.AGENT = "1"
-    process.env.OPENCODE = "1"
+    Env.set("AGENT", "1")
+    Env.set("OPENCODE", "1")
 
     Log.Default.info("opencode", {
       version: Installation.VERSION,
