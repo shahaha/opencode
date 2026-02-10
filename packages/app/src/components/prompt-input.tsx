@@ -46,6 +46,7 @@ import { PromptImageAttachments } from "./prompt-input/image-attachments"
 import { PromptDragOverlay } from "./prompt-input/drag-overlay"
 import { promptPlaceholder } from "./prompt-input/placeholder"
 import { ImagePreview } from "@opencode-ai/ui/image-preview"
+import { isCodeFile } from "@opencode-ai/util/path"
 
 interface PromptInputProps {
   class?: string
@@ -150,7 +151,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   }
 
   const openComment = (item: { path: string; commentID?: string; commentOrigin?: "review" | "file" }) => {
-    if (!item.commentID) return
+    if (!item.commentID) {
+      if (!isCodeFile(item.path)) return
+      const tab = files.tab(item.path)
+      tabs().open(tab)
+      files.load(item.path)
+      return
+    }
 
     const focus = { file: item.path, id: item.commentID }
     comments.setActive(focus)
@@ -427,8 +434,28 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (part.type === "agent") pill.setAttribute("data-name", part.name)
     pill.setAttribute("contenteditable", "false")
     pill.style.userSelect = "text"
-    pill.style.cursor = "default"
+
+    if (part.type === "file" && isCodeFile(part.path)) {
+      pill.classList.add("prompt-pill--code")
+    }
+
     return pill
+  }
+
+  const handleEditorClick = (e: MouseEvent) => {
+    const target = e.target as HTMLElement
+    const pill = target.closest('[data-type="file"]') as HTMLElement | null
+    if (!pill) return
+
+    const path = pill.dataset.path
+    if (!path || !isCodeFile(path)) return
+
+    if (!view().reviewPanel.opened()) view().reviewPanel.open()
+    layout.fileTree.open()
+    layout.fileTree.setTab("all")
+    const tab = files.tab(path)
+    tabs().open(tab)
+    files.load(path)
   }
 
   const isNormalizedEditor = () =>
@@ -1001,12 +1028,18 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             onCompositionStart={() => setComposing(true)}
             onCompositionEnd={() => setComposing(false)}
             onKeyDown={handleKeyDown}
+            onClick={handleEditorClick}
             classList={{
               "select-text": true,
               "w-full p-3 pr-12 text-14-regular text-text-strong focus:outline-none whitespace-pre-wrap": true,
               "[&_[data-type=file]]:text-syntax-property": true,
               "[&_[data-type=agent]]:text-syntax-type": true,
               "font-mono!": store.mode === "shell",
+              "[&_.prompt-pill--code]:cursor-pointer": true,
+              "[&_.prompt-pill--code]:rounded": true,
+              "[&_.prompt-pill--code]:px-1": true,
+              "[&_.prompt-pill--code]:hover:text-syntax-property/70": true,
+              "[&_.prompt-pill--code]:transition-colors": true,
             }}
           />
           <Show when={!prompt.dirty()}>
