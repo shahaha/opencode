@@ -53,7 +53,7 @@ export namespace Agent {
 
     const skillDirs = await Skill.dirs()
     const defaults = PermissionNext.fromConfig({
-      "*": "allow",
+      "*": "ask",
       doom_loop: "ask",
       external_directory: {
         "*": "ask",
