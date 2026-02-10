@@ -8,6 +8,7 @@ import * as Formatter from "./formatter"
 import { Config } from "../config/config"
 import { mergeDeep } from "remeda"
 import { Instance } from "../project/instance"
+import { DiffRange } from "./diff-range"
 
 export namespace Format {
   const log = Log.create({ service: "format" })
@@ -104,14 +105,33 @@ export namespace Format {
     log.info("init")
     Bus.subscribe(File.Event.Edited, async (payload) => {
       const file = payload.properties.file
-      log.info("formatting", { file })
+      const changedRanges = payload.properties.changedRanges
+      log.info("formatting", { file, changedRanges })
       const ext = path.extname(file)
 
       for (const item of await getFormatter(ext)) {
         log.info("running", { command: item.command })
         try {
+          let cmd: string[]
+
+          // Use range formatting if supported and ranges are provided
+          if (item.buildRangeCommand && changedRanges) {
+            // Convert plain objects back to DiffRange instances
+            const rangeObjects = changedRanges.map((data) => DiffRange.fromJSON(data))
+
+            if (rangeObjects.length > 0) {
+              cmd = item.buildRangeCommand(file, rangeObjects)
+              log.info("using range formatting", { ranges: rangeObjects })
+            } else {
+              log.info("formatting skipped: no changed ranges detected", { file })
+              continue
+            }
+          } else {
+            cmd = item.command.map((x) => x.replace("$FILE", file))
+          }
+
           const proc = Bun.spawn({
-            cmd: item.command.map((x) => x.replace("$FILE", file)),
+            cmd,
             cwd: Instance.directory,
             env: { ...process.env, ...item.environment },
             stdout: "ignore",
@@ -120,7 +140,7 @@ export namespace Format {
           const exit = await proc.exited
           if (exit !== 0)
             log.error("failed", {
-              command: item.command,
+              command: cmd,
               ...item.environment,
             })
         } catch (error) {

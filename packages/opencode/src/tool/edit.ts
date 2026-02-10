@@ -17,6 +17,7 @@ import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { Snapshot } from "@/snapshot"
 import { assertExternalDirectory } from "./external-directory"
+import { calculateRanges } from "../format/diff-range"
 
 const MAX_DIAGNOSTICS_PER_FILE = 20
 
@@ -62,6 +63,8 @@ export const EditTool = Tool.define("edit", {
           },
         })
         await Bun.write(filePath, params.newString)
+
+        // For new file content, format the entire file
         await Bus.publish(File.Event.Edited, {
           file: filePath,
         })
@@ -95,8 +98,12 @@ export const EditTool = Tool.define("edit", {
       })
 
       await file.write(contentNew)
+
+      const ranges = calculateRanges(contentOld, contentNew)
+
       await Bus.publish(File.Event.Edited, {
         file: filePath,
+        changedRanges: ranges.map((r) => r.toJSON()),
       })
       await Bus.publish(FileWatcher.Event.Updated, {
         file: filePath,

@@ -3,6 +3,7 @@ import { BunProc } from "../bun"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
 import { Flag } from "@/flag/flag"
+import type { DiffRange } from "./diff-range"
 
 export interface Info {
   name: string
@@ -10,6 +11,7 @@ export interface Info {
   environment?: Record<string, string>
   extensions: string[]
   enabled(): Promise<boolean>
+  buildRangeCommand?(file: string, ranges: DiffRange[]): string[]
 }
 
 export const gofmt: Info = {
@@ -72,6 +74,25 @@ export const prettier: Info = {
       if (json.devDependencies?.prettier) return true
     }
     return false
+  },
+  buildRangeCommand(file: string, ranges: DiffRange[]) {
+    // Prettier only supports a single range, so we merge all ranges into one
+    if (ranges.length === 0) {
+      return [BunProc.which(), "x", "prettier", "--write", file]
+    }
+
+    // Merge all ranges into one for prettier
+    const merged = ranges.reduce((acc, range) => acc.merge(range), ranges[0])
+
+    return [
+      BunProc.which(),
+      "x",
+      "prettier",
+      "--write",
+      `--range-start=${merged.start}`,
+      `--range-end=${merged.end}`,
+      file,
+    ]
   },
 }
 
@@ -156,6 +177,21 @@ export const clang: Info = {
   async enabled() {
     const items = await Filesystem.findUp(".clang-format", Instance.directory, Instance.worktree)
     return items.length > 0
+  },
+  buildRangeCommand(file: string, ranges: DiffRange[]) {
+    const cmd = ["clang-format", "-i"]
+
+    // clang-format requires byte offsets - we must have cached values
+    for (const range of ranges) {
+      const byteOffsets = range.getCachedByteOffsets()
+      if (!byteOffsets) {
+        throw new Error("clang-format requires byte offsets but none were cached for range")
+      }
+      cmd.push(`--offset=${byteOffsets.start}`)
+      cmd.push(`--length=${byteOffsets.end - byteOffsets.start}`)
+    }
+    cmd.push(file)
+    return cmd
   },
 }
 
