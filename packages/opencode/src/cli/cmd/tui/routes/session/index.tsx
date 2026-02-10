@@ -78,6 +78,7 @@ import { QuestionPrompt } from "./question"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatTranscript } from "../../util/transcript"
 import { UI } from "@/cli/ui.ts"
+import { DialogSessionTree } from "./dialog-session-tree"
 
 addDefaultParsers(parsers.parsers)
 
@@ -120,6 +121,25 @@ export function Session() {
     const parentID = session()?.parentID ?? session()?.id
     return sync.data.session
       .filter((x) => x.parentID === parentID || x.id === parentID)
+      .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  })
+  // Siblings: sessions with the same direct parent (for left/right cycling)
+  const siblings = createMemo(() => {
+    const currentParentID = session()?.parentID
+    if (!currentParentID) {
+      // Root session: no siblings to cycle
+      return [session()!].filter(Boolean)
+    }
+    return sync.data.session
+      .filter((x) => x.parentID === currentParentID)
+      .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  })
+  // Direct children: sessions whose parent is this session (for down navigation)
+  const directChildren = createMemo(() => {
+    const currentID = session()?.id
+    if (!currentID) return []
+    return sync.data.session
+      .filter((x) => x.parentID === currentID)
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   })
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
@@ -299,14 +319,37 @@ export function Session() {
   const local = useLocal()
 
   function moveChild(direction: number) {
-    if (children().length === 1) return
-    let next = children().findIndex((x) => x.id === session()?.id) + direction
-    if (next >= children().length) next = 0
-    if (next < 0) next = children().length - 1
-    if (children()[next]) {
+    if (siblings().length <= 1) return
+    let next = siblings().findIndex((x) => x.id === session()?.id) + direction
+    if (next >= siblings().length) next = 0
+    if (next < 0) next = siblings().length - 1
+    if (siblings()[next]) {
       navigate({
         type: "session",
-        sessionID: children()[next].id,
+        sessionID: siblings()[next].id,
+      })
+    }
+  }
+
+  function moveToFirstChild() {
+    const children = directChildren()
+    if (children.length === 0) return
+    navigate({
+      type: "session",
+      sessionID: children[0].id,
+    })
+  }
+
+  function moveToRoot() {
+    // Traverse up to find root session (no parentID)
+    let current = session()
+    while (current?.parentID) {
+      current = sync.session.get(current.parentID)
+    }
+    if (current && current.id !== session()?.id) {
+      navigate({
+        type: "session",
+        sessionID: current.id,
       })
     }
   }
@@ -869,6 +912,17 @@ export function Session() {
       },
     },
     {
+      title: "Go to first child session",
+      value: "session.child.down",
+      keybind: "session_child_down",
+      category: "Session",
+      hidden: true,
+      onSelect: (dialog) => {
+        moveToFirstChild()
+        dialog.clear()
+      },
+    },
+    {
       title: "Go to parent session",
       value: "session.parent",
       keybind: "session_parent",
@@ -883,6 +937,26 @@ export function Session() {
           })
         }
         dialog.clear()
+      },
+    },
+    {
+      title: "Go to root session",
+      value: "session.root",
+      keybind: "session_root",
+      category: "Session",
+      hidden: true,
+      onSelect: (dialog) => {
+        moveToRoot()
+        dialog.clear()
+      },
+    },
+    {
+      title: "Session tree",
+      value: "session.tree",
+      keybind: "session_child_list",
+      category: "Session",
+      onSelect: (dialog) => {
+        dialog.replace(() => <DialogSessionTree />)
       },
     },
   ])
@@ -1849,7 +1923,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
 
   return (
     <Switch>
-      <Match when={props.input.description || props.input.subagent_type}>
+      <Match when={props.metadata.sessionId}>
         <BlockTool
           title={"# " + Locale.titlecase(props.input.subagent_type ?? "unknown") + " Task"}
           onClick={
@@ -1875,12 +1949,10 @@ function Task(props: ToolProps<typeof TaskTool>) {
               }}
             </Show>
           </box>
-          <Show when={props.metadata.sessionId}>
-            <text fg={theme.text}>
-              {keybind.print("session_child_cycle")}
-              <span style={{ fg: theme.textMuted }}> view subagents</span>
-            </text>
-          </Show>
+          <text fg={theme.text}>
+            {keybind.print("session_child_down")}
+            <span style={{ fg: theme.textMuted }}> view subagents</span>
+          </text>
         </BlockTool>
       </Match>
       <Match when={true}>

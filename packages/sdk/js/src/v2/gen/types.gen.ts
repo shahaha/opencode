@@ -47,13 +47,6 @@ export type EventProjectUpdated = {
   properties: Project
 }
 
-export type EventServerInstanceDisposed = {
-  type: "server.instance.disposed"
-  properties: {
-    directory: string
-  }
-}
-
 export type EventServerConnected = {
   type: "server.connected"
   properties: {
@@ -65,6 +58,13 @@ export type EventGlobalDisposed = {
   type: "global.disposed"
   properties: {
     [key: string]: unknown
+  }
+}
+
+export type EventServerInstanceDisposed = {
+  type: "server.instance.disposed"
+  properties: {
+    directory: string
   }
 }
 
@@ -909,9 +909,9 @@ export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
   | EventProjectUpdated
-  | EventServerInstanceDisposed
   | EventServerConnected
   | EventGlobalDisposed
+  | EventServerInstanceDisposed
   | EventLspClientDiagnostics
   | EventLspUpdated
   | EventFileEdited
@@ -1015,22 +1015,6 @@ export type KeybindsConfig = {
    */
   session_rename?: string
   /**
-   * Delete session
-   */
-  session_delete?: string
-  /**
-   * Delete stash entry
-   */
-  stash_delete?: string
-  /**
-   * Open provider list from model dialog
-   */
-  model_provider_list?: string
-  /**
-   * Toggle model favorite status
-   */
-  model_favorite_toggle?: string
-  /**
    * Share current session
    */
   session_share?: string
@@ -1054,14 +1038,6 @@ export type KeybindsConfig = {
    * Scroll messages down by one page
    */
   messages_page_down?: string
-  /**
-   * Scroll messages up by one line
-   */
-  messages_line_up?: string
-  /**
-   * Scroll messages down by one line
-   */
-  messages_line_down?: string
   /**
    * Scroll messages up by half page
    */
@@ -1307,17 +1283,29 @@ export type KeybindsConfig = {
    */
   history_next?: string
   /**
-   * Next child session
+   * Next sibling session
    */
   session_child_cycle?: string
   /**
-   * Previous child session
+   * Previous sibling session
    */
   session_child_cycle_reverse?: string
   /**
    * Go to parent session
    */
   session_parent?: string
+  /**
+   * Go to first child session
+   */
+  session_child_down?: string
+  /**
+   * Go to root session
+   */
+  session_root?: string
+  /**
+   * Open session tree dialog
+   */
+  session_child_list?: string
   /**
    * Suspend terminal
    */
@@ -1424,6 +1412,10 @@ export type AgentConfig = {
    * Hide this subagent from the @ autocomplete menu (default: false, only applies to mode: subagent)
    */
   hidden?: boolean
+  /**
+   * Maximum task calls this agent can make per session when delegating to other subagents. Set to 0 to explicitly disable, omit to use default (disabled).
+   */
+  task_budget?: number
   options?: {
     [key: string]: unknown
   }
@@ -1451,6 +1443,7 @@ export type AgentConfig = {
     | "subagent"
     | "primary"
     | "all"
+    | number
     | {
         [key: string]: unknown
       }
@@ -1575,7 +1568,7 @@ export type McpLocalConfig = {
    */
   enabled?: boolean
   /**
-   * Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified.
+   * Timeout in ms for fetching tools from the MCP server. Defaults to 5000 (5 seconds) if not specified.
    */
   timeout?: number
 }
@@ -1619,7 +1612,7 @@ export type McpRemoteConfig = {
    */
   oauth?: McpOAuthConfig | false
   /**
-   * Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified.
+   * Timeout in ms for fetching tools from the MCP server. Defaults to 5000 (5 seconds) if not specified.
    */
   timeout?: number
 }
@@ -1738,7 +1731,7 @@ export type Config = {
     [key: string]: AgentConfig | undefined
   }
   /**
-   * Agent configuration, see https://opencode.ai/docs/agents
+   * Agent configuration, see https://opencode.ai/docs/agent
    */
   agent?: {
     plan?: AgentConfig
@@ -1845,6 +1838,10 @@ export type Config = {
      * Timeout in milliseconds for model context protocol (MCP) requests
      */
     mcp_timeout?: number
+    /**
+     * Maximum depth for subagent session trees. Prevents infinite delegation loops. Default: 5. Set to 0 to disable (not recommended).
+     */
+    level_limit?: number
   }
 }
 
@@ -2187,6 +2184,7 @@ export type Agent = {
     [key: string]: unknown
   }
   steps?: number
+  task_budget?: number
 }
 
 export type LspStatus = {
