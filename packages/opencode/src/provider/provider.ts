@@ -434,6 +434,7 @@ export namespace Provider {
       }
 
       return {
+        key: apiKey || undefined,
         autoload: !!apiKey,
         options: {
           instanceUrl,
